@@ -7,7 +7,7 @@ use axum_embed::{FallbackBehavior, ServeEmbed};
 use rust_embed::RustEmbed;
 use sqlx::SqlitePool;
 use std::sync::Arc;
-use tower::{Service, ServiceBuilder, ServiceExt};
+use tower::ServiceBuilder;
 use tower_http::{
     request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
     trace::TraceLayer,

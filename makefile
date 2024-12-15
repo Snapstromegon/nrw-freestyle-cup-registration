@@ -8,7 +8,7 @@ install-frontend:
 	cd frontend && npm install
 	mkdir -p static
 
-openapi: install-frontend
+openapi: migrate-db install-frontend
 	cargo run --bin gen_openapi
 
 frontend-api: openapi
