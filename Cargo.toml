@@ -1,0 +1,40 @@
+[package]
+name = "nrw-freestyle-cup-registration"
+version = "0.1.0"
+edition = "2021"
+default-run = "nrw-freestyle-cup-registration"
+
+[[bin]]
+name = "nrw-freestyle-cup-registration"
+path = "src/bin/registration_server.rs"
+
+[[bin]]
+name = "gen_openapi"
+path = "src/bin/gen_openapi.rs"
+
+[dependencies]
+anyhow = "1.0.94"
+axum = { version = "0.7.9", features = ["macros", "multipart"] }
+axum-embed = "0.1.0"
+axum-extra = { version = "0.9.6", features = ["cookie"] }
+clap = { version = "4.5.23", features = ["derive", "env"] }
+dotenvy = "0.15.7"
+jsonwebtoken = "9.3.0"
+lettre = { version = "0.11.11", features = ["builder", "hostname", "pool", "rustls-tls", "smtp-transport", "tokio1-rustls-tls"], default-features = false }
+password-auth = "1.0.0"
+rust-embed = "8.5.0"
+serde = "1.0.216"
+serde_json = "1.0.133"
+sqlx = { version = "0.8.2", features = ["runtime-tokio", "sqlite", "uuid"] }
+thiserror = "2.0.7"
+time = "0.3.37"
+tokio = { version = "1.42.0", features = ["full"] }
+tower = "0.5.2"
+tower-http = { version = "0.6.2", features = ["cors", "fs", "request-id", "trace"] }
+tracing = "0.1.41"
+tracing-subscriber = "0.3.19"
+url = "2.5.4"
+utoipa = { version = "5.2.0", features = ["axum_extras", "debug", "time", "uuid", "yaml"] }
+utoipa-axum = { version = "0.1.2", features = ["debug"] }
+utoipa-swagger-ui = { version = "8.0.3", features = ["debug", "axum", "vendored"] }
+uuid = { version = "1.11.0", features = ["serde", "v7"] }
