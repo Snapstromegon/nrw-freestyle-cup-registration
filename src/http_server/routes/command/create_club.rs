@@ -5,7 +5,7 @@ use tracing::instrument;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::http_server::{extractor::auth::Auth, HttpError};
+use crate::http_server::{extractor::auth::Auth, ClientError, HttpError};
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct CreateClubResponse {
@@ -27,6 +27,8 @@ pub struct CreateClubBody {
     request_body=CreateClubBody,
     responses(
         (status=200, content_type="application/json", body=CreateClubResponse),
+        (status=400, content_type="application/json", body=ClientError),
+        (status=500, content_type="application/json", body=ClientError),
     ),
 )]
 #[instrument(skip(db))]
@@ -49,11 +51,7 @@ pub async fn create_club(
         auth.user_id,
     )
     .execute(&db)
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to create club: {:?}", e);
-        HttpError::InternalServerError
-    })?;
+    .await?;
 
     Ok(Json(CreateClubResponse { club_id }))
 }

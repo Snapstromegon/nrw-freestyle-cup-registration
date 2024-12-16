@@ -1,6 +1,7 @@
 import { LitElement, html, css, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { client } from "../../apiClient";
+import "../elements/cup-centered-icon-box.js";
 
 @customElement("cup-view-request-password-reset")
 export default class CupViewRequestPasswordReset extends LitElement {
@@ -25,41 +26,6 @@ export default class CupViewRequestPasswordReset extends LitElement {
       direction: ltr;
       font-feature-settings: "liga";
       -webkit-font-smoothing: antialiased;
-    }
-
-    main {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100dvh;
-      background: #99add7;
-      padding: 1rem;
-    }
-
-    #wrapper {
-      display: flex;
-      background: #fff;
-      border-radius: 0.5rem;
-      overflow: hidden;
-      flex-wrap: wrap;
-      place-content: center;
-
-      & aside {
-        width: 15rem;
-        flex-grow: 1;
-        display: flex;
-        place-items: center;
-        justify-content: center;
-        padding: 2rem;
-        background: #002d56;
-
-        & img {
-          width: 100%;
-          max-width: 12rem;
-          max-height: 12rem;
-          height: 100%;
-        }
-      }
     }
 
     form {
@@ -126,11 +92,7 @@ export default class CupViewRequestPasswordReset extends LitElement {
   @state() error?: string = undefined;
 
   override render() {
-    return html`<main>
-      <div id="wrapper">
-        <aside>
-          <img src="/assets/images/nrw-freestyle-cup.svg" />
-        </aside>
+    return html`<cup-centered-icon-box>
         <form @submit=${this.register}>
           <h1>NRW Freestyle Cup 2025</h1>
           <h2>Passwort zurücksetzen</h2>
@@ -142,15 +104,14 @@ export default class CupViewRequestPasswordReset extends LitElement {
           </label>
           <div id="action-buttons">
             <button type="submit">
-              <i class="material-icon">key_off</i> Passwort Zurüücksetzen
+              <i class="material-icon">key_off</i> Passwort Zurücksetzen
             </button>
             <a href="/" id="login">
               <i class="material-icon">login</i> Zurück zum Login
             </a>
           </div>
         </form>
-      </div>
-    </main>`;
+  </cup-centered-icon-box>`;
   }
 
   async register(event: SubmitEvent) {

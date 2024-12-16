@@ -40,12 +40,23 @@ export default class CupApp extends LitElement {
     {
       path: new URLPattern({ pathname: "/request_password_reset" }),
       load: () => import("./views/cup-view-request-password-reset.js"),
-      render: () => html`<cup-view-request-password-reset></cup-view-request-password-reset>`,
+      render: () =>
+        html`<cup-view-request-password-reset></cup-view-request-password-reset>`,
     },
     {
       path: new URLPattern({ pathname: "/reset_password" }),
       load: () => import("./views/cup-view-reset-password.js"),
       render: () => html`<cup-view-reset-password></cup-view-reset-password>`,
+    },
+    {
+      path: new URLPattern({ pathname: "/create_club" }),
+      load: () => import("./views/cup-view-create-club.js"),
+      render: () => html`<cup-view-create-club></cup-view-create-club>`,
+    },
+    {
+      path: new URLPattern({ pathname: "/manage_club" }),
+      load: () => import("./views/cup-view-manage-club.js"),
+      render: () => html`<cup-view-manage-club></cup-view-manage-club>`,
     },
   ];
 

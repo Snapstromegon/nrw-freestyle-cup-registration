@@ -1,12 +1,10 @@
-import { consume } from "@lit/context";
 import { LitElement, html, css, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
-import { User, userContext } from "../../contexts/user";
 import { client } from "../../apiClient";
 import "../elements/cup-centered-icon-box.js";
 
-@customElement("cup-view-reset-password")
-export default class CupViewResetPassword extends LitElement {
+@customElement("cup-view-create-club")
+export default class CupViewCreateClub extends LitElement {
   static override styles = css`
     * {
       margin: 0;
@@ -91,113 +89,60 @@ export default class CupViewResetPassword extends LitElement {
       border-radius: 0.5rem;
     }
   `;
-  @consume({ context: userContext, subscribe: true })
-  user: User | null = null;
   @state() error?: string = undefined;
 
   override render() {
     return html`<cup-centered-icon-box>
-      <form @submit=${this.register}>
+      <form @submit=${this.createClub}>
         <h1>NRW Freestyle Cup 2025</h1>
-        <h2>Passwort Zurücksetzen</h2>
+        <h2>Verein erstellen</h2>
+        <p>
+          Erstelle hier ale Trainer einen neuen Verein. Jeder Verein kann nur
+          einmal existieren.
+        </p>
         ${this.error ? html`<p id="error">${this.error}</p>` : nothing}
         <label>
-          Passwort
+          Vereinsname
           <input
-            type="password"
-            name="password"
-            placeholder="Passwort"
-            required
-          />
-        </label>
-        <label>
-          Passwort wiederholen
-          <input
-            type="password"
-            name="passwordRepeat"
-            placeholder="Passwort wiederholen"
+            type="text"
+            name="clubName"
+            placeholder="Vereinsname"
             required
           />
         </label>
         <div id="action-buttons">
           <button type="submit">
-            <i class="material-icon">key</i> Passwort zurücksetzen
+            <i class="material-icon">add_circle</i> Verein erstellen
           </button>
         </div>
       </form>
     </cup-centered-icon-box>`;
   }
 
-  async register(event: SubmitEvent) {
+  async createClub(event: SubmitEvent) {
     event.preventDefault();
-    const token = new URL(window.location.href).searchParams.get("token");
-    if (!token) {
-      this.error = "Kein Token gefunden.";
-      return;
-    }
     const form = event.target as HTMLFormElement;
     const formData = new FormData(form);
     const data = Object.fromEntries(formData.entries()) as {
-      password: string;
-      passwordRepeat: string;
+      clubName: string;
     };
-    if (data.password !== data.passwordRepeat) {
-      this.error = "Passwörter stimmen nicht überein.";
-      return;
-    }
 
-    const passwordFail = getProblemWithPassword(data.password);
-    if (passwordFail) {
-      this.error = passwordFail;
-      return;
-    }
-
-    const resp = await client.POST("/api/command/reset_password", {
+    let resp = await client.POST("/api/command/create_club", {
       body: {
-        token,
-        new_password: data.password,
+        name: data.clubName,
       },
     });
 
-    if (resp.error) {
-      console.error(resp.error);
-      this.error =
-        (resp.error as { message?: string }).message ||
-        "Fehler beim Zurücksetzen.";
+    if (resp.response.status === 404) {
+      this.error = "E-Mail nicht gefunden.";
       return;
     }
 
-    this.error = undefined;
-    window.location.href = "/";
+    if (resp.error) {
+      this.error = (resp.error as { message?: string }).message || "";
+      return;
+    }
+
+    window.location.href = "/manage_club?club=" + resp.data.club_id;
   }
 }
-
-const getProblemWithPassword = (password: string): string | null => {
-  if (password.length < 8) {
-    return "Passwort muss mindestens 8 Zeichen lang sein.";
-  }
-
-  let categories = 0;
-  if (password.match(/[a-z]/)) {
-    categories++;
-  }
-  if (password.match(/[A-Z]/)) {
-    categories++;
-  }
-  if (password.match(/[0-9]/)) {
-    categories++;
-  }
-  if (
-    `!"§$%&/()=?+-*#'_~.,:;<>|\\ {[]}`
-      .split("")
-      .some((char) => password.includes(char))
-  ) {
-    categories++;
-  }
-
-  if (categories < 3) {
-    return "Passwort muss mindestens 3 der folgenden Kategorien enthalten: Kleinbuchstaben, Großbuchstaben, Zahlen, Sonderzeichen.";
-  }
-
-  return null;
-};

@@ -3,12 +3,32 @@ import { LitElement, html, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { User, userContext } from "../../contexts/user";
 import { client } from "../../apiClient";
+import { Task } from "@lit/task";
 
 @customElement("cup-view-home")
 export default class CupViewHome extends LitElement {
   @consume({ context: userContext, subscribe: true })
   user: User | null = null;
   @state() message: string = "Hello, World!";
+
+  club = new Task(this, {
+    task: async ([clubId]) => {
+      if (!clubId) {
+        return null;
+      }
+      let resp = await client.GET("/api/query/get_club", {
+        searchParams: { id: clubId },
+      });
+      if (resp.error) {
+        throw new Error((resp.error as any).message);
+      }
+      if (!resp.data) {
+        throw new Error("Club not found");
+      }
+      return resp.data;
+    },
+    args: () => [this.user?.club_id],
+  });
 
   override render() {
     return html`<h1>Hi ${this.user?.name}</h1>
@@ -20,12 +40,20 @@ export default class CupViewHome extends LitElement {
         ${this.user?.email_verified ? "✔️" : "❌"}
       </p>
       <button @click=${this.logout}>Logout</button>
-      <br />
+
+      <h2>Verein</h2>
+
       ${this.user?.email_verified
         ? this.user?.club_id
-          ? html`<a href="/manage_club?club=${this.user.club_id}"
-              >Verein verwalten</a
-            >`
+          ? html` ${this.club.render({
+                complete: (club) => html`<p>Du bist im Verein ${club!.name}</p>`,
+                pending: () => html`<p>Verein wird geladen...</p>`,
+                error: (error) => html`<p>${error}</p>`,
+              })}
+
+              <a href="/manage_club?club=${this.user.club_id}"
+                >Verein verwalten</a
+              >`
           : html`<a href="/create_club">Verein Erstellen</a>`
         : html`<p>
             Du musst deine EMail verifizieren, um einen Verein zu erstellen.
@@ -34,7 +62,7 @@ export default class CupViewHome extends LitElement {
             <button @click=${this.reverifyMail}>
               Neue Verifizierungsmail schicken
             </button>
-          </p>`} `;
+          </p>`}`;
   }
 
   async logout() {

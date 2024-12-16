@@ -3,6 +3,7 @@ import { LitElement, html, css, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { User, userContext } from "../../contexts/user";
 import { client } from "../../apiClient";
+import "../elements/cup-centered-icon-box.js";
 
 @customElement("cup-view-register")
 export default class CupViewRegister extends LitElement {
@@ -27,41 +28,6 @@ export default class CupViewRegister extends LitElement {
       direction: ltr;
       font-feature-settings: "liga";
       -webkit-font-smoothing: antialiased;
-    }
-
-    main {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100dvh;
-      background: #99add7;
-      padding: 1rem;
-    }
-
-    #wrapper {
-      display: flex;
-      background: #fff;
-      border-radius: 0.5rem;
-      overflow: hidden;
-      flex-wrap: wrap;
-      place-content: center;
-
-      & aside {
-        width: 15rem;
-        flex-grow: 1;
-        display: flex;
-        place-items: center;
-        justify-content: center;
-        padding: 2rem;
-        background: #002d56;
-
-        & img {
-          width: 100%;
-          max-width: 12rem;
-          max-height: 12rem;
-          height: 100%;
-        }
-      }
     }
 
     form {
@@ -130,52 +96,47 @@ export default class CupViewRegister extends LitElement {
   @state() error?: string = undefined;
 
   override render() {
-    return html`<main>
-      <div id="wrapper">
-        <aside>
-          <img src="/assets/images/nrw-freestyle-cup.svg" />
-        </aside>
-        <form @submit=${this.register}>
-          <h1>NRW Freestyle Cup 2025</h1>
-          <h2>Registrierung</h2>
-          ${this.error ? html`<p id="error">${this.error}</p>` : nothing}
-          <label>
-            Name
-            <input type="text" name="name" placeholder="Name" required />
-          </label>
-          <label>
-            E-Mail
-            <input type="text" name="email" placeholder="E-Mail" required />
-          </label>
-          <label>
-            Passwort
-            <input
-              type="password"
-              name="password"
-              placeholder="Passwort"
-              required
-            />
-          </label>
-          <label>
-            Passwort wiederholen
-            <input
-              type="password"
-              name="passwordRepeat"
-              placeholder="Passwort wiederholen"
-              required
-            />
-          </label>
-          <div id="action-buttons">
-            <button type="submit">
-              <i class="material-icon">app_registration</i> Registrieren
-            </button>
-            <a href="/" id="login">
-              <i class="material-icon">login</i> Zurück zum Login
-            </a>
-          </div>
-        </form>
-      </div>
-    </main>`;
+    return html`<cup-centered-icon-box>
+      <form @submit=${this.register}>
+        <h1>NRW Freestyle Cup 2025</h1>
+        <h2>Registrierung</h2>
+        ${this.error ? html`<p id="error">${this.error}</p>` : nothing}
+        <label>
+          Name
+          <input type="text" name="name" placeholder="Name" required />
+        </label>
+        <label>
+          E-Mail
+          <input type="text" name="email" placeholder="E-Mail" required />
+        </label>
+        <label>
+          Passwort
+          <input
+            type="password"
+            name="password"
+            placeholder="Passwort"
+            required
+          />
+        </label>
+        <label>
+          Passwort wiederholen
+          <input
+            type="password"
+            name="passwordRepeat"
+            placeholder="Passwort wiederholen"
+            required
+          />
+        </label>
+        <div id="action-buttons">
+          <button type="submit">
+            <i class="material-icon">app_registration</i> Registrieren
+          </button>
+          <a href="/" id="login">
+            <i class="material-icon">login</i> Zurück zum Login
+          </a>
+        </div>
+      </form>
+    </cup-centered-icon-box>`;
   }
 
   async register(event: SubmitEvent) {

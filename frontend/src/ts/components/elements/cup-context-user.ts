@@ -3,6 +3,7 @@ import { customElement, state } from "lit/decorators.js";
 import { User, userContext } from "../../contexts/user.js";
 import { provide } from "@lit/context";
 import { client } from "../../apiClient.js";
+import "./cup-centered-icon-box.js";
 
 @customElement("cup-context-user")
 export default class CupContextUser extends LitElement {
@@ -27,41 +28,6 @@ export default class CupContextUser extends LitElement {
       direction: ltr;
       font-feature-settings: "liga";
       -webkit-font-smoothing: antialiased;
-    }
-
-    main {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100dvh;
-      background: #99add7;
-      padding: 1rem;
-    }
-
-    #wrapper {
-      display: flex;
-      background: #fff;
-      border-radius: 0.5rem;
-      overflow: hidden;
-      flex-wrap: wrap;
-      place-content: center;
-
-      & aside {
-        width: 15rem;
-        flex-grow: 1;
-        display: flex;
-        place-items: center;
-        justify-content: center;
-        padding: 2rem;
-        background: #002d56;
-
-        & img {
-          width: 100%;
-          max-width: 12rem;
-          max-height: 12rem;
-          height: 100%;
-        }
-      }
     }
 
     form {
@@ -134,54 +100,48 @@ export default class CupContextUser extends LitElement {
   @state() error?: string;
 
   override render() {
-    console.log("this.error", this.error);
     return this.user
       ? html`<slot @login=${this.getLogin} @logout=${this.getLogin}></slot>`
-      : html`<main>
-          <div id="wrapper">
-            <aside>
-              <img src="/assets/images/nrw-freestyle-cup.svg" />
-            </aside>
-            <form @submit=${this.login}>
-              <h1>NRW Freestyle Cup 2025</h1>
-              <h2>Traineranmeldung</h2>
-              ${this.error ? html`<p id="error">${this.error}</p>` : nothing}
-              <label>
-                Email
-                <input
-                  type="text"
-                  name="email"
-                  placeholder="Email"
-                  required
-                  autocomplete="username"
-                  id="email"
-                />
-              </label>
-              <label>
-                Password
-                <input
-                  type="password"
-                  name="password"
-                  placeholder="Password"
-                  autocomplete="current-password"
-                  required
-                  id="password"
-                />
-              </label>
-              <div id="action-buttons">
-                <button type="submit">
-                  <i class="material-icon">login</i> Login
-                </button>
-                <a href="/register" id="register">
-                  <i class="material-icon">app_registration</i> Registrieren
-                </a>
-                <a href="/request_password_reset" id="pw-reset">
-                  <i class="material-icon">key_off</i> Passwort Vergessen
-                </a>
-              </div>
-            </form>
-          </div>
-        </main>`;
+      : html`<cup-centered-icon-box>
+          <form @submit=${this.login}>
+            <h1>NRW Freestyle Cup 2025</h1>
+            <h2>Traineranmeldung</h2>
+            ${this.error ? html`<p id="error">${this.error}</p>` : nothing}
+            <label>
+              Email
+              <input
+                type="text"
+                name="email"
+                placeholder="Email"
+                required
+                autocomplete="username"
+                id="email"
+              />
+            </label>
+            <label>
+              Password
+              <input
+                type="password"
+                name="password"
+                placeholder="Password"
+                autocomplete="current-password"
+                required
+                id="password"
+              />
+            </label>
+            <div id="action-buttons">
+              <button type="submit">
+                <i class="material-icon">login</i> Login
+              </button>
+              <a href="/register" id="register">
+                <i class="material-icon">app_registration</i> Registrieren
+              </a>
+              <a href="/request_password_reset" id="pw-reset">
+                <i class="material-icon">key_off</i> Passwort Vergessen
+              </a>
+            </div>
+          </form>
+        </cup-centered-icon-box>`;
   }
 
   constructor() {
