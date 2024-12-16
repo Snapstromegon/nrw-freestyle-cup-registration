@@ -37,6 +37,16 @@ export default class CupApp extends LitElement {
       load: () => import("./views/cup-view-verify-email.js"),
       render: () => html`<cup-view-verify-email></cup-view-verify-email>`,
     },
+    {
+      path: new URLPattern({ pathname: "/request_password_reset" }),
+      load: () => import("./views/cup-view-request-password-reset.js"),
+      render: () => html`<cup-view-request-password-reset></cup-view-request-password-reset>`,
+    },
+    {
+      path: new URLPattern({ pathname: "/reset_password" }),
+      load: () => import("./views/cup-view-reset-password.js"),
+      render: () => html`<cup-view-reset-password></cup-view-reset-password>`,
+    },
   ];
 
   get currentRoute() {

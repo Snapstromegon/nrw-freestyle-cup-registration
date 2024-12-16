@@ -4,6 +4,8 @@ use utoipa_axum::{router::OpenApiRouter, routes};
 mod register;
 mod verify_email;
 mod resend_mail_validation;
+mod request_password_reset;
+mod reset_password;
 mod login;
 mod logout;
 mod create_club;
@@ -14,6 +16,8 @@ pub fn get_command_router() -> OpenApiRouter {
         .routes(routes!(register::register))
         .routes(routes!(verify_email::verify_email))
         .routes(routes!(resend_mail_validation::resend_mail_validation))
+        .routes(routes!(request_password_reset::request_password_reset))
+        .routes(routes!(reset_password::reset_password))
         .routes(routes!(login::login))
         .routes(routes!(logout::logout))
         .routes(routes!(create_club::create_club))

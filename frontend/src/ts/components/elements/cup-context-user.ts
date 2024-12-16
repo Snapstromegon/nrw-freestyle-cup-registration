@@ -175,7 +175,7 @@ export default class CupContextUser extends LitElement {
                 <a href="/register" id="register">
                   <i class="material-icon">app_registration</i> Registrieren
                 </a>
-                <a href="/reset-password" id="pw-reset">
+                <a href="/request_password_reset" id="pw-reset">
                   <i class="material-icon">key_off</i> Passwort Vergessen
                 </a>
               </div>
