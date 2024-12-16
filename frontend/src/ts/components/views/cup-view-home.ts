@@ -15,6 +15,15 @@ export default class CupViewHome extends LitElement {
       ${this.user?.is_admin
         ? html`<p>Du bist Admin! <a href="/admin">Admininterface</a></p>`
         : nothing}
+      <p>
+        Deine Email ist ${this.user?.email}. Verifiziert:
+        ${this.user?.email_verified ? "✔️" : "❌"}
+      </p>
+      ${this.user?.email_verified
+        ? nothing
+        : html`<button @click=${this.reverifyMail}>
+            Neue Verifizierungsmail schicken
+          </button>`}
       <button @click=${this.logout}>Logout</button>`;
   }
 
@@ -22,5 +31,15 @@ export default class CupViewHome extends LitElement {
     await client.POST("/api/command/logout");
     window.location.href = "/";
     this.dispatchEvent(new Event("logout", { bubbles: true, composed: true }));
+  }
+
+  async reverifyMail() {
+    const data = await client.POST("/api/command/resend_mail_validation", { body: {} });
+    if (data.error) {
+      console.error(data.error);
+      alert("Fehler beim Versenden der Mail: " + data.error);
+      return;
+    }
+    alert("Mail wurde versendet.");
   }
 }

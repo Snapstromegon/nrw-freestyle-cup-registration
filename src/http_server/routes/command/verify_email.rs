@@ -1,14 +1,17 @@
 use std::sync::Arc;
 
-use axum::{extract::Query, Extension, Json};
+use axum::{Extension, Json};
 use axum_extra::extract::CookieJar;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
-use tracing::instrument;
+use tracing::{info, instrument};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{http_server::HttpError, jwt::JWTConfig};
+use crate::{
+    http_server::{ClientError, HttpError},
+    jwt::JWTConfig,
+};
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct VerifyMailResponse {
@@ -16,19 +19,20 @@ pub struct VerifyMailResponse {
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
-pub struct VerifyMailQuery {
-    email: String,
+pub struct VerifyMailBody {
+    token: Uuid,
 }
 
 /// VerifyMail a new user.
 ///
 /// This endpoint is used to create a new user.
 #[utoipa::path(
-    get,
+    post,
     tags=["command", "user"],
     path="/verify_email",
     responses(
         (status=200, content_type="application/json", body=VerifyMailResponse),
+        (status=500, content_type="application/json", body=ClientError),
     ),
 )]
 #[instrument(skip(db, jwt_config))]
@@ -36,25 +40,43 @@ pub struct VerifyMailQuery {
 pub async fn verify_email(
     Extension(db): Extension<SqlitePool>,
     Extension(jwt_config): Extension<Arc<JWTConfig>>,
-    Query(body): Query<VerifyMailQuery>,
     cookies: CookieJar,
+    Json(body): Json<VerifyMailBody>,
 ) -> Result<(CookieJar, Json<VerifyMailResponse>), HttpError> {
+    info!("Verifying email");
     let user = sqlx::query!(
         r#"
-        UPDATE users SET email_verified = true WHERE email = ? RETURNING id as "id!: Uuid"
+        SELECT user_id as "user_id!: Uuid" FROM mail_verification WHERE id = ?
         "#,
-        body.email
+        body.token
     )
     .fetch_optional(&db)
     .await?;
-
+    info!("User ID: {:?}", user);
     if let Some(user) = user {
+        sqlx::query!(
+            r#"UPDATE users SET email_verified = true WHERE id = ?"#,
+            user.user_id
+        )
+        .execute(&db)
+        .await?;
+        sqlx::query!(
+            r#"DELETE FROM mail_verification WHERE user_id = ?"#,
+            user.user_id
+        )
+        .execute(&db)
+        .await?;
+        info!("Found user: {:?}", user);
         Ok((
-            jwt_config.add_jwt_cookie(cookies, user.id).map_err(|e| {
-                tracing::error!("Failed to add JWT cookie: {:?}", e);
-                HttpError::InvalidCredentials
-            })?,
-            Json(VerifyMailResponse { user_id: user.id }),
+            jwt_config
+                .add_jwt_cookie(cookies, user.user_id)
+                .map_err(|e| {
+                    tracing::error!("Failed to add JWT cookie: {:?}", e);
+                    HttpError::InvalidCredentials
+                })?,
+            Json(VerifyMailResponse {
+                user_id: user.user_id,
+            }),
         ))
     } else {
         Err(HttpError::NotFound)

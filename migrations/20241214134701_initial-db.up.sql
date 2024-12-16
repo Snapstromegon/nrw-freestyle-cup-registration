@@ -10,6 +10,13 @@ CREATE TABLE
     "club_id" BLOB
   );
 
+CREATE TABLE IF NOT EXISTS "mail_verification" (
+  "id" BLOB PRIMARY KEY,
+  "user_id" BLOB NOT NULL,
+  "created_at" TIMESTAMP NOT NULL,
+  FOREIGN KEY ("user_id") REFERENCES "users" ("id")
+);
+
 CREATE TABLE
   IF NOT EXISTS "clubs" (
     "id" BLOB PRIMARY KEY,

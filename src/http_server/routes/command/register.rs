@@ -1,10 +1,13 @@
 use std::sync::Arc;
 
+use askama::Template;
 use axum::{Extension, Json};
 use axum_extra::extract::CookieJar;
+use password_auth::generate_hash;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tracing::instrument;
+use url::Url;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -12,6 +15,7 @@ use crate::{
     http_server::{ClientError, HttpError, HttpServerOptions},
     jwt::JWTConfig,
     mailer::Mailer,
+    templates::VerifyMail,
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -53,6 +57,7 @@ pub async fn register(
     check_password(&body.password).map_err(HttpError::ErrorMessages)?;
     check_email_exists(&db, &body.email).await?;
     let user_id = Uuid::now_v7();
+    let hashed_password = generate_hash(body.password);
     sqlx::query!(
         r#"
         INSERT INTO users (id, name, email, email_verified, password, is_admin)
@@ -62,17 +67,42 @@ pub async fn register(
         body.name,
         body.email,
         false,
-        body.password,
+        hashed_password,
         false
     )
     .execute(&db)
     .await?;
 
+    // Create a token for email verification
+    let email_token = Uuid::new_v4();
+    let now = time::OffsetDateTime::now_utc();
+    sqlx::query!(
+        r#"
+        INSERT INTO mail_verification (id, user_id, created_at)
+        VALUES (?, ?, ?)
+        "#,
+        email_token,
+        user_id,
+        now
+    )
+    .execute(&db)
+    .await?;
+
+    let verify_link = Url::parse(&http_options.base_url)
+        .expect("Invalid Base URL")
+        .join(&format!("/verify_email?token={}", email_token))
+        .expect("Invalid URL")
+        .to_string();
+
     mailer
         .send_text(
             &body.email,
             "Freestyle Cup NRW - Email bestätigen",
-            &format!("Hallo {},\n\nWillkommen im Frewestyle Cup NRW Anmeldesystem.\n\nUm mit der Anmeldung zu beginnen, bestätige deine Email Adresse über diesen Link: {}\n\nMIt freundlichen Grüßen,\nDein Freestyle Cup NRW Team\n\nP.S.: Bitte nicht auf diese Mail antworten - das Postfach wird nicht gelesen.", body.name, http_options.base_url),
+            &VerifyMail {
+                name: &body.name,
+                verify_link: &verify_link,
+            }
+            .render()?,
         )
         .await?;
 

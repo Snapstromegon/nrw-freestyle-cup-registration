@@ -14,6 +14,7 @@ path = "src/bin/gen_openapi.rs"
 
 [dependencies]
 anyhow = "1.0.94"
+askama = "0.12.1"
 axum = { version = "0.7.9", features = ["macros", "multipart"] }
 axum-embed = "0.1.0"
 axum-extra = { version = "0.9.6", features = ["cookie"] }
@@ -25,7 +26,7 @@ password-auth = "1.0.0"
 rust-embed = "8.5.0"
 serde = "1.0.216"
 serde_json = "1.0.133"
-sqlx = { version = "0.8.2", features = ["runtime-tokio", "sqlite", "uuid"] }
+sqlx = { version = "0.8.2", features = ["runtime-tokio", "sqlite", "time", "uuid"] }
 thiserror = "2.0.7"
 time = "0.3.37"
 tokio = { version = "1.42.0", features = ["full"] }

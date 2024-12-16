@@ -12,6 +12,8 @@ pub mod routes;
 
 #[derive(Debug, thiserror::Error)]
 pub enum HttpError {
+    #[error("Template error: {0}")]
+    TemplateError(#[from] askama::Error),
     #[error("Not found")]
     NotFound,
     #[error("Internal server error")]
@@ -48,6 +50,7 @@ pub enum ClientError {
 impl From<HttpError> for ClientError {
     fn from(e: HttpError) -> Self {
         match e {
+            HttpError::TemplateError(e) => ClientError::Generic(format!("Template error: {:?}", e)),
             HttpError::NotFound => ClientError::NotFound,
             HttpError::InternalServerError => ClientError::InternalServerError,
             HttpError::DBError(e) => ClientError::Generic(format!("Database error: {:?}", e)),
