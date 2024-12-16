@@ -19,12 +19,22 @@ export default class CupViewHome extends LitElement {
         Deine Email ist ${this.user?.email}. Verifiziert:
         ${this.user?.email_verified ? "✔️" : "❌"}
       </p>
+      <button @click=${this.logout}>Logout</button>
+      <br />
       ${this.user?.email_verified
-        ? nothing
-        : html`<button @click=${this.reverifyMail}>
-            Neue Verifizierungsmail schicken
-          </button>`}
-      <button @click=${this.logout}>Logout</button>`;
+        ? this.user?.club_id
+          ? html`<a href="/manage_club?club=${this.user.club_id}"
+              >Verein verwalten</a
+            >`
+          : html`<a href="/create_club">Verein Erstellen</a>`
+        : html`<p>
+            Du musst deine EMail verifizieren, um einen Verein zu erstellen.
+            Falls du keine Verifizierungsmail bekommen hast, kannst du hier eine
+            neue versenden:
+            <button @click=${this.reverifyMail}>
+              Neue Verifizierungsmail schicken
+            </button>
+          </p>`} `;
   }
 
   async logout() {
@@ -34,7 +44,9 @@ export default class CupViewHome extends LitElement {
   }
 
   async reverifyMail() {
-    const data = await client.POST("/api/command/resend_mail_validation", { body: {} });
+    const data = await client.POST("/api/command/resend_mail_validation", {
+      body: {},
+    });
     if (data.error) {
       console.error(data.error);
       alert("Fehler beim Versenden der Mail: " + data.error);

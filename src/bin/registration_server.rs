@@ -82,7 +82,6 @@ async fn main() -> anyhow::Result<()> {
 
     migrate!().run(&db).await?;
 
-    info!("{:?}", args.admin);
     if let Some(admin) = &args.admin {
         insert_admin_user(&db, &admin.name, &admin.email, &admin.password).await?;
     }

@@ -34,7 +34,7 @@ export default class CupViewVerifyEmail extends LitElement {
       display: flex;
       justify-content: center;
       align-items: center;
-      height: 100vh;
+      height: 100dvh;
       background: #99add7;
       padding: 1rem;
     }

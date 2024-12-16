@@ -33,7 +33,7 @@ export default class CupContextUser extends LitElement {
       display: flex;
       justify-content: center;
       align-items: center;
-      height: 100vh;
+      height: 100dvh;
       background: #99add7;
       padding: 1rem;
     }
@@ -153,7 +153,7 @@ export default class CupContextUser extends LitElement {
                   name="email"
                   placeholder="Email"
                   required
-                  autocomplete="on"
+                  autocomplete="username"
                   id="email"
                 />
               </label>
@@ -163,7 +163,7 @@ export default class CupContextUser extends LitElement {
                   type="password"
                   name="password"
                   placeholder="Password"
-                  autocomplete="on"
+                  autocomplete="current-password"
                   required
                   id="password"
                 />
@@ -207,6 +207,7 @@ export default class CupContextUser extends LitElement {
       this.error = "Login failed.";
       return;
     }
+    window.location.reload();
     this.getLogin();
   }
 
