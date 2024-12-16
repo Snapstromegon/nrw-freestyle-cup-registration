@@ -8,6 +8,7 @@ use nrw_freestyle_cup_registration::{
 };
 use password_auth::generate_hash;
 use serde::Deserialize;
+use sqlx::migrate;
 use tracing::info;
 use tracing_subscriber::FmtSubscriber;
 use url::Url;
@@ -78,6 +79,8 @@ async fn main() -> anyhow::Result<()> {
     let db = sqlx::sqlite::SqlitePool::connect(&args.db.to_string_lossy())
         .await
         .expect("Couldn't connect to database");
+
+    migrate!().run(&db).await?;
 
     info!("{:?}", args.admin);
     if let Some(admin) = &args.admin {

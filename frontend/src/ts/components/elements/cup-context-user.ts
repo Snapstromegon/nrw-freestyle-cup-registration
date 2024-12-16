@@ -73,11 +73,13 @@ export default class CupContextUser extends LitElement {
       border-radius: 0.5rem;
 
       & input,
-      button, a {
+      button,
+      a {
         padding: 0.5rem;
       }
 
-      & button, a {
+      & button,
+      a {
         background: #009036;
         color: #fff;
         border: none;
@@ -100,7 +102,8 @@ export default class CupContextUser extends LitElement {
       gap: 1rem;
       flex-wrap: wrap;
 
-      & button, & a {
+      & button,
+      & a {
         flex-grow: 1;
         display: flex;
         align-items: center;
@@ -111,6 +114,12 @@ export default class CupContextUser extends LitElement {
       & a {
         text-decoration: none;
       }
+    }
+
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
     }
 
     #error {
@@ -137,22 +146,28 @@ export default class CupContextUser extends LitElement {
               <h1>NRW Freestyle Cup 2025</h1>
               <h2>Traineranmeldung</h2>
               ${this.error ? html`<p id="error">${this.error}</p>` : nothing}
-              <input
-                type="text"
-                name="email"
-                placeholder="Email"
-                required
-                autocomplete="on"
-                id="email"
-              />
-              <input
-                type="password"
-                name="password"
-                placeholder="Password"
-                autocomplete="on"
-                required
-                id="password"
-              />
+              <label>
+                Email
+                <input
+                  type="text"
+                  name="email"
+                  placeholder="Email"
+                  required
+                  autocomplete="on"
+                  id="email"
+                />
+              </label>
+              <label>
+                Password
+                <input
+                  type="password"
+                  name="password"
+                  placeholder="Password"
+                  autocomplete="on"
+                  required
+                  id="password"
+                />
+              </label>
               <div id="action-buttons">
                 <button type="submit">
                   <i class="material-icon">login</i> Login

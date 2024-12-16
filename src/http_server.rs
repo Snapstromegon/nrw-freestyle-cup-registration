@@ -1,13 +1,14 @@
 use std::sync::Arc;
 
-use axum::response::IntoResponse;
+use axum::{response::IntoResponse, Json};
+use serde::Serialize;
 use sqlx::SqlitePool;
 use tracing::{error, info};
 
 use crate::{jwt::JWTConfig, mailer::Mailer};
 
-pub mod routes;
 pub mod extractor;
+pub mod routes;
 
 #[derive(Debug, thiserror::Error)]
 pub enum HttpError {
@@ -17,32 +18,58 @@ pub enum HttpError {
     InternalServerError,
     #[error("Database error: {0}")]
     DBError(#[from] sqlx::Error),
-    #[error("Error messages: {0}")]
+    #[error("Mail error: {0}")]
+    MailError(#[from] lettre::transport::smtp::Error),
+    #[error("{0}")]
     ErrorMessages(String),
     #[error("Invalid credentials")]
     InvalidCredentials,
 }
 
 impl IntoResponse for HttpError {
-    fn into_response(self) -> axum::http::Response<axum::body::Body> {
-        match self {
-            HttpError::NotFound => axum::http::StatusCode::NOT_FOUND.into_response(),
-            HttpError::InternalServerError => {
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
-            }
-            HttpError::DBError(e) => {
-                error!("Database error: {:?}", e);
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
-            }
-            HttpError::ErrorMessages(e) => {
-                error!("Error messages: {:?}", e);
-                (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e).into_response()
-            }
-            HttpError::InvalidCredentials => {
-                error!("Invalid credentials");
-                axum::http::StatusCode::UNAUTHORIZED.into_response()
-            }
+    fn into_response(self) -> axum::response::Response {
+        ClientError::from(self).into_response()
+    }
+}
+
+#[derive(Debug, thiserror::Error, Serialize, utoipa::ToSchema)]
+#[serde(tag = "type", content = "message")]
+pub enum ClientError {
+    #[error("Not found")]
+    NotFound,
+    #[error("Internal server error")]
+    InternalServerError,
+    #[error("Invalid credentials")]
+    InvalidCredentials,
+    #[error("{0}")]
+    Generic(String),
+}
+
+impl From<HttpError> for ClientError {
+    fn from(e: HttpError) -> Self {
+        match e {
+            HttpError::NotFound => ClientError::NotFound,
+            HttpError::InternalServerError => ClientError::InternalServerError,
+            HttpError::DBError(e) => ClientError::Generic(format!("Database error: {:?}", e)),
+            HttpError::MailError(e) => ClientError::Generic(format!("Mail error: {:?}", e)),
+            HttpError::ErrorMessages(e) => ClientError::Generic(format!("{e:?}")),
+            HttpError::InvalidCredentials => ClientError::InvalidCredentials,
         }
+    }
+}
+
+impl IntoResponse for ClientError {
+    fn into_response(self) -> axum::http::Response<axum::body::Body> {
+        (
+            match &self {
+                Self::NotFound => axum::http::StatusCode::NOT_FOUND,
+                Self::InternalServerError => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                Self::Generic(_) => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                Self::InvalidCredentials => axum::http::StatusCode::UNAUTHORIZED,
+            },
+            Json(self),
+        )
+            .into_response()
     }
 }
 
@@ -75,7 +102,12 @@ impl HttpServer {
     }
 
     pub fn start(&mut self) -> tokio::task::JoinHandle<()> {
-        let app = routes::get_router(self.options.clone(), self.db.clone(), self.mailer.clone(), self.jwt.clone());
+        let app = routes::get_router(
+            self.options.clone(),
+            self.db.clone(),
+            self.mailer.clone(),
+            self.jwt.clone(),
+        );
         let address = self.options.bind_address.clone();
 
         tokio::spawn(async move {
