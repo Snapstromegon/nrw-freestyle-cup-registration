@@ -38,7 +38,7 @@ CREATE TABLE
     "club_id" BLOB NOT NULL,
     "firstname" TEXT NOT NULL,
     "lastname" TEXT NOT NULL,
-    "birthdate" DATE NOT NULL,
+    "birthdate" DATETIME NOT NULL,
     "sonderpokal" BOOLEAN NOT NULL,
     "single_male" BOOLEAN NOT NULL,
     "single_female" BOOLEAN NOT NULL,

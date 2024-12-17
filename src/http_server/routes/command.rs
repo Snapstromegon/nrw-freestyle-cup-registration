@@ -10,6 +10,8 @@ mod login;
 mod logout;
 mod create_club;
 mod rename_club;
+mod add_club_starter;
+mod delete_club_starter;
 
 pub fn get_command_router() -> OpenApiRouter {
     OpenApiRouter::new()
@@ -22,5 +24,7 @@ pub fn get_command_router() -> OpenApiRouter {
         .routes(routes!(logout::logout))
         .routes(routes!(create_club::create_club))
         .routes(routes!(rename_club::rename_club))
+        .routes(routes!(add_club_starter::add_club_starter))
+        .routes(routes!(delete_club_starter::delete_club_starter))
         .layer(DefaultBodyLimit::max(1024 * 1024 * 10))
 }

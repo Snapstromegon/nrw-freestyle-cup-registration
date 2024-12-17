@@ -11,7 +11,8 @@ pub struct ClubStarter {
     club_id: Uuid,
     firstname: String,
     lastname: String,
-    birthdate: time::Date,
+    #[serde(with = "time::serde::iso8601")]
+    birthdate: time::OffsetDateTime,
     sonderpokal: bool,
     single_male: bool,
     single_female: bool,
