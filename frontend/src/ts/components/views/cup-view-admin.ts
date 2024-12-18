@@ -2,10 +2,11 @@ import { consume } from "@lit/context";
 import { LitElement, html, nothing, css } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { User, userContext } from "../../contexts/user";
-import { client } from "../../apiClient";
+import { client, components } from "../../apiClient";
 import "../elements/cup-context-club.js";
 import "../elements/cup-club-manager.js";
 import { Task } from "@lit/task";
+import { Club } from "../../contexts/club";
 
 @customElement("cup-view-admin")
 export default class CupViewAdmin extends LitElement {
@@ -41,7 +42,32 @@ export default class CupViewAdmin extends LitElement {
       if (data.error) {
         throw new Error((data.error as { message: string }).message);
       }
-      return data.data;
+      const users = data.data as (User & {
+        club?: components["schemas"]["Club"];
+        starters?: components["schemas"]["ClubStarter"][];
+      })[];
+
+      for (const user of users) {
+        if (user.club_id !== null) {
+          const club = await client.GET(`/api/query/get_club`, {
+            params: {
+              query: {
+                club_id: user.club_id,
+              },
+            },
+          });
+          const starters = await client.GET(`/api/query/list_club_starters`, {
+            params: {
+              query: {
+                club_id: user.club_id!,
+              },
+            },
+          });
+          user.club = club.data;
+          user.starters = starters.data?.starters;
+        }
+      }
+      return users;
     },
     args: () => [],
   });
@@ -50,28 +76,39 @@ export default class CupViewAdmin extends LitElement {
     return html`
       <h2>Users</h2>
       ${this.users.render({
-        complete: (data) => html`<table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Verified</th>
-              <th>Admin</th>
-              <th>Club ID</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${data?.map((user: any) => html`<tr>
-              <td>${user.id}</td>
-              <td>${user.name}</td>
-              <td>${user.email}</td>
-              <td>${user.email_verified ? '✔️' : '❌'}</td>
-              <td>${user.is_admin ? '✔️' : '❌'}</td>
-              <td>${user.club_id}</td>
-            </tr>`)}
-          </tbody>
-        </table>`,
+        complete: (data) =>
+          html` ${data?.map(
+            (user) => html`<div>
+              <h3>${user.name}</h3>
+              <p>${user.email}</p>
+              <p>${user.email_verified ? "✔️" : "❌"}</p>
+              <p>${user.is_admin ? "✔️" : "❌"}</p>
+              ${user.club
+                ? html`
+                    <p>${user.club.name}</p>
+                    <table>
+                      <tbody>
+                        ${user.starters?.map(
+                          (starter) => html`
+                            <tr>
+                              <td>${starter.firstname}</td>
+                              <td>${starter.lastname}</td>
+                              <td>${starter.birthdate}</td>
+                              <td>${starter.sonderpokal}</td>
+                              <td>${starter.single_male}</td>
+                              <td>${starter.single_female}</td>
+                              <td>${starter.pair}</td>
+                              <td>${starter.partner_name}</td>
+
+                            </tr>
+                          `
+                        )}
+                      </tbody>
+                    </table>
+                  `
+                : nothing}
+            </div>`
+          )}`,
         error: (error) => html`<li>${error}</li>`,
         pending: () => html`<li>Loading...</li>`,
       })}
