@@ -1,68 +1,136 @@
 import { consume } from "@lit/context";
-import { LitElement, html, nothing } from "lit";
+import { LitElement, html, nothing, css } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { User, userContext } from "../../contexts/user";
 import { client } from "../../apiClient";
-import { Task } from "@lit/task";
+import "../elements/cup-context-club.js";
+import "../elements/cup-club-manager.js";
 
 @customElement("cup-view-home")
 export default class CupViewHome extends LitElement {
+  static override styles = css`
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    .material-icon {
+      font-family: "Material Symbols Outlined";
+      font-weight: normal;
+      font-style: normal;
+      font-size: 24px;
+      line-height: 1;
+      letter-spacing: normal;
+      text-transform: none;
+      display: inline-block;
+      white-space: nowrap;
+      word-wrap: normal;
+      direction: ltr;
+      font-feature-settings: "liga";
+      -webkit-font-smoothing: antialiased;
+    }
+
+    header {
+      display: grid;
+      background: #002d56;
+      padding: 2rem 0;
+      color: #fff;
+      grid-template-columns: 1fr 2fr;
+      grid-template-rows: auto auto auto;
+      grid-template-areas: "img h1" "img date" "img location";
+      place-items: center start;
+    }
+
+    header img {
+      grid-area: img;
+      width: 100%;
+      min-height: 0;
+      height: 7rem;
+      max-height: 100%;
+    }
+
+    header h1 {
+      grid-area: h1;
+      font-size: 2rem;
+      text-align: center;
+    }
+
+    header .date {
+      grid-area: date;
+      text-align: right;
+    }
+
+    header .location {
+      grid-area: location;
+      text-align: right;
+    }
+
+    main {
+      max-width: 80rem;
+      margin: 0 auto;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    #logout {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem;
+      align-self: flex-start;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      padding: 0.25rem 0.75rem;
+      border: none;
+      border-radius: 100vh;
+      background: #e2001a;
+      color: #fff;
+    }
+  `;
+
   @consume({ context: userContext, subscribe: true })
   user: User | null = null;
   @state() message: string = "Hello, World!";
 
-  club = new Task(this, {
-    task: async ([clubId]) => {
-      if (!clubId) {
-        return null;
-      }
-      let resp = await client.GET("/api/query/get_club", {
-        searchParams: { id: clubId },
-      });
-      if (resp.error) {
-        throw new Error((resp.error as any).message);
-      }
-      if (!resp.data) {
-        throw new Error("Club not found");
-      }
-      return resp.data;
-    },
-    args: () => [this.user?.club_id],
-  });
-
   override render() {
-    return html`<h1>Hi ${this.user?.name}</h1>
-      ${this.user?.is_admin
-        ? html`<p>Du bist Admin! <a href="/admin">Admininterface</a></p>`
-        : nothing}
-      <p>
-        Deine Email ist ${this.user?.email}. Verifiziert:
-        ${this.user?.email_verified ? "✔️" : "❌"}
-      </p>
-      <button @click=${this.logout}>Logout</button>
+    return html`<header>
+        <img src="/assets/images/nrw-freestyle-cup.svg" />
+        <h1>Anmeldung NRW Freestyle Cup</h1>
+        <span class="date">15.03. - 16.03.2025</span>
+        <span class="location">SSV Nümbrecht</span>
+      </header>
+      <main>
+        <h2>Hi ${this.user?.name}</h2>
+        ${this.user?.is_admin
+          ? html`<p>Du bist Admin! <a href="/admin">Admininterface</a></p>`
+          : nothing}
+        <p>
+          Deine Email ist ${this.user?.email}. Verifiziert:
+          ${this.user?.email_verified ? "✔️" : "❌"}
+        </p>
+        <button @click=${this.logout} id="logout">
+          <i class="material-icon">logout</i> Logout
+        </button>
 
-      <h2>Verein</h2>
+        <h2>Verein</h2>
 
-      ${this.user?.email_verified
-        ? this.user?.club_id
-          ? html` ${this.club.render({
-                complete: (club) => html`<p>Du bist im Verein ${club!.name}</p>`,
-                pending: () => html`<p>Verein wird geladen...</p>`,
-                error: (error) => html`<p>${error}</p>`,
-              })}
-
-              <a href="/manage_club?club=${this.user.club_id}"
-                >Verein verwalten</a
-              >`
-          : html`<a href="/create_club">Verein Erstellen</a>`
-        : html`<p>
-            Du musst deine EMail verifizieren, um einen Verein zu erstellen.
-            Falls du keine Verifizierungsmail bekommen hast, kannst du hier eine
-            neue versenden:
-            <button @click=${this.reverifyMail}>
-              Neue Verifizierungsmail schicken
-            </button>
-          </p>`}`;
+        ${this.user?.email_verified
+          ? this.user?.club_id
+            ? html`<cup-context-club clubId=${this.user?.club_id}
+                ><cup-club-manager></cup-club-manager
+              ></cup-context-club>`
+            : html`<a href="/create_club">Verein Erstellen</a>`
+          : html`<p>
+              Du musst deine EMail verifizieren, um einen Verein zu erstellen.
+              Falls du keine Verifizierungsmail bekommen hast, kannst du hier
+              eine neue versenden:
+              <button @click=${this.reverifyMail}>
+                Neue Verifizierungsmail schicken
+              </button>
+            </p>`}
+      </main>`;
   }
 
   async logout() {

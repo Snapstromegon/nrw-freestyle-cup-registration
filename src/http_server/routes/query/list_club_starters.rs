@@ -71,7 +71,6 @@ pub async fn list_club_starters(
     )
     .fetch_all(&db)
     .await?;
-    println!("{:?}", club_starters);
     Ok(Json(ListClubStartersResponse {
         starters: club_starters,
     }))
