@@ -37,8 +37,12 @@ export default class CupClubManager extends LitElement {
       -webkit-font-smoothing: antialiased;
     }
 
-    h3, h4 {
+    h3 {
       margin-bottom: .5em;
+    }
+    h4, p {
+      margin-top: 1em;
+      margin-bottom: 0.5em;
     }
 
     .blue {
@@ -58,6 +62,14 @@ export default class CupClubManager extends LitElement {
 
     table {
       width: 100%;
+    }
+
+    #summary {
+      width: auto;
+    }
+
+    #summary th {
+      text-align: left;
     }
 
     tr {
@@ -171,6 +183,32 @@ export default class CupClubManager extends LitElement {
 
   override render() {
     return html`<h3>${this.club?.name}</h3>
+      <p>
+        Der anmeldende Trainer ist dafür verantwortlich, dass alle Starter den
+        Bedingungen aus der Ausschreibung wie zum Beispiel der Veröffentlichung
+        von Namen und Bildern zustimmen.
+      </p>
+
+      <p>Änderungen können noch bis zum Anmeldeschluss am <strong>02.02.2025</strong> vorgenommen werden.</p>
+
+      <h4>Zusammenfassung</h4>
+
+      <table id="summary">
+        <tr>
+          <th>Starter</th>
+          <td>${this.starters.value?.length}</td>
+        </tr>
+        <tr>
+          <th>Gesamtstartgebühr</th>
+          <td>
+            ${(this.starters.value || []).reduce(
+              (acc, starter) => acc + getStarterPrice(starter),
+              0
+            )}€
+          </td>
+        </tr>
+      </table>
+
       <h4>Starter</h4>
       <table>
         <thead>

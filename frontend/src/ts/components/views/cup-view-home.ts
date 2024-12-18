@@ -88,6 +88,12 @@ export default class CupViewHome extends LitElement {
       background: #e2001a;
       color: #fff;
     }
+
+    @media print {
+      #logout {
+        display: none;
+      }
+    }
   `;
 
   @consume({ context: userContext, subscribe: true })

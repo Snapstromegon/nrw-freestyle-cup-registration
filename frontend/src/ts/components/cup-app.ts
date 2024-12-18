@@ -53,11 +53,6 @@ export default class CupApp extends LitElement {
       load: () => import("./views/cup-view-create-club.js"),
       render: () => html`<cup-view-create-club></cup-view-create-club>`,
     },
-    {
-      path: new URLPattern({ pathname: "/manage_club" }),
-      load: () => import("./views/cup-view-manage-club.js"),
-      render: () => html`<cup-view-manage-club></cup-view-manage-club>`,
-    },
   ];
 
   get currentRoute() {
