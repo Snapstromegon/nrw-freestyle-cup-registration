@@ -104,7 +104,10 @@ impl HttpServer {
         }
     }
 
-    pub fn start(&mut self) -> tokio::task::JoinHandle<()> {
+    pub fn start<F>(&mut self, shutdown_signal: F) -> tokio::task::JoinHandle<()>
+    where
+        F: std::future::Future<Output = ()> + Send + 'static,
+    {
         let app = routes::get_router(
             self.options.clone(),
             self.db.clone(),
@@ -116,7 +119,10 @@ impl HttpServer {
         tokio::spawn(async move {
             info!("Starting server on {}", address);
             let listener = tokio::net::TcpListener::bind(address).await.unwrap();
-            axum::serve(listener, app).await.unwrap();
+            axum::serve(listener, app)
+                .with_graceful_shutdown(shutdown_signal)
+                .await
+                .unwrap();
         })
     }
 }

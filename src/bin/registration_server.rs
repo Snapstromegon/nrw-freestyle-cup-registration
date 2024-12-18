@@ -9,6 +9,7 @@ use nrw_freestyle_cup_registration::{
 use password_auth::generate_hash;
 use serde::Deserialize;
 use sqlx::migrate;
+use tokio::signal;
 use tracing::info;
 use tracing_subscriber::FmtSubscriber;
 use url::Url;
@@ -105,7 +106,7 @@ async fn main() -> anyhow::Result<()> {
         Arc::new(jwt_config),
         Arc::new(mailer),
     )
-    .start()
+    .start(shutdown_signal())
     .await?;
 
     Ok(())
@@ -146,4 +147,28 @@ async fn insert_admin_user(
     .execute(db)
     .await?;
     Ok(())
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
 }
