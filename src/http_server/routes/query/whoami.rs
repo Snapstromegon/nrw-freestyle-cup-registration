@@ -3,17 +3,7 @@ use sqlx::SqlitePool;
 use tracing::instrument;
 use uuid::Uuid;
 
-use crate::http_server::{extractor::auth::Auth, HttpError};
-
-#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
-pub struct User {
-    id: Uuid,
-    name: String,
-    email: String,
-    email_verified: bool,
-    is_admin: bool,
-    club_id: Option<Uuid>,
-}
+use crate::http_server::{extractor::auth::Auth, routes::http_types::User, HttpError};
 
 /// Get information about the currently authenticated user.
 #[utoipa::path(
