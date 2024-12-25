@@ -4,6 +4,7 @@ mod get_club;
 mod list_club_starters;
 mod list_users;
 mod whoami;
+mod get_system_status;
 
 pub fn get_query_router() -> OpenApiRouter {
     OpenApiRouter::new()
@@ -11,4 +12,5 @@ pub fn get_query_router() -> OpenApiRouter {
         .routes(routes!(list_club_starters::list_club_starters))
         .routes(routes!(list_users::list_users))
         .routes(routes!(whoami::whoami))
+        .routes(routes!(get_system_status::get_system_status))
 }

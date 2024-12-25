@@ -1,11 +1,11 @@
-use axum::{Extension, Json};
+use axum::{http::StatusCode, Extension, Json};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tracing::instrument;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::http_server::{extractor::auth::Auth, HttpError};
+use crate::{http_server::{extractor::auth::Auth, HttpError}, system_status::Capabilities};
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct RenameClubResponse {
@@ -35,8 +35,12 @@ pub struct RenameClubBody {
 pub async fn rename_club(
     Extension(db): Extension<SqlitePool>,
     auth: Auth,
+    capabilities: Capabilities,
     Json(body): Json<RenameClubBody>,
 ) -> Result<Json<RenameClubResponse>, HttpError> {
+    if !capabilities.can_register_starter {
+        return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
+    }
     if auth.is_admin {
         sqlx::query!(
             r#"

@@ -1,8 +1,9 @@
-import { LitElement, html, TemplateResult } from "lit";
+import { LitElement, html, TemplateResult, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { Task } from "@lit/task";
 import "./views/cup-view-not-found.js";
 import "./elements/cup-context-user.js";
+import "./elements/cup-context-system-status.js";
 // @ts-ignore: Property 'UrlPattern' does not exist
 if (!globalThis.URLPattern) {
   await import("urlpattern-polyfill");
@@ -90,7 +91,7 @@ export default class CupApp extends LitElement {
       error: () =>
         html`<cup-view-not-found .url=${this.location}></cup-view-not-found>`,
       complete: ({ route, urlPatternExec }) =>
-        route ? route.render(urlPatternExec) : "",
+        html`<cup-context-system-status>${route ? route.render(urlPatternExec) : nothing}</cup-context-system-status>`,
     });
   }
 }

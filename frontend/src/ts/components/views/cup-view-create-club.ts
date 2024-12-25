@@ -2,6 +2,8 @@ import { LitElement, html, css, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { client } from "../../apiClient";
 import "../elements/cup-centered-icon-box.js";
+import { SystemStatus, systemStatusContext } from "../../contexts/systemStatus";
+import { consume } from "@lit/context";
 
 @customElement("cup-view-create-club")
 export default class CupViewCreateClub extends LitElement {
@@ -90,31 +92,37 @@ export default class CupViewCreateClub extends LitElement {
     }
   `;
   @state() error?: string = undefined;
+  @consume({ context: systemStatusContext, subscribe: true })
+  systemStatus: SystemStatus | null = null;
 
   override render() {
     return html`<cup-centered-icon-box>
       <form @submit=${this.createClub}>
         <h1>NRW Freestyle Cup 2025</h1>
         <h2>Verein erstellen</h2>
-        <p>
-          Erstelle hier ale Trainer einen neuen Verein. Jeder Verein kann nur
-          einmal existieren.
-        </p>
-        ${this.error ? html`<p id="error">${this.error}</p>` : nothing}
-        <label>
-          Vereinsname
-          <input
-            type="text"
-            name="clubName"
-            placeholder="Vereinsname"
-            required
-          />
-        </label>
-        <div id="action-buttons">
-          <button type="submit">
-            <i class="material-icon">add_circle</i> Verein erstellen
-          </button>
-        </div>
+        ${this.systemStatus?.can_create_club
+          ? html`
+              <p>
+                Erstelle hier ale Trainer einen neuen Verein. Jeder Verein kann
+                nur einmal existieren.
+              </p>
+              ${this.error ? html`<p id="error">${this.error}</p>` : nothing}
+              <label>
+                Vereinsname
+                <input
+                  type="text"
+                  name="clubName"
+                  placeholder="Vereinsname"
+                  required
+                />
+              </label>
+              <div id="action-buttons">
+                <button type="submit">
+                  <i class="material-icon">add_circle</i> Verein erstellen
+                </button>
+              </div>
+            `
+          : html` <p>Die Registrierung ist geschlossen!</p> `}
       </form>
     </cup-centered-icon-box>`;
   }

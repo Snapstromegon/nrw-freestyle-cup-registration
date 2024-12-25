@@ -17,7 +17,7 @@ use utoipa::{openapi::OpenApi, OpenApi as OpenApiTrait};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::{jwt::JWTConfig, mailer::Mailer};
+use crate::{jwt::JWTConfig, mailer::Mailer, system_status::StatusOptions};
 
 use super::HttpServerOptions;
 
@@ -59,6 +59,7 @@ pub fn get_api_router(
     db: SqlitePool,
     mailer: Arc<Mailer>,
     jwt_config: Arc<JWTConfig>,
+    status_options: Arc<StatusOptions>,
 ) -> Router {
     let (router, openapi) = get_openapi_router();
     router
@@ -67,6 +68,7 @@ pub fn get_api_router(
         .layer(Extension(mailer))
         .layer(Extension(jwt_config))
         .layer(Extension(http_options))
+        .layer(Extension(status_options))
 }
 
 #[must_use]
@@ -79,6 +81,7 @@ pub fn get_router(
     db: SqlitePool,
     mailer: Arc<Mailer>,
     jwt_config: Arc<JWTConfig>,
+    status_options: Arc<StatusOptions>,
 ) -> Router {
     let request_id_layer = ServiceBuilder::new()
         .layer(SetRequestIdLayer::new(
@@ -116,6 +119,6 @@ pub fn get_router(
 
     Router::new()
         .nest_service("/", serve_assets)
-        .nest("/", get_api_router(http_options, db, mailer, jwt_config))
+        .nest("/", get_api_router(http_options, db, mailer, jwt_config, status_options))
         .layer(request_id_layer)
 }

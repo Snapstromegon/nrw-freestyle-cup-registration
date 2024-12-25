@@ -1,9 +1,9 @@
 import { consume } from "@lit/context";
 import { LitElement, html, css, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
-import { User, userContext } from "../../contexts/user";
 import { client } from "../../apiClient";
 import "../elements/cup-centered-icon-box.js";
+import { SystemStatus, systemStatusContext } from "../../contexts/systemStatus";
 
 @customElement("cup-view-register")
 export default class CupViewRegister extends LitElement {
@@ -91,8 +91,8 @@ export default class CupViewRegister extends LitElement {
       border-radius: 0.5rem;
     }
   `;
-  @consume({ context: userContext, subscribe: true })
-  user: User | null = null;
+  @consume({ context: systemStatusContext, subscribe: true })
+  systemStatus: SystemStatus | null = null;
   @state() error?: string = undefined;
 
   override render() {
@@ -101,40 +101,51 @@ export default class CupViewRegister extends LitElement {
         <h1>NRW Freestyle Cup 2025</h1>
         <h2>Registrierung</h2>
         ${this.error ? html`<p id="error">${this.error}</p>` : nothing}
-        <label>
-          Name
-          <input type="text" name="name" placeholder="Name" required />
-        </label>
-        <label>
-          E-Mail
-          <input type="text" name="email" placeholder="E-Mail" required />
-        </label>
-        <label>
-          Passwort
-          <input
-            type="password"
-            name="password"
-            placeholder="Passwort"
-            required
-          />
-        </label>
-        <label>
-          Passwort wiederholen
-          <input
-            type="password"
-            name="passwordRepeat"
-            placeholder="Passwort wiederholen"
-            required
-          />
-        </label>
-        <div id="action-buttons">
-          <button type="submit">
-            <i class="material-icon">app_registration</i> Registrieren
-          </button>
-          <a href="/" id="login">
-            <i class="material-icon">login</i> Zurück zum Login
-          </a>
-        </div>
+        ${this.systemStatus?.can_register
+          ? html`
+              <label>
+                Name
+                <input type="text" name="name" placeholder="Name" required />
+              </label>
+              <label>
+                E-Mail
+                <input type="text" name="email" placeholder="E-Mail" required />
+              </label>
+              <label>
+                Passwort
+                <input
+                  type="password"
+                  name="password"
+                  placeholder="Passwort"
+                  required
+                />
+              </label>
+              <label>
+                Passwort wiederholen
+                <input
+                  type="password"
+                  name="passwordRepeat"
+                  placeholder="Passwort wiederholen"
+                  required
+                />
+              </label>
+              <div id="action-buttons">
+                <button type="submit">
+                  <i class="material-icon">app_registration</i> Registrieren
+                </button>
+                <a href="/" id="login">
+                  <i class="material-icon">login</i> Zurück zum Login
+                </a>
+              </div>
+            `
+          : html`
+              <p>Die Registrierung ist geschlossen!</p>
+              <div id="action-buttons">
+                <a href="/" id="login">
+                  <i class="material-icon">login</i> Zurück zum Login
+                </a>
+              </div>
+            `}
       </form>
     </cup-centered-icon-box>`;
   }

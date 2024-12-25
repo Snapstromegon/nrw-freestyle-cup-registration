@@ -1,11 +1,11 @@
-use axum::{Extension, Json};
+use axum::{http::StatusCode, Extension, Json};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tracing::instrument;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::http_server::{extractor::auth::Auth, ClientError, HttpError};
+use crate::{http_server::{extractor::auth::Auth, ClientError, HttpError}, system_status::Capabilities};
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct DeleteClubStarterResponse {}
@@ -34,8 +34,12 @@ pub struct DeleteClubStarterBody {
 pub async fn delete_club_starter(
     Extension(db): Extension<SqlitePool>,
     auth: Auth,
+    capabilities: Capabilities,
     Json(body): Json<DeleteClubStarterBody>,
 ) -> Result<Json<DeleteClubStarterResponse>, HttpError> {
+    if !capabilities.can_register_starter {
+        return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
+    }
     sqlx::query!(
         r#"
         DELETE FROM starter WHERE id = ?;

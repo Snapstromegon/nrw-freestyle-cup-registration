@@ -1,9 +1,10 @@
-import { LitElement, html, css } from "lit";
+import { LitElement, html, css, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { client, components } from "../../apiClient";
 import { consume } from "@lit/context";
 import { Task } from "@lit/task";
 import { Club, clubContext } from "../../contexts/club";
+import { SystemStatus, systemStatusContext } from "../../contexts/systemStatus";
 
 type Starter = { birthdate: Date } & Omit<
   components["schemas"]["ClubStarter"],
@@ -38,9 +39,10 @@ export default class CupClubManager extends LitElement {
     }
 
     h3 {
-      margin-bottom: .5em;
+      margin-bottom: 0.5em;
     }
-    h4, p {
+    h4,
+    p {
       margin-top: 1em;
       margin-bottom: 0.5em;
     }
@@ -93,6 +95,7 @@ export default class CupClubManager extends LitElement {
     }
 
     input,
+    select,
     button {
       padding: 0.25rem;
     }
@@ -148,6 +151,9 @@ export default class CupClubManager extends LitElement {
 
   @consume({ context: clubContext, subscribe: true }) club: Club | null = null;
 
+  @consume({ context: systemStatusContext, subscribe: true })
+  systemStatus: SystemStatus | null = null;
+
   starters = new Task(this, {
     task: async ([clubId]) => {
       if (!clubId) {
@@ -189,7 +195,10 @@ export default class CupClubManager extends LitElement {
         von Namen und Bildern zustimmen.
       </p>
 
-      <p>Änderungen können noch bis zum Anmeldeschluss am <strong>02.02.2025</strong> vorgenommen werden.</p>
+      <p>
+        Änderungen können noch bis zum Anmeldeschluss am
+        <strong>02.02.2025</strong> vorgenommen werden.
+      </p>
 
       <h4>Zusammenfassung</h4>
 
@@ -226,126 +235,128 @@ export default class CupClubManager extends LitElement {
           </tr>
         </thead>
         <tbody>
-          ${this.addStarterMode
-            ? html`<tr id="addStarterRow">
-                <td>
-                  <label
-                    ><span>Vorname</span
-                    ><input
-                      type="text"
-                      .value=${this.addStarter.firstname}
-                      @input=${this.updateAddStarterFirstname}
-                      placeholder="Vorname"
-                  /></label>
-                </td>
-                <td>
-                  <label
-                    ><span>Nachname</span
-                    ><input
-                      type="text"
-                      .value=${this.addStarter.lastname}
-                      @input=${this.updateAddStarterLastname}
-                      placeholder="Nachname"
-                  /></label>
-                </td>
-                <td>
-                  <label
-                    ><span>Geburtstag</span
-                    ><input
-                      type="date"
-                      .value=${this.addStarter.birthdate
-                        .toISOString()
-                        .slice(0, 10)}
-                      @input=${this.updateAddStarterBirthdate}
-                  /></label>
-                </td>
-                <td>
-                  <label
-                    ><span>Kategorie</span
-                    ><select @input=${this.updateAddStarterSonderpokal}>
-                      <option
-                        value="sonderpokal"
-                        ?selected=${this.addStarter.sonderpokal}
-                      >
-                        Sonderpokal
-                      </option>
-                      <option
-                        value="nachwuchscup"
-                        ?selected=${!this.addStarter.sonderpokal}
-                      >
-                        Nachwuchscup
-                      </option>
-                    </select></label
-                  >
-                </td>
-                <td>
-                  <label
-                    ><span>Einzel Männlich</span
-                    ><input
-                      type="checkbox"
-                      .checked=${this.addStarter.single_male}
-                      @input=${this.updateAddStarterSingleMale}
-                  /></label>
-                </td>
-                <td>
-                  <label
-                    ><span>Einzel Weiblich</span
-                    ><input
-                      type="checkbox"
-                      .checked=${this.addStarter.single_female}
-                      @input=${this.updateAddStarterSingleFemale}
-                  /></label>
-                </td>
-                <td>
-                  <label
-                    ><span>Paar</span
-                    ><input
-                      type="checkbox"
-                      .checked=${this.addStarter.pair}
-                      @input=${this.updateAddStarterPair}
-                  /></label>
-                </td>
-                <td>
-                  <label
-                    ><span>Partner Name</span>
-                    <input
-                      type="text"
-                      .value=${this.addStarter.partner_name || ""}
-                      @input=${this.updateAddStarterPartnerName}
-                      placeholder="Partner Name"
-                  /></label>
-                </td>
-                <td>
-                  <label><span>Startgebühr</span></label> ${getStarterPrice(
-                    this.addStarter
-                  )}€
-                </td>
-                <td class="actionCol">
-                  <button
-                    class="green material-icon"
-                    @click=${this.commitAddStarter}
-                  >
-                    save
-                  </button>
-                  <button
-                    class="red material-icon"
-                    @click=${this.resetAddStarter}
-                  >
-                    cancel
-                  </button>
-                </td>
-              </tr>`
-            : html`<tr id="addStarterRow">
-                <td colspan="10">
-                  <button
-                    id="addStarterButton"
-                    class="material-icon"
-                    @click=${() => (this.addStarterMode = true)}
-                  >
-                    add
-                  </button>
-                </td>
-              </tr>`}
+          ${this.systemStatus?.can_register_starter
+            ? this.addStarterMode
+              ? html`<tr id="addStarterRow">
+                  <td>
+                    <label
+                      ><span>Vorname</span
+                      ><input
+                        type="text"
+                        .value=${this.addStarter.firstname}
+                        @input=${this.updateAddStarterFirstname}
+                        placeholder="Vorname"
+                    /></label>
+                  </td>
+                  <td>
+                    <label
+                      ><span>Nachname</span
+                      ><input
+                        type="text"
+                        .value=${this.addStarter.lastname}
+                        @input=${this.updateAddStarterLastname}
+                        placeholder="Nachname"
+                    /></label>
+                  </td>
+                  <td>
+                    <label
+                      ><span>Geburtstag</span
+                      ><input
+                        type="date"
+                        .value=${this.addStarter.birthdate
+                          .toISOString()
+                          .slice(0, 10)}
+                        @input=${this.updateAddStarterBirthdate}
+                    /></label>
+                  </td>
+                  <td>
+                    <label
+                      ><span>Kategorie</span
+                      ><select @input=${this.updateAddStarterSonderpokal}>
+                        <option
+                          value="sonderpokal"
+                          ?selected=${this.addStarter.sonderpokal}
+                        >
+                          Sonderpokal
+                        </option>
+                        <option
+                          value="nachwuchscup"
+                          ?selected=${!this.addStarter.sonderpokal}
+                        >
+                          Nachwuchscup
+                        </option>
+                      </select></label
+                    >
+                  </td>
+                  <td>
+                    <label
+                      ><span>Einzel Männlich</span
+                      ><input
+                        type="checkbox"
+                        .checked=${this.addStarter.single_male}
+                        @input=${this.updateAddStarterSingleMale}
+                    /></label>
+                  </td>
+                  <td>
+                    <label
+                      ><span>Einzel Weiblich</span
+                      ><input
+                        type="checkbox"
+                        .checked=${this.addStarter.single_female}
+                        @input=${this.updateAddStarterSingleFemale}
+                    /></label>
+                  </td>
+                  <td>
+                    <label
+                      ><span>Paar</span
+                      ><input
+                        type="checkbox"
+                        .checked=${this.addStarter.pair}
+                        @input=${this.updateAddStarterPair}
+                    /></label>
+                  </td>
+                  <td>
+                    <label
+                      ><span>Partner Name</span>
+                      <input
+                        type="text"
+                        .value=${this.addStarter.partner_name || ""}
+                        @input=${this.updateAddStarterPartnerName}
+                        placeholder="Partner Name"
+                    /></label>
+                  </td>
+                  <td>
+                    <label><span>Startgebühr</span></label> ${getStarterPrice(
+                      this.addStarter
+                    )}€
+                  </td>
+                  <td class="actionCol">
+                    <button
+                      class="green material-icon"
+                      @click=${this.commitAddStarter}
+                    >
+                      save
+                    </button>
+                    <button
+                      class="red material-icon"
+                      @click=${this.resetAddStarter}
+                    >
+                      cancel
+                    </button>
+                  </td>
+                </tr>`
+              : html`<tr id="addStarterRow">
+                  <td colspan="10">
+                    <button
+                      id="addStarterButton"
+                      class="material-icon"
+                      @click=${() => (this.addStarterMode = true)}
+                    >
+                      add
+                    </button>
+                  </td>
+                </tr>`
+            : nothing}
           ${this.starters.render({
             complete: (starters) =>
               starters.map((starter) => {
@@ -508,18 +519,20 @@ export default class CupClubManager extends LitElement {
                         ${getStarterPrice(starter)}€
                       </td>
                       <td class="actionCol">
-                        <button
-                          @click=${() => this.enableStarterEdit(starter)}
-                          class="blue material-icon"
-                        >
-                          edit
-                        </button>
-                        <button
-                          @click=${() => this.deleteStarter(starter)}
-                          class="red material-icon"
-                        >
-                          delete
-                        </button>
+                        ${this.systemStatus?.can_register_starter
+                          ? html` <button
+                                @click=${() => this.enableStarterEdit(starter)}
+                                class="blue material-icon"
+                              >
+                                edit
+                              </button>
+                              <button
+                                @click=${() => this.deleteStarter(starter)}
+                                class="red material-icon"
+                              >
+                                delete
+                              </button>`
+                          : nothing}
                       </td>
                     </tr>`;
               }),

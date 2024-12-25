@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use askama::Template;
-use axum::{Extension, Json};
+use axum::{http::StatusCode, Extension, Json};
 use axum_extra::extract::CookieJar;
 use password_auth::generate_hash;
 use serde::{Deserialize, Serialize};
@@ -12,10 +12,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    http_server::{ClientError, HttpError, HttpServerOptions},
-    jwt::JWTConfig,
-    mailer::Mailer,
-    templates::VerifyMail, utils::check_password,
+    http_server::{ClientError, HttpError, HttpServerOptions}, jwt::JWTConfig, mailer::Mailer, system_status::Capabilities, templates::VerifyMail, utils::check_password
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -48,12 +45,16 @@ pub struct RegisterBody {
 #[axum::debug_handler]
 pub async fn register(
     cookies: CookieJar,
+    capabilities: Capabilities,
     Extension(db): Extension<SqlitePool>,
     Extension(mailer): Extension<Arc<Mailer>>,
     Extension(jwt_config): Extension<Arc<JWTConfig>>,
     Extension(http_options): Extension<Arc<HttpServerOptions>>,
     Json(body): Json<RegisterBody>,
 ) -> Result<(CookieJar, Json<RegisterResponse>), HttpError> {
+    if !capabilities.can_register {
+        return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
+    }
     check_password(&body.password).map_err(HttpError::ErrorMessages)?;
     check_email_exists(&db, &body.email).await?;
     let user_id = Uuid::now_v7();

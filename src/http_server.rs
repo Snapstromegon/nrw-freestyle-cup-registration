@@ -5,7 +5,7 @@ use serde::Serialize;
 use sqlx::SqlitePool;
 use tracing::{error, info};
 
-use crate::{jwt::JWTConfig, mailer::Mailer};
+use crate::{jwt::JWTConfig, mailer::Mailer, system_status::StatusOptions};
 
 pub mod extractor;
 pub mod routes;
@@ -26,6 +26,8 @@ pub enum HttpError {
     ErrorMessages(String),
     #[error("Invalid credentials")]
     InvalidCredentials,
+    #[error("Status code: {0}")]
+    StatusCode(axum::http::StatusCode),
 }
 
 impl IntoResponse for HttpError {
@@ -45,6 +47,8 @@ pub enum ClientError {
     InvalidCredentials,
     #[error("{0}")]
     Generic(String),
+    #[error("Status code: {0}")]
+    StatusCode(u16),
 }
 
 impl From<HttpError> for ClientError {
@@ -57,6 +61,7 @@ impl From<HttpError> for ClientError {
             HttpError::MailError(e) => ClientError::Generic(format!("Mail error: {:?}", e)),
             HttpError::ErrorMessages(e) => ClientError::Generic(format!("{e:?}")),
             HttpError::InvalidCredentials => ClientError::InvalidCredentials,
+            HttpError::StatusCode(code) => ClientError::StatusCode(code.as_u16()),
         }
     }
 }
@@ -69,6 +74,7 @@ impl IntoResponse for ClientError {
                 Self::InternalServerError => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                 Self::Generic(_) => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                 Self::InvalidCredentials => axum::http::StatusCode::UNAUTHORIZED,
+                Self::StatusCode(code) => axum::http::StatusCode::from_u16(*code).unwrap(),
             },
             Json(self),
         )
@@ -87,6 +93,7 @@ pub struct HttpServer {
     mailer: Arc<Mailer>,
     jwt: Arc<JWTConfig>,
     options: Arc<HttpServerOptions>,
+    status_options: Arc<StatusOptions>,
 }
 
 impl HttpServer {
@@ -95,12 +102,14 @@ impl HttpServer {
         db: SqlitePool,
         jwt: Arc<JWTConfig>,
         mailer: Arc<Mailer>,
+        status_options: Arc<StatusOptions>,
     ) -> Self {
         Self {
             db,
             mailer,
             options: Arc::new(options),
             jwt,
+            status_options,
         }
     }
 
@@ -113,6 +122,7 @@ impl HttpServer {
             self.db.clone(),
             self.mailer.clone(),
             self.jwt.clone(),
+            self.status_options.clone(),
         );
         let address = self.options.bind_address.clone();
 

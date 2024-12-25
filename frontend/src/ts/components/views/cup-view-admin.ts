@@ -1,12 +1,12 @@
 import { consume } from "@lit/context";
 import { LitElement, html, nothing, css } from "lit";
-import { customElement, state } from "lit/decorators.js";
+import { customElement } from "lit/decorators.js";
 import { User, userContext } from "../../contexts/user";
 import { client, components } from "../../apiClient";
 import "../elements/cup-context-club.js";
 import "../elements/cup-club-manager.js";
 import { Task } from "@lit/task";
-import { Club } from "../../contexts/club";
+// import { Club } from "../../contexts/club";
 
 @customElement("cup-view-admin")
 export default class CupViewAdmin extends LitElement {

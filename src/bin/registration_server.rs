@@ -5,12 +5,13 @@ use nrw_freestyle_cup_registration::{
     http_server::{HttpServer, HttpServerOptions},
     jwt::JWTConfig,
     mailer::Mailer,
+    system_status::StatusOptions,
 };
 use password_auth::generate_hash;
 use serde::Deserialize;
 use sqlx::migrate;
+use time::{format_description::well_known::Iso8601, OffsetDateTime};
 use tokio::signal;
-use tracing::info;
 use tracing_subscriber::FmtSubscriber;
 use url::Url;
 use uuid::Uuid;
@@ -39,6 +40,16 @@ struct Args {
     pub jwt_secret: String,
     #[clap(long, env = "ADMIN")]
     pub admin: Option<AdminArgs>,
+    #[clap(long, env = "START_REGISTER_DATE", value_parser = parse_date)]
+    pub start_register_date: OffsetDateTime,
+    #[clap(long, env = "END_REGISTER_DATE", value_parser = parse_date)]
+    pub end_register_date: OffsetDateTime,
+    #[clap(long, env = "END_MUSIC_UPLOAD_DATE", value_parser = parse_date)]
+    pub end_music_upload_date: OffsetDateTime,
+}
+
+fn parse_date(s: &str) -> Result<OffsetDateTime, time::error::Parse> {
+    OffsetDateTime::parse(s, &Iso8601::DEFAULT)
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -67,8 +78,6 @@ async fn main() -> anyhow::Result<()> {
         .with_file(true)
         .with_line_number(true)
         .init();
-
-    info!("Starting server with args: {:?}", args);
 
     let mailer = Mailer::new(
         &args.smtp_server,
@@ -105,6 +114,11 @@ async fn main() -> anyhow::Result<()> {
         db,
         Arc::new(jwt_config),
         Arc::new(mailer),
+        Arc::new(StatusOptions {
+            start_register_date: args.start_register_date,
+            end_register_date: args.end_register_date,
+            end_music_upload_date: args.end_music_upload_date,
+        }),
     )
     .start(shutdown_signal())
     .await?;
