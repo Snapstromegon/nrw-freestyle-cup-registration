@@ -64,7 +64,7 @@ export default class CupViewAdmin extends LitElement {
             },
           });
           user.club = club.data;
-          user.starters = starters.data?.starters;
+          user.starters = starters.data;
         }
       }
       return users;
