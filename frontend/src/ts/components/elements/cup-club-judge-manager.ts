@@ -81,6 +81,7 @@ export default class CupClubJudgeManager extends LitElement {
 
     table {
       width: 100%;
+      border-collapse: collapse;
     }
 
     #summary {
@@ -92,14 +93,23 @@ export default class CupClubJudgeManager extends LitElement {
     }
 
     tr {
-      border: 0.1rem solid #000;
+      border: 0.1rem solid #ddd;
       border-radius: 0.5rem;
+    }
+
+    tbody tr:nth-child(odd) {
+      background: #f8f8f8;
+    }
+
+    tbody tr:hover {
+      background: #eee;
     }
 
     th,
     td {
       padding: 0.25rem;
       height: 100%;
+      border: 0.1rem solid #ddd;
     }
 
     .juryselect {
@@ -112,6 +122,13 @@ export default class CupClubJudgeManager extends LitElement {
       }
       & h6 {
         display: none;
+      }
+
+      & .type {
+        display: flex;
+        gap: 0.5rem;
+        flex-grow: 1;
+        justify-content: center;
       }
     }
 
@@ -169,9 +186,19 @@ export default class CupClubJudgeManager extends LitElement {
         padding: 0.5rem;
       }
 
+      tbody tr:hover, tbody tr:nth-child(odd) {
+        background: none;
+      }
+
+      td,
+      th {
+        border: none;
+      }
+
       .juryselect {
         display: flex;
         gap: 0.5rem;
+        flex-direction: row;
         flex-wrap: wrap;
 
         & h6 {
@@ -306,8 +333,8 @@ export default class CupClubJudgeManager extends LitElement {
           <tr>
             <th rowspan="4">Vorname</th>
             <th rowspan="4">Nachname</th>
+            <th rowspan="4">Email</th>
             <th rowspan="4">Geburtstag</th>
-            <th rowspan="4">Kategorie</th>
             <th colspan="6">Nachwuchscup</th>
             <th colspan="4">Sonderpokal</th>
             <th rowspan="4"></th>
@@ -434,7 +461,7 @@ export default class CupClubJudgeManager extends LitElement {
                                   value="none"
                                   ?selected=${!isJudge && !isHosp}
                                 >
-                                  ❌
+                                  -
                                 </option>
                               </select></label
                             >`;
@@ -579,7 +606,7 @@ export default class CupClubJudgeManager extends LitElement {
                                       value="none"
                                       ?selected=${!isJudge && !isHosp}
                                     >
-                                      ❌
+                                      -
                                     </option>
                                   </select></label
                                 >`;
@@ -654,9 +681,11 @@ export default class CupClubJudgeManager extends LitElement {
                                 const isHosp = (judge as any)[
                                   category + "_" + type + "_hosp"
                                 ];
-                                return html` <span class="type-label"
+                                return html`<div class="type">
+                                  <span class="type-label"
                                     >${type.toUpperCase()}</span
-                                  >${isJudge ? "✔️" : isHosp ? "👀" : "❌"}`;
+                                  >${isJudge ? "✔️" : isHosp ? "👀" : "-"}
+                                </div>`;
                               }
                             )}
                           </td>`;
@@ -759,8 +788,7 @@ export default class CupClubJudgeManager extends LitElement {
   }
 
   updateEditJudgeCategory(judge: Judge, e: InputEvent, category: string) {
-    (judge as any)[category] =
-      (e.target as HTMLSelectElement).value == "judge";
+    (judge as any)[category] = (e.target as HTMLSelectElement).value == "judge";
     (judge as any)[category + "_hosp"] =
       (e.target as HTMLSelectElement).value == "hosp";
     this.requestUpdate();

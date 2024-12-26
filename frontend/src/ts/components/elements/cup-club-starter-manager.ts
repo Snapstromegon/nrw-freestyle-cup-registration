@@ -41,7 +41,8 @@ export default class CupClubStarterManager extends LitElement {
     h3 {
       margin-bottom: 0.5em;
     }
-    h4, h5,
+    h4,
+    h5,
     p {
       margin-top: 1em;
       margin-bottom: 0.5em;
@@ -64,6 +65,7 @@ export default class CupClubStarterManager extends LitElement {
 
     table {
       width: 100%;
+      border-collapse: collapse;
     }
 
     #summary {
@@ -75,14 +77,23 @@ export default class CupClubStarterManager extends LitElement {
     }
 
     tr {
-      border: 0.1rem solid #000;
+      border: 0.1rem solid #ddd;
       border-radius: 0.5rem;
+    }
+
+    tbody tr:nth-child(odd) {
+      background: #f8f8f8;
+    }
+
+    tbody tr:hover {
+      background: #eee;
     }
 
     th,
     td {
       padding: 0.25rem;
       height: 100%;
+      border: 0.1rem solid #ddd;
     }
 
     label {
@@ -133,6 +144,19 @@ export default class CupClubStarterManager extends LitElement {
         display: flex;
         flex-direction: column;
         padding: 0.5rem;
+      }
+
+      tbody tr:nth-child(odd) {
+        background: none;
+      }
+
+      tbody tr:hover {
+        background: none;
+      }
+
+      th,
+      td {
+        border: none;
       }
 
       label span {
@@ -488,16 +512,16 @@ export default class CupClubStarterManager extends LitElement {
                       </td>
                       <td>
                         <label><span>Einzel Männlich</span></label>
-                        ${starter.single_male ? "✔️" : "❌"}
+                        ${starter.single_male ? "✔️" : "-"}
                       </td>
                       <td>
                         <label><span>Einzel Weiblich</span></label>
-                        ${starter.single_female ? "✔️" : "❌"}
+                        ${starter.single_female ? "✔️" : "-"}
                       </td>
                       <td>
                         <label><span>Paar</span></label> ${starter.pair
                           ? "✔️"
-                          : "❌"}
+                          : "-"}
                       </td>
                       <td>
                         <label><span>Partner Name</span></label>
