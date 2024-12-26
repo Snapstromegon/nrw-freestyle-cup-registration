@@ -13,6 +13,9 @@ mod rename_club;
 mod add_club_starter;
 mod delete_club_starter;
 mod edit_club_starter;
+mod add_club_judge;
+mod delete_club_judge;
+mod edit_club_judge;
 
 pub fn get_command_router() -> OpenApiRouter {
     OpenApiRouter::new()
@@ -28,5 +31,8 @@ pub fn get_command_router() -> OpenApiRouter {
         .routes(routes!(add_club_starter::add_club_starter))
         .routes(routes!(delete_club_starter::delete_club_starter))
         .routes(routes!(edit_club_starter::edit_club_starter))
+        .routes(routes!(add_club_judge::add_club_judge))
+        .routes(routes!(delete_club_judge::delete_club_judge))
+        .routes(routes!(edit_club_judge::edit_club_judge))
         .layer(DefaultBodyLimit::max(1024 * 1024 * 10))
 }

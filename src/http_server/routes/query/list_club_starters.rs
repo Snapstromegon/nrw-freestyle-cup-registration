@@ -21,11 +21,6 @@ pub struct ClubStarter {
     partner_name: Option<String>,
 }
 
-#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
-pub struct ListClubStartersResponse {
-    starters: Vec<ClubStarter>,
-}
-
 #[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
 pub struct ListClubStartersQuery {
     club_id: Uuid,
@@ -38,7 +33,7 @@ pub struct ListClubStartersQuery {
     params(ListClubStartersQuery),
     path="/list_club_starters",
     responses(
-        (status=200, content_type="application/json", body=ListClubStartersResponse),
+        (status=200, content_type="application/json", body=Vec<ClubStarter>),
         (status=404, content_type="application/json", body=ClientError),
         (status=500, content_type="application/json", body=ClientError),
     ),
@@ -48,7 +43,7 @@ pub async fn list_club_starters(
     Extension(db): Extension<SqlitePool>,
     Query(query): Query<ListClubStartersQuery>,
     auth: Option<Auth>,
-) -> Result<Json<ListClubStartersResponse>, HttpError> {
+) -> Result<Json<Vec<ClubStarter>>, HttpError> {
     let club_id = query.club_id;
     let club_starters = sqlx::query_as!(
         ClubStarter,
@@ -71,7 +66,5 @@ pub async fn list_club_starters(
     )
     .fetch_all(&db)
     .await?;
-    Ok(Json(ListClubStartersResponse {
-        starters: club_starters,
-    }))
+    Ok(Json(club_starters))
 }
