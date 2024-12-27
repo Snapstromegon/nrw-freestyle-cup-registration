@@ -186,7 +186,8 @@ export default class CupClubJudgeManager extends LitElement {
         padding: 0.5rem;
       }
 
-      tbody tr:hover, tbody tr:nth-child(odd) {
+      tbody tr:hover,
+      tbody tr:nth-child(odd) {
         background: none;
       }
 
@@ -316,20 +317,63 @@ export default class CupClubJudgeManager extends LitElement {
 
   @state() addJudgeMode = false;
 
+  get judgingCount() {
+    return this.judges.value?.filter(judge => 
+      judge.n_em_u15_p || judge.n_em_u15_t || judge.n_em_u15_a ||
+      judge.n_em_o15_p || judge.n_em_o15_t || judge.n_em_o15_a ||
+      judge.n_ew_u15_p || judge.n_ew_u15_t || judge.n_ew_u15_a ||
+      judge.n_ew_o15_p || judge.n_ew_o15_t || judge.n_ew_o15_a ||
+      judge.n_p_u15_p || judge.n_p_u15_t || judge.n_p_u15_a ||
+      judge.n_p_o15_p || judge.n_p_o15_t || judge.n_p_o15_a ||
+      judge.s_e_u15_p || judge.s_e_u15_t || judge.s_e_u15_a ||
+      judge.s_e_o15_p || judge.s_e_o15_t || judge.s_e_o15_a ||
+      judge.s_p_u15_p || judge.s_p_u15_t || judge.s_p_u15_a ||
+      judge.s_p_o15_p || judge.s_p_o15_t || judge.s_p_o15_a
+    ).length;
+  }
+
+  get hospCount() {
+    return this.judges.value?.filter(judge =>
+      judge.n_em_u15_p_hosp || judge.n_em_u15_t_hosp || judge.n_em_u15_a_hosp ||
+      judge.n_em_o15_p_hosp || judge.n_em_o15_t_hosp || judge.n_em_o15_a_hosp ||
+      judge.n_ew_u15_p_hosp || judge.n_ew_u15_t_hosp || judge.n_ew_u15_a_hosp ||
+      judge.n_ew_o15_p_hosp || judge.n_ew_o15_t_hosp || judge.n_ew_o15_a_hosp ||
+      judge.n_p_u15_p_hosp || judge.n_p_u15_t_hosp || judge.n_p_u15_a_hosp ||
+      judge.n_p_o15_p_hosp || judge.n_p_o15_t_hosp || judge.n_p_o15_a_hosp ||
+      judge.s_e_u15_p_hosp || judge.s_e_u15_t_hosp || judge.s_e_u15_a_hosp ||
+      judge.s_e_o15_p_hosp || judge.s_e_o15_t_hosp || judge.s_e_o15_a_hosp ||
+      judge.s_p_u15_p_hosp || judge.s_p_u15_t_hosp || judge.s_p_u15_a_hosp ||
+      judge.s_p_o15_p_hosp || judge.s_p_o15_t_hosp || judge.s_p_o15_a_hosp
+    ).length;
+  }
+
   override render() {
     return html`<h4>Jury</h4>
-      <h5>Zusammenfassung</h5>
 
       <p>
         Die Altersgruppen sind nur in U15 und 15+ geteilt. Eine genauere
         Einteilung wird nach Meldeschluss vorgenommen. Wir achten darauf, dass
         alle Judges mit ausreichend Abstand zur eigenen Kür werten.
       </p>
-      <p>Die Auswahl besteht aus "-" (Nichts), "✔️" (Judge) und "👀" (Judge Hospitation). Gewertet wird in "P" (Performance), "T" (Technik) und "A" (Abstiege).</p>
+      <p>
+        Die Auswahl besteht aus "-" (Nichts), "✔️" (Judge) und "👀" (Judge
+        Hospitation). Gewertet wird in "P" (Performance), "T" (Technik) und "A"
+        (Abstiege).
+      </p>
+
+      <h5>Zusammenfassung</h5>
 
       <table id="summary">
         <tr>
-          <th>Judge</th>
+          <th>Judges (ohne Hospitation)</th>
+          <td>${this.judgingCount}</td>
+        </tr>
+        <tr>
+          <th>Judges (Hospitation)</th>
+          <td>${this.hospCount}</td>
+        </tr>
+        <tr>
+          <th>Judges (gesamt)</th>
           <td>${this.judges.value?.length}</td>
         </tr>
       </table>
