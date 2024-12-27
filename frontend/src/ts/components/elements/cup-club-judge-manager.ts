@@ -320,6 +320,13 @@ export default class CupClubJudgeManager extends LitElement {
     return html`<h4>Jury</h4>
       <h5>Zusammenfassung</h5>
 
+      <p>
+        Die Altersgruppen sind nur in U15 und 15+ geteilt. Eine genauere
+        Einteilung wird nach Meldeschluss vorgenommen. Wir achten darauf, dass
+        alle Judges mit ausreichend Abstand zur eigenen Kür werten.
+      </p>
+      <p>Die Auswahl besteht aus "-" (Nichts), "✔️" (Judge) und "👀" (Judge Hospitation). Gewertet wird in "P" (Performance), "T" (Technik) und "A" (Abstiege).</p>
+
       <table id="summary">
         <tr>
           <th>Judge</th>
