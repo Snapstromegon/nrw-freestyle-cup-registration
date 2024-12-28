@@ -202,9 +202,10 @@ export default class CupClubStarterManager extends LitElement {
     firstname: "",
     lastname: "",
     birthdate: new Date(),
-    sonderpokal: false,
+    single_sonderpokal: false,
     single_male: false,
     single_female: false,
+    pair_sonderpokal: false,
     pair: false,
     partner_name: "",
   };
@@ -214,6 +215,15 @@ export default class CupClubStarterManager extends LitElement {
   override render() {
     return html`<h4>Starter</h4>
       <h5>Zusammenfassung</h5>
+
+      <datalist id="clubStarters">
+        ${this.starters.value?.map(
+          (starter) =>
+            html`<option
+              value="${starter.firstname} ${starter.lastname}"
+            ></option>`
+        )}
+      </datalist>
 
       <table id="summary">
         <tr>
@@ -238,9 +248,10 @@ export default class CupClubStarterManager extends LitElement {
             <th>Vorname</th>
             <th>Nachname</th>
             <th>Geburtstag</th>
-            <th>Kategorie</th>
+            <th>Einzel-Kategorie</th>
             <th>Einzel M</th>
             <th>Einzel W</th>
+            <th>Paar-Kategorie</th>
             <th>Paar</th>
             <th>Partner</th>
             <th>Startgeld</th>
@@ -284,17 +295,17 @@ export default class CupClubStarterManager extends LitElement {
                   </td>
                   <td>
                     <label
-                      ><span>Kategorie</span
-                      ><select @input=${this.updateAddStarterSonderpokal}>
+                      ><span>Einzel-Kategorie</span
+                      ><select @input=${this.updateAddStarterEinzelSonderpokal}>
                         <option
                           value="sonderpokal"
-                          ?selected=${this.addStarter.sonderpokal}
+                          ?selected=${this.addStarter.single_sonderpokal}
                         >
                           Sonderpokal
                         </option>
                         <option
                           value="nachwuchscup"
-                          ?selected=${!this.addStarter.sonderpokal}
+                          ?selected=${!this.addStarter.single_sonderpokal}
                         >
                           Nachwuchscup
                         </option>
@@ -321,6 +332,25 @@ export default class CupClubStarterManager extends LitElement {
                   </td>
                   <td>
                     <label
+                      ><span>Paar-Kategorie</span
+                      ><select @input=${this.updateAddStarterPaarSonderpokal}>
+                        <option
+                          value="sonderpokal"
+                          ?selected=${this.addStarter.pair_sonderpokal}
+                        >
+                          Sonderpokal
+                        </option>
+                        <option
+                          value="nachwuchscup"
+                          ?selected=${!this.addStarter.pair_sonderpokal}
+                        >
+                          Nachwuchscup
+                        </option>
+                      </select></label
+                    >
+                  </td>
+                  <td>
+                    <label
                       ><span>Paar</span
                       ><input
                         type="checkbox"
@@ -336,6 +366,8 @@ export default class CupClubStarterManager extends LitElement {
                         .value=${this.addStarter.partner_name || ""}
                         @input=${this.updateAddStarterPartnerName}
                         placeholder="Partner Name"
+                        list="clubStarters"
+                        ?disabled=${!this.addStarter.pair}
                     /></label>
                   </td>
                   <td>
@@ -359,7 +391,7 @@ export default class CupClubStarterManager extends LitElement {
                   </td>
                 </tr>`
               : html`<tr id="addStarterRow">
-                  <td colspan="10">
+                  <td colspan="11">
                     <button
                       id="addStarterButton"
                       class="material-icon"
@@ -412,20 +444,23 @@ export default class CupClubStarterManager extends LitElement {
                       </td>
                       <td>
                         <label
-                          ><span>Kategorie</span
+                          ><span>Einzel Kategorie</span
                           ><select
                             @input=${(e: InputEvent) =>
-                              this.updateEditStarterSonderpokal(editStarter, e)}
+                              this.updateEditStarterEinzelSonderpokal(
+                                editStarter,
+                                e
+                              )}
                           >
                             <option
                               value="sonderpokal"
-                              ?selected=${editStarter.sonderpokal}
+                              ?selected=${editStarter.single_sonderpokal}
                             >
                               Sonderpokal
                             </option>
                             <option
                               value="nachwuchscup"
-                              ?selected=${!editStarter.sonderpokal}
+                              ?selected=${!editStarter.single_sonderpokal}
                             >
                               Nachwuchscup
                             </option>
@@ -457,6 +492,31 @@ export default class CupClubStarterManager extends LitElement {
                       </td>
                       <td>
                         <label
+                          ><span>Paar Kategorie</span
+                          ><select
+                            @input=${(e: InputEvent) =>
+                              this.updateEditStarterPaarSonderpokal(
+                                editStarter,
+                                e
+                              )}
+                          >
+                            <option
+                              value="sonderpokal"
+                              ?selected=${editStarter.pair_sonderpokal}
+                            >
+                              Sonderpokal
+                            </option>
+                            <option
+                              value="nachwuchscup"
+                              ?selected=${!editStarter.pair_sonderpokal}
+                            >
+                              Nachwuchscup
+                            </option>
+                          </select></label
+                        >
+                      </td>
+                      <td>
+                        <label
                           ><span>Paar</span
                           ><input
                             type="checkbox"
@@ -474,6 +534,8 @@ export default class CupClubStarterManager extends LitElement {
                             @input=${(e: InputEvent) =>
                               this.updateEditStarterPartnerName(editStarter, e)}
                             placeholder="Partner Name"
+                            list="clubStarters"
+                            ?disabled=${!editStarter.pair}
                         /></label>
                       </td>
                       <td>
@@ -507,8 +569,10 @@ export default class CupClubStarterManager extends LitElement {
                         ${starter.birthdate.toLocaleDateString()}
                       </td>
                       <td>
-                        <label><span>Kategorie</span></label>
-                        ${starter.sonderpokal ? "Sonderpokal" : "Nachwuchscup"}
+                        <label><span>Einzel-Kategorie</span></label>
+                        ${starter.single_sonderpokal
+                          ? "Sonderpokal"
+                          : "Nachwuchscup"}
                       </td>
                       <td>
                         <label><span>Einzel Männlich</span></label>
@@ -517,6 +581,12 @@ export default class CupClubStarterManager extends LitElement {
                       <td>
                         <label><span>Einzel Weiblich</span></label>
                         ${starter.single_female ? "✔️" : "-"}
+                      </td>
+                      <td>
+                        <label><span>Paar-Kategorie</span></label>
+                        ${starter.pair_sonderpokal
+                          ? "Sonderpokal"
+                          : "Nachwuchscup"}
                       </td>
                       <td>
                         <label><span>Paar</span></label> ${starter.pair
@@ -573,14 +643,9 @@ export default class CupClubStarterManager extends LitElement {
 
     let resp = await client.POST("/api/command/edit_club_starter", {
       body: {
+        ...starter,
         starter_id: starter.id,
-        firstname: starter.firstname,
-        lastname: starter.lastname,
         birthdate: starter.birthdate.toISOString(),
-        sonderpokal: starter.sonderpokal,
-        single_male: starter.single_male,
-        single_female: starter.single_female,
-        pair: starter.pair,
         partner_name: starter.partner_name ? starter.partner_name : null,
       },
     });
@@ -626,8 +691,8 @@ export default class CupClubStarterManager extends LitElement {
     this.requestUpdate();
   }
 
-  updateEditStarterSonderpokal(starter: Starter, e: InputEvent) {
-    starter.sonderpokal =
+  updateEditStarterEinzelSonderpokal(starter: Starter, e: InputEvent) {
+    starter.single_sonderpokal =
       (e.target as HTMLSelectElement).value === "sonderpokal";
     this.requestUpdate();
   }
@@ -639,6 +704,12 @@ export default class CupClubStarterManager extends LitElement {
 
   updateEditStarterSingleFemale(starter: Starter, e: InputEvent) {
     starter.single_female = (e.target as HTMLInputElement).checked;
+    this.requestUpdate();
+  }
+
+  updateEditStarterPaarSonderpokal(starter: Starter, e: InputEvent) {
+    starter.pair_sonderpokal =
+      (e.target as HTMLSelectElement).value === "sonderpokal";
     this.requestUpdate();
   }
 
@@ -667,8 +738,8 @@ export default class CupClubStarterManager extends LitElement {
     this.requestUpdate();
   }
 
-  updateAddStarterSonderpokal(e: InputEvent) {
-    this.addStarter.sonderpokal =
+  updateAddStarterEinzelSonderpokal(e: InputEvent) {
+    this.addStarter.single_sonderpokal =
       (e.target as HTMLSelectElement).value === "sonderpokal";
     this.requestUpdate();
   }
@@ -688,6 +759,12 @@ export default class CupClubStarterManager extends LitElement {
     this.requestUpdate();
   }
 
+  updateAddStarterPaarSonderpokal(e: InputEvent) {
+    this.addStarter.pair_sonderpokal =
+      (e.target as HTMLSelectElement).value === "sonderpokal";
+    this.requestUpdate();
+  }
+
   updateAddStarterPartnerName(e: InputEvent) {
     this.addStarter.partner_name = (e.target as HTMLInputElement).value;
     this.requestUpdate();
@@ -700,14 +777,9 @@ export default class CupClubStarterManager extends LitElement {
 
     let resp = await client.POST("/api/command/add_club_starter", {
       body: {
+        ...this.addStarter,
         club_id: this.club?.id,
-        firstname: this.addStarter.firstname,
-        lastname: this.addStarter.lastname,
         birthdate: this.addStarter.birthdate.toISOString(),
-        sonderpokal: this.addStarter.sonderpokal,
-        single_male: this.addStarter.single_male,
-        single_female: this.addStarter.single_female,
-        pair: this.addStarter.pair,
         partner_name: this.addStarter.partner_name
           ? this.addStarter.partner_name
           : null,
@@ -727,9 +799,10 @@ export default class CupClubStarterManager extends LitElement {
       firstname: "",
       lastname: "",
       birthdate: new Date(),
-      sonderpokal: false,
+      single_sonderpokal: false,
       single_male: false,
       single_female: false,
+      pair_sonderpokal: false,
       pair: false,
       partner_name: "",
     };
@@ -738,16 +811,17 @@ export default class CupClubStarterManager extends LitElement {
 }
 
 const getStarterPrice = (starter: MaybeNewStarter) => {
-  let pricePerStart = starter.sonderpokal ? 12 : 10;
+  let singlePricePerStart = starter.single_sonderpokal ? 12 : 10;
+  let pairPricePerStart = starter.pair_sonderpokal ? 12 : 10;
   let price = 0;
   if (starter.single_male) {
-    price += pricePerStart;
+    price += singlePricePerStart;
   }
   if (starter.single_female) {
-    price += pricePerStart;
+    price += singlePricePerStart;
   }
   if (starter.pair) {
-    price += pricePerStart;
+    price += pairPricePerStart;
   }
   return price;
 };
@@ -760,6 +834,13 @@ const validateStarter = (starter: MaybeNewStarter) => {
 
   if (!starter.firstname || !starter.lastname) {
     alert("Vorname und Nachname müssen angegeben werden.");
+    return false;
+  }
+
+  if (starter.single_sonderpokal && !starter.pair_sonderpokal) {
+    alert(
+      "Einzel-Sonderpokal ist nur in Kombination mit Paar-Sonderpokal möglich."
+    );
     return false;
   }
   return true;

@@ -1,12 +1,11 @@
 import { consume } from "@lit/context";
-import { LitElement, html, nothing, css } from "lit";
+import { LitElement, html, css } from "lit";
 import { customElement } from "lit/decorators.js";
 import { User, userContext } from "../../contexts/user";
 import { client, components } from "../../apiClient";
+import { Task } from "@lit/task";
 import "../elements/cup-context-club.js";
 import "../elements/cup-club-manager.js";
-import { Task } from "@lit/task";
-// import { Club } from "../../contexts/club";
 
 @customElement("cup-view-admin")
 export default class CupViewAdmin extends LitElement {
@@ -45,6 +44,7 @@ export default class CupViewAdmin extends LitElement {
       const users = data.data as (User & {
         club?: components["schemas"]["Club"];
         starters?: components["schemas"]["ClubStarter"][];
+        judges?: components["schemas"]["ClubJudge"][];
       })[];
 
       for (const user of users) {
@@ -63,8 +63,16 @@ export default class CupViewAdmin extends LitElement {
               },
             },
           });
+          const judges = await client.GET(`/api/query/list_club_judges`, {
+            params: {
+              query: {
+                club_id: user.club_id!,
+              },
+            },
+          });
           user.club = club.data;
           user.starters = starters.data;
+          user.judges = judges.data;
         }
       }
       return users;
@@ -83,30 +91,11 @@ export default class CupViewAdmin extends LitElement {
               <p>${user.email}</p>
               <p>${user.email_verified ? "✔️" : "❌"}</p>
               <p>${user.is_admin ? "✔️" : "❌"}</p>
-              ${user.club
-                ? html`
-                    <p>${user.club.name}</p>
-                    <table>
-                      <tbody>
-                        ${user.starters?.map(
-                          (starter) => html`
-                            <tr>
-                              <td>${starter.firstname}</td>
-                              <td>${starter.lastname}</td>
-                              <td>${starter.birthdate}</td>
-                              <td>${starter.sonderpokal}</td>
-                              <td>${starter.single_male}</td>
-                              <td>${starter.single_female}</td>
-                              <td>${starter.pair}</td>
-                              <td>${starter.partner_name}</td>
-
-                            </tr>
-                          `
-                        )}
-                      </tbody>
-                    </table>
-                  `
-                : nothing}
+              ${user.club_id
+                ? html` <cup-context-club clubId=${user.club_id}>
+                    <cup-club-manager></cup-club-manager>
+                  </cup-context-club>`
+                : html`<p>Kein Verein</p>`}
             </div>`
           )}`,
         error: (error) => html`<li>${error}</li>`,

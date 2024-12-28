@@ -17,9 +17,10 @@ pub struct EditClubStarterBody {
     lastname: String,
     #[serde(with = "time::serde::iso8601")]
     birthdate: time::OffsetDateTime,
-    sonderpokal: bool,
+    single_sonderpokal: bool,
     single_male: bool,
     single_female: bool,
+    pair_sonderpokal: bool,
     pair: bool,
     partner_name: Option<String>,
 }
@@ -55,9 +56,10 @@ pub async fn edit_club_starter(
           firstname = ?,
           lastname = ?,
           birthdate = ?,
-          sonderpokal = ?,
+          single_sonderpokal = ?,
           single_male = ?,
           single_female = ?,
+          pair_sonderpokal = ?,
           pair = ?,
           partner_name = ?
         WHERE id = ?
@@ -65,9 +67,10 @@ pub async fn edit_club_starter(
         body.firstname,
         body.lastname,
         body.birthdate,
-        body.sonderpokal,
+        body.single_sonderpokal,
         body.single_male,
         body.single_female,
+        body.pair_sonderpokal,
         body.pair,
         body.partner_name,
         body.starter_id,

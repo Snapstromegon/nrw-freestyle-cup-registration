@@ -13,9 +13,10 @@ pub struct ClubStarter {
     lastname: String,
     #[serde(with = "time::serde::iso8601")]
     birthdate: time::OffsetDateTime,
-    sonderpokal: bool,
+    single_sonderpokal: bool,
     single_male: bool,
     single_female: bool,
+    pair_sonderpokal: bool,
     pair: bool,
     partner_id: Option<Uuid>,
     partner_name: Option<String>,
@@ -54,9 +55,10 @@ pub async fn list_club_starters(
             firstname,
             lastname,
             birthdate,
-            sonderpokal,
+            single_sonderpokal,
             single_male,
             single_female,
+            pair_sonderpokal,
             pair,
             partner_id as "partner_id: Uuid",
             partner_name
