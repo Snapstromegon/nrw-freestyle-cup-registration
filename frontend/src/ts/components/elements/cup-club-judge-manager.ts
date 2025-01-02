@@ -1,5 +1,5 @@
 import { LitElement, html, css, nothing } from "lit";
-import { customElement, state } from "lit/decorators.js";
+import { customElement, property, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 import { client, components } from "../../apiClient";
 import { consume } from "@lit/context";
@@ -228,7 +228,9 @@ export default class CupClubJudgeManager extends LitElement {
 
   @consume({ context: systemStatusContext, subscribe: true })
   systemStatus: SystemStatus | null = null;
-  @consume({context: userContext, subscribe: true}) user: User | null = null;
+  @consume({ context: userContext, subscribe: true }) user: User | null = null;
+
+  @property({ type: Boolean }) adminMode = false;
 
   judges = new Task(this, {
     task: async ([clubId]) => {
@@ -320,49 +322,93 @@ export default class CupClubJudgeManager extends LitElement {
   @state() addJudgeMode = false;
 
   get judgingCount() {
-    return this.judges.value?.filter(judge => 
-      judge.n_em_u15_p || judge.n_em_u15_t || judge.n_em_u15_a ||
-      judge.n_em_o15_p || judge.n_em_o15_t || judge.n_em_o15_a ||
-      judge.n_ew_u15_p || judge.n_ew_u15_t || judge.n_ew_u15_a ||
-      judge.n_ew_o15_p || judge.n_ew_o15_t || judge.n_ew_o15_a ||
-      judge.n_p_u15_p || judge.n_p_u15_t || judge.n_p_u15_a ||
-      judge.n_p_o15_p || judge.n_p_o15_t || judge.n_p_o15_a ||
-      judge.s_e_u15_p || judge.s_e_u15_t || judge.s_e_u15_a ||
-      judge.s_e_o15_p || judge.s_e_o15_t || judge.s_e_o15_a ||
-      judge.s_p_u15_p || judge.s_p_u15_t || judge.s_p_u15_a ||
-      judge.s_p_o15_p || judge.s_p_o15_t || judge.s_p_o15_a
+    return this.judges.value?.filter(
+      (judge) =>
+        judge.n_em_u15_p ||
+        judge.n_em_u15_t ||
+        judge.n_em_u15_a ||
+        judge.n_em_o15_p ||
+        judge.n_em_o15_t ||
+        judge.n_em_o15_a ||
+        judge.n_ew_u15_p ||
+        judge.n_ew_u15_t ||
+        judge.n_ew_u15_a ||
+        judge.n_ew_o15_p ||
+        judge.n_ew_o15_t ||
+        judge.n_ew_o15_a ||
+        judge.n_p_u15_p ||
+        judge.n_p_u15_t ||
+        judge.n_p_u15_a ||
+        judge.n_p_o15_p ||
+        judge.n_p_o15_t ||
+        judge.n_p_o15_a ||
+        judge.s_e_u15_p ||
+        judge.s_e_u15_t ||
+        judge.s_e_u15_a ||
+        judge.s_e_o15_p ||
+        judge.s_e_o15_t ||
+        judge.s_e_o15_a ||
+        judge.s_p_u15_p ||
+        judge.s_p_u15_t ||
+        judge.s_p_u15_a ||
+        judge.s_p_o15_p ||
+        judge.s_p_o15_t ||
+        judge.s_p_o15_a
     ).length;
   }
 
   get hospCount() {
-    return this.judges.value?.filter(judge =>
-      judge.n_em_u15_p_hosp || judge.n_em_u15_t_hosp || judge.n_em_u15_a_hosp ||
-      judge.n_em_o15_p_hosp || judge.n_em_o15_t_hosp || judge.n_em_o15_a_hosp ||
-      judge.n_ew_u15_p_hosp || judge.n_ew_u15_t_hosp || judge.n_ew_u15_a_hosp ||
-      judge.n_ew_o15_p_hosp || judge.n_ew_o15_t_hosp || judge.n_ew_o15_a_hosp ||
-      judge.n_p_u15_p_hosp || judge.n_p_u15_t_hosp || judge.n_p_u15_a_hosp ||
-      judge.n_p_o15_p_hosp || judge.n_p_o15_t_hosp || judge.n_p_o15_a_hosp ||
-      judge.s_e_u15_p_hosp || judge.s_e_u15_t_hosp || judge.s_e_u15_a_hosp ||
-      judge.s_e_o15_p_hosp || judge.s_e_o15_t_hosp || judge.s_e_o15_a_hosp ||
-      judge.s_p_u15_p_hosp || judge.s_p_u15_t_hosp || judge.s_p_u15_a_hosp ||
-      judge.s_p_o15_p_hosp || judge.s_p_o15_t_hosp || judge.s_p_o15_a_hosp
+    return this.judges.value?.filter(
+      (judge) =>
+        judge.n_em_u15_p_hosp ||
+        judge.n_em_u15_t_hosp ||
+        judge.n_em_u15_a_hosp ||
+        judge.n_em_o15_p_hosp ||
+        judge.n_em_o15_t_hosp ||
+        judge.n_em_o15_a_hosp ||
+        judge.n_ew_u15_p_hosp ||
+        judge.n_ew_u15_t_hosp ||
+        judge.n_ew_u15_a_hosp ||
+        judge.n_ew_o15_p_hosp ||
+        judge.n_ew_o15_t_hosp ||
+        judge.n_ew_o15_a_hosp ||
+        judge.n_p_u15_p_hosp ||
+        judge.n_p_u15_t_hosp ||
+        judge.n_p_u15_a_hosp ||
+        judge.n_p_o15_p_hosp ||
+        judge.n_p_o15_t_hosp ||
+        judge.n_p_o15_a_hosp ||
+        judge.s_e_u15_p_hosp ||
+        judge.s_e_u15_t_hosp ||
+        judge.s_e_u15_a_hosp ||
+        judge.s_e_o15_p_hosp ||
+        judge.s_e_o15_t_hosp ||
+        judge.s_e_o15_a_hosp ||
+        judge.s_p_u15_p_hosp ||
+        judge.s_p_u15_t_hosp ||
+        judge.s_p_u15_a_hosp ||
+        judge.s_p_o15_p_hosp ||
+        judge.s_p_o15_t_hosp ||
+        judge.s_p_o15_a_hosp
     ).length;
   }
 
   override render() {
     return html`<h4>Jury</h4>
-
-      <p>
-        Die Altersgruppen sind nur in U15 und 15+ geteilt. Eine genauere
-        Einteilung wird nach Meldeschluss vorgenommen. Wir achten darauf, dass
-        alle Judges mit ausreichend Abstand zur eigenen Kür werten.
-      </p>
-      <p>
-        Die Auswahl besteht aus "-" (Nichts), "✔️" (Judge) und "👀" (Judge
-        Hospitation). Gewertet wird in "P" (Performance), "T" (Technik) und "A"
-        (Abstiege).
-      </p>
-
+      ${this.adminMode
+        ? nothing
+        : html`
+            <p>
+              Die Altersgruppen sind nur in U15 und 15+ geteilt. Eine genauere
+              Einteilung wird nach Meldeschluss vorgenommen. Wir achten darauf,
+              dass alle Judges mit ausreichend Abstand zur eigenen Kür werten.
+            </p>
+            <p>
+              Die Auswahl besteht aus "-" (Nichts), "✔️" (Judge) und "👀" (Judge
+              Hospitation). Gewertet wird in "P" (Performance), "T" (Technik)
+              und "A" (Abstiege).
+            </p>
+          `}
       <h5>Zusammenfassung</h5>
 
       <table id="summary">

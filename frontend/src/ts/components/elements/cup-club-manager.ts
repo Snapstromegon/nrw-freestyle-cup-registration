@@ -1,5 +1,5 @@
-import { LitElement, html, css } from "lit";
-import { customElement } from "lit/decorators.js";
+import { LitElement, html, css, nothing } from "lit";
+import { customElement, property } from "lit/decorators.js";
 import { consume } from "@lit/context";
 import { Club, clubContext } from "../../contexts/club";
 import "./cup-club-starter-manager.js";
@@ -26,21 +26,30 @@ export default class CupClubManager extends LitElement {
 
   @consume({ context: clubContext, subscribe: true }) club: Club | null = null;
 
+  @property({ type: Boolean }) adminMode = false;
+
   override render() {
     return html`<h3>${this.club?.name}</h3>
-      <p>
-        Der anmeldende Trainer ist dafür verantwortlich, dass alle Starter den
-        Bedingungen aus der Ausschreibung wie zum Beispiel der Veröffentlichung
-        von Namen und Bildern zustimmen.
-      </p>
+      ${this.adminMode
+        ? nothing
+        : html`
+            <p>
+              Der anmeldende Trainer ist dafür verantwortlich, dass alle Starter
+              den Bedingungen aus der Ausschreibung wie zum Beispiel der
+              Veröffentlichung von Namen und Bildern zustimmen.
+            </p>
 
-      <p>
-        Änderungen können noch bis zum Anmeldeschluss am
-        <strong>02.02.2025</strong> vorgenommen werden.
-      </p>
+            <p>
+              Änderungen können noch bis zum Anmeldeschluss am
+              <strong>02.02.2025</strong> vorgenommen werden.
+            </p>
+          `}
 
-      <cup-club-starter-manager></cup-club-starter-manager>
-      <cup-club-judge-manager></cup-club-judge-manager>
-      `;
+      <cup-club-starter-manager
+        ?adminMode=${this.adminMode}
+      ></cup-club-starter-manager>
+      <cup-club-judge-manager
+        ?adminMode=${this.adminMode}
+      ></cup-club-judge-manager> `;
   }
 }

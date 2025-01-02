@@ -1,5 +1,5 @@
 import { LitElement, html, css, nothing } from "lit";
-import { customElement, state } from "lit/decorators.js";
+import { customElement, property, state } from "lit/decorators.js";
 import { client, components } from "../../apiClient";
 import { consume } from "@lit/context";
 import { Task } from "@lit/task";
@@ -179,6 +179,8 @@ export default class CupClubStarterManager extends LitElement {
   @consume({ context: systemStatusContext, subscribe: true })
   systemStatus: SystemStatus | null = null;
   @consume({ context: userContext, subscribe: true }) user: User | null = null;
+
+  @property({ type: Boolean }) adminMode = false;
 
   starters = new Task(this, {
     task: async ([clubId]) => {
