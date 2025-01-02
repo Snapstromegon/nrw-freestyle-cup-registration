@@ -6,6 +6,7 @@ import { consume } from "@lit/context";
 import { Task } from "@lit/task";
 import { Club, clubContext } from "../../contexts/club";
 import { SystemStatus, systemStatusContext } from "../../contexts/systemStatus";
+import { User, userContext } from "../../contexts/user";
 
 type Judge = { birthdate: Date } & Omit<
   components["schemas"]["ClubJudge"],
@@ -227,6 +228,7 @@ export default class CupClubJudgeManager extends LitElement {
 
   @consume({ context: systemStatusContext, subscribe: true })
   systemStatus: SystemStatus | null = null;
+  @consume({context: userContext, subscribe: true}) user: User | null = null;
 
   judges = new Task(this, {
     task: async ([clubId]) => {
@@ -411,7 +413,7 @@ export default class CupClubJudgeManager extends LitElement {
           </tr>
         </thead>
         <tbody>
-          ${this.systemStatus?.can_register_judge
+          ${this.systemStatus?.can_register_judge || this.user?.is_admin
             ? this.addJudgeMode
               ? html`<tr id="addJudgeRow">
                   <td>
@@ -743,7 +745,8 @@ export default class CupClubJudgeManager extends LitElement {
                         }
                       )}
                       <td class="actionCol">
-                        ${this.systemStatus?.can_register_judge
+                        ${this.systemStatus?.can_register_judge ||
+                        this.user?.is_admin
                           ? html` <button
                                 @click=${() => this.enableJudgeEdit(judge)}
                                 class="blue material-icon"

@@ -5,6 +5,7 @@ import { consume } from "@lit/context";
 import { Task } from "@lit/task";
 import { Club, clubContext } from "../../contexts/club";
 import { SystemStatus, systemStatusContext } from "../../contexts/systemStatus";
+import { User, userContext } from "../../contexts/user";
 
 type Starter = { birthdate: Date } & Omit<
   components["schemas"]["ClubStarter"],
@@ -177,6 +178,7 @@ export default class CupClubStarterManager extends LitElement {
 
   @consume({ context: systemStatusContext, subscribe: true })
   systemStatus: SystemStatus | null = null;
+  @consume({ context: userContext, subscribe: true }) user: User | null = null;
 
   starters = new Task(this, {
     task: async ([clubId]) => {
@@ -259,7 +261,7 @@ export default class CupClubStarterManager extends LitElement {
           </tr>
         </thead>
         <tbody>
-          ${this.systemStatus?.can_register_starter
+          ${this.systemStatus?.can_register_starter || this.user?.is_admin
             ? this.addStarterMode
               ? html`<tr id="addStarterRow">
                   <td>
@@ -602,7 +604,8 @@ export default class CupClubStarterManager extends LitElement {
                         ${getStarterPrice(starter)}€
                       </td>
                       <td class="actionCol">
-                        ${this.systemStatus?.can_register_starter
+                        ${this.systemStatus?.can_register_starter ||
+                        this.user?.is_admin
                           ? html` <button
                                 @click=${() => this.enableStarterEdit(starter)}
                                 class="blue material-icon"
