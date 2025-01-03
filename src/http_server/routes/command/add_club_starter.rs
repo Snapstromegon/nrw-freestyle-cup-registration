@@ -1,11 +1,14 @@
-use axum::{Extension, Json, http::StatusCode};
+use axum::{http::StatusCode, Extension, Json};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tracing::instrument;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{http_server::{extractor::auth::Auth, ClientError, HttpError}, system_status::Capabilities};
+use crate::{
+    http_server::{extractor::auth::Auth, ClientError, HttpError},
+    system_status::Capabilities,
+};
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct AddClubStarterResponse {
@@ -54,6 +57,39 @@ pub async fn add_club_starter(
         return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
     }
     let starter_id = Uuid::now_v7();
+
+    let self_name = format!("{} {}", body.firstname, body.lastname);
+
+    // Find potential partner
+    let partner_id = if let Some(partner_id) = body.partner_id {
+        Some(partner_id)
+    } else {
+        let rows = sqlx::query!(
+            r#"
+            SELECT id as "id!: Uuid" FROM starter WHERE concat_ws(" ", firstname, lastname) = ? AND pair = TRUE AND club_id = ?
+            "#,
+            body.partner_name,
+            body.club_id,
+        )
+        .fetch_all(&db)
+        .await?;
+        if rows.len() != 1 {
+            None
+        } else {
+            Some(rows[0].id)
+        }
+    };
+    if let Some(partner_id) = partner_id {
+        sqlx::query!(
+            r#"
+                UPDATE starter SET partner_id = NULL, partner_name = NULL WHERE partner_id = ?
+                "#,
+            partner_id,
+        )
+        .execute(&db)
+        .await?;
+    }
+
     sqlx::query!(
         r#"
         INSERT INTO starter (
@@ -81,11 +117,24 @@ pub async fn add_club_starter(
         body.single_female,
         body.pair_sonderpokal,
         body.pair,
-        body.partner_id,
+        partner_id,
         body.partner_name,
     )
     .execute(&db)
     .await?;
+
+    if let Some(partner_id) = partner_id {
+        sqlx::query!(
+            r#"
+                UPDATE starter SET partner_id = ?, partner_name = ? WHERE id = ?
+                "#,
+            starter_id,
+            self_name,
+            partner_id,
+        )
+        .execute(&db)
+        .await?;
+    }
 
     Ok(Json(AddClubStarterResponse { starter_id }))
 }

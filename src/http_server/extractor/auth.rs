@@ -24,7 +24,7 @@ pub struct Auth {
 
 impl Auth {
     pub fn is_admin(&self) -> bool {
-        self.user_id == Uuid::nil()
+        self.is_admin
     }
 }
 

@@ -598,8 +598,11 @@ export default class CupClubStarterManager extends LitElement {
                           : "-"}
                       </td>
                       <td>
-                        <label><span>Partner Name</span></label>
-                        ${starter.partner_name}
+                        <label><span>Partner</span></label> ${starter.pair && starter.partner_name
+                          ? starter.resolved_partner_name
+                            ? `✔️ ${starter.resolved_partner_name} (${starter.resolved_partner_club})`
+                            : `⌛ ${starter.partner_name}`
+                          : nothing}
                       </td>
                       <td>
                         <label><span>Startgebühr</span></label>
@@ -628,7 +631,17 @@ export default class CupClubStarterManager extends LitElement {
             pending: () => html`<p>Lädt Starter...</p>`,
           })}
         </tbody>
-      </table> `;
+      </table>
+      ${this.adminMode
+        ? nothing
+        : html`<p>
+            <em
+              >Paarkürpartner innerhalb eines Vereins werden automatisch
+              verbunden. Vereinsübergreifende Paare werden vom Veranstalter
+              verifiziert. Bis dies geschehen ist, wird der Partner mit einem ⌛
+              markiert.</em
+            >
+          </p>`}`;
   }
 
   enableStarterEdit(starter: Starter) {
@@ -655,7 +668,9 @@ export default class CupClubStarterManager extends LitElement {
       },
     });
     if (resp.error) {
-      alert("Fehler beim Speichern: " + resp.error);
+      alert(
+        "Fehler beim Speichern: " + (resp.error as { message: string }).message
+      );
       return;
     }
     this.starterEdits.delete(starter.id);

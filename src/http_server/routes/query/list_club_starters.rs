@@ -20,6 +20,8 @@ pub struct ClubStarter {
     pair: bool,
     partner_id: Option<Uuid>,
     partner_name: Option<String>,
+    resolved_partner_name: Option<String>,
+    resolved_partner_club: Option<String>,
 }
 
 #[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
@@ -50,19 +52,22 @@ pub async fn list_club_starters(
         ClubStarter,
         r#"
         SELECT
-            id as "id!: Uuid",
-            club_id as "club_id!: Uuid",
-            firstname,
-            lastname,
-            birthdate,
-            single_sonderpokal,
-            single_male,
-            single_female,
-            pair_sonderpokal,
-            pair,
-            partner_id as "partner_id: Uuid",
-            partner_name
-        FROM starter WHERE club_id = ?
+            starter.id as "id!: Uuid",
+            starter.club_id as "club_id!: Uuid",
+            starter.firstname,
+            starter.lastname,
+            starter.birthdate,
+            starter.single_sonderpokal,
+            starter.single_male,
+            starter.single_female,
+            starter.pair_sonderpokal,
+            starter.pair,
+            starter.partner_id as "partner_id: Uuid",
+            starter.partner_name,
+            NULLIF(concat_ws(" ", partner.firstname, partner.lastname), '') as "resolved_partner_name: String",
+            partner_club.name as resolved_partner_club
+        FROM starter LEFT JOIN starter as partner ON partner.id = starter.partner_id LEFT JOIN clubs as partner_club ON partner_club.id = partner.club_id
+        WHERE starter.club_id = ?
         "#,
         club_id
     )

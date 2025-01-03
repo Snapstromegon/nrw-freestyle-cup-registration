@@ -42,8 +42,8 @@ where
     S: Send + Sync,
 {
     type Rejection = ();
-    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        if let Some(auth) = parts.extensions.get::<Auth>() {
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        if let Ok(auth) = Auth::from_request_parts(parts, state).await {
             if auth.is_admin() {
                 return Ok(Capabilities {
                     can_register: true,
