@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use axum::{async_trait, extract::FromRequestParts, http::request::Parts};
+use axum::{extract::FromRequestParts, http::request::Parts};
 use time::OffsetDateTime;
 
 use crate::http_server::extractor::auth::Auth;
@@ -36,7 +36,7 @@ impl StatusOptions {
         }
     }
 }
-#[async_trait]
+
 impl<S> FromRequestParts<S> for Capabilities
 where
     S: Send + Sync,

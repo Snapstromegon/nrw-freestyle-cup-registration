@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use axum::{
-    async_trait,
-    extract::FromRequestParts,
+    extract::{FromRequestParts, OptionalFromRequestParts},
     http::{request::Parts, StatusCode},
     response::IntoResponse,
 };
@@ -28,7 +27,6 @@ impl Auth {
     }
 }
 
-#[async_trait]
 impl<S> FromRequestParts<S> for Auth
 where
     S: Send + Sync,
@@ -36,39 +34,54 @@ where
     type Rejection = Error;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        <Auth as OptionalFromRequestParts<S>>::from_request_parts(parts, state)
+            .await?
+            .ok_or(Error::JwtMissing)
+    }
+}
+
+impl<S: Send + Sync> OptionalFromRequestParts<S> for Auth {
+    type Rejection = Error;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &S,
+    ) -> Result<Option<Self>, Self::Rejection> {
         let cookies = CookieJar::from_request_parts(parts, state)
             .await
             .or(Err(Error::CookiesMissing))?;
 
-        let jwt = cookies.get("jwt").ok_or(Error::JwtMissing)?;
+        if let Some(jwt) = cookies.get("jwt") {
+            let jwt_config = parts.extensions.get::<Arc<JWTConfig>>().unwrap();
 
-        let jwt_config = parts.extensions.get::<Arc<JWTConfig>>().unwrap();
-
-        let token_data = jsonwebtoken::decode::<JWTClaims>(
-            jwt.value_trimmed(),
-            jwt_config.decode_key(),
-            jwt_config.validation(),
-        )
-        .map_err(|_| Error::JwtInvalid)?;
-        let user_id = token_data.claims.sub();
-        let db = parts.extensions.get::<SqlitePool>().unwrap();
-        let user = sqlx::query!(
-            r#"
-            SELECT email, name, is_admin, club_id as "club_id: Uuid", email_verified FROM users WHERE id = ?
-            "#,
-            user_id,
-        )
-        .fetch_one(db)
-        .await
-        .map_err(|_| Error::UserNotFound)?;
-        Ok(Auth {
-            user_id,
-            email: user.email,
-            name: user.name,
-            is_admin: user.is_admin,
-            club_id: user.club_id,
-            email_verified: user.email_verified,
-        })
+            let token_data = jsonwebtoken::decode::<JWTClaims>(
+                jwt.value_trimmed(),
+                jwt_config.decode_key(),
+                jwt_config.validation(),
+            )
+            .map_err(|_| Error::JwtInvalid)?;
+            let user_id = token_data.claims.sub();
+            let db = parts.extensions.get::<SqlitePool>().unwrap();
+            let user = sqlx::query!(
+                r#"
+                SELECT email, name, is_admin, club_id as "club_id: Uuid", email_verified FROM users WHERE id = ?
+                "#,
+                user_id,
+            )
+            .fetch_one(db)
+            .await
+            .map_err(|_| Error::UserNotFound)?;
+            Ok(Some(Auth {
+                user_id,
+                email: user.email,
+                name: user.name,
+                is_admin: user.is_admin,
+                club_id: user.club_id,
+                email_verified: user.email_verified,
+            }))
+        } else {
+            Ok(None)
+        }
     }
 }
 
