@@ -857,7 +857,7 @@ const validateStarter = (starter: MaybeNewStarter) => {
     return false;
   }
 
-  if (starter.single_sonderpokal && !starter.pair_sonderpokal) {
+  if (starter.single_sonderpokal && (!starter.pair || !starter.pair_sonderpokal)) {
     alert(
       "Einzel-Sonderpokal ist nur in Kombination mit Paar-Sonderpokal möglich."
     );
