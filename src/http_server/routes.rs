@@ -118,7 +118,7 @@ pub fn get_router(
     );
 
     Router::new()
-        .nest_service("/", serve_assets)
-        .nest("/", get_api_router(http_options, db, mailer, jwt_config, status_options))
+        .fallback_service(serve_assets)
+        .merge(get_api_router(http_options, db, mailer, jwt_config, status_options))
         .layer(request_id_layer)
 }
