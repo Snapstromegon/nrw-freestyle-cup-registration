@@ -249,6 +249,7 @@ export default class CupClubStarterManager extends LitElement {
       <table>
         <thead>
           <tr>
+            ${this.adminMode ? html`<th>ID</th>` : nothing}
             <th>Vorname</th>
             <th>Nachname</th>
             <th>Geburtstag</th>
@@ -258,6 +259,7 @@ export default class CupClubStarterManager extends LitElement {
             <th>Paar-Kategorie</th>
             <th>Paar</th>
             <th>Partner</th>
+            ${this.adminMode ? html`<th>Partner ID</th>` : nothing}
             <th>Startgeld</th>
             <th></th>
           </tr>
@@ -266,6 +268,7 @@ export default class CupClubStarterManager extends LitElement {
           ${this.systemStatus?.can_register_starter || this.user?.is_admin
             ? this.addStarterMode
               ? html`<tr id="addStarterRow">
+                  ${this.adminMode ? html`<td></td>` : nothing}
                   <td>
                     <label
                       ><span>Vorname</span
@@ -375,6 +378,18 @@ export default class CupClubStarterManager extends LitElement {
                     /></label>
                   </td>
                   <td>
+                    <label
+                      ><span>Partner ID</span>
+                      <input
+                        type="text"
+                        .value=${this.addStarter.partner_id || ""}
+                        @input=${this.updateAddStarterPartnerId}
+                        placeholder="Partner ID"
+                        list="clubStarters"
+                        ?disabled=${!this.addStarter.pair}
+                    /></label>
+                  </td>
+                  <td>
                     <label><span>Startgebühr</span></label> ${getStarterPrice(
                       this.addStarter
                     )}€
@@ -395,7 +410,7 @@ export default class CupClubStarterManager extends LitElement {
                   </td>
                 </tr>`
               : html`<tr id="addStarterRow">
-                  <td colspan="11">
+                  <td colspan=${this.adminMode ? 13 : 11}>
                     <button
                       id="addStarterButton"
                       class="material-icon"
@@ -412,6 +427,7 @@ export default class CupClubStarterManager extends LitElement {
                 const editStarter = this.starterEdits.get(starter.id);
                 return editStarter
                   ? html`<tr>
+                      ${this.adminMode ? html`<td>${starter.id}</td>` : nothing}
                       <td>
                         <label
                           ><span>Vorname</span
@@ -542,6 +558,24 @@ export default class CupClubStarterManager extends LitElement {
                             ?disabled=${!editStarter.pair}
                         /></label>
                       </td>
+                      ${this.adminMode
+                        ? html`<td>
+                            <label
+                              ><span>Partner ID</span
+                              ><input
+                                type="text"
+                                value=${editStarter.partner_id || ""}
+                                @input=${(e: InputEvent) =>
+                                  this.updateEditStarterPartnerId(
+                                    editStarter,
+                                    e
+                                  )}
+                                placeholder="Partner ID"
+                                list="clubStarters"
+                                ?disabled=${!editStarter.pair}
+                            /></label>
+                          </td>`
+                        : nothing}
                       <td>
                         <label><span>Startgebühr</span></label>
                         ${getStarterPrice(editStarter)}€
@@ -562,6 +596,7 @@ export default class CupClubStarterManager extends LitElement {
                       </td>
                     </tr>`
                   : html`<tr>
+                      ${this.adminMode ? html`<td>${starter.id}</td>` : nothing}
                       <td>
                         <label><span>Vorname</span></label> ${starter.firstname}
                       </td>
@@ -598,12 +633,21 @@ export default class CupClubStarterManager extends LitElement {
                           : "-"}
                       </td>
                       <td>
-                        <label><span>Partner</span></label> ${starter.pair && starter.partner_name
+                        <label><span>Partner</span></label> ${starter.pair &&
+                        starter.partner_name
                           ? starter.resolved_partner_name
                             ? `✔️ ${starter.resolved_partner_name} (${starter.resolved_partner_club})`
                             : `⌛ ${starter.partner_name}`
                           : nothing}
                       </td>
+                      ${this.adminMode
+                        ? html`<td>
+                            <label><span>Partner ID</span></label>
+                            ${starter.pair && starter.partner_id
+                              ? starter.partner_id
+                              : nothing}
+                          </td>`
+                        : nothing}
                       <td>
                         <label><span>Startgebühr</span></label>
                         ${getStarterPrice(starter)}€
@@ -743,6 +787,11 @@ export default class CupClubStarterManager extends LitElement {
     this.requestUpdate();
   }
 
+  updateEditStarterPartnerId(starter: Starter, e: InputEvent) {
+    starter.partner_id = (e.target as HTMLInputElement).value;
+    this.requestUpdate();
+  }
+
   updateAddStarterFirstname(e: InputEvent) {
     this.addStarter.firstname = (e.target as HTMLInputElement).value;
     this.requestUpdate();
@@ -787,6 +836,11 @@ export default class CupClubStarterManager extends LitElement {
 
   updateAddStarterPartnerName(e: InputEvent) {
     this.addStarter.partner_name = (e.target as HTMLInputElement).value;
+    this.requestUpdate();
+  }
+
+  updateAddStarterPartnerId(e: InputEvent) {
+    this.addStarter.partner_id = (e.target as HTMLInputElement).value;
     this.requestUpdate();
   }
 
