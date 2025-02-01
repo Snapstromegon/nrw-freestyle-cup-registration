@@ -1,7 +1,6 @@
-import { consume } from "@lit/context";
 import { LitElement, html, css } from "lit";
 import { customElement } from "lit/decorators.js";
-import { User, userContext } from "../../contexts/user";
+import { User } from "../../contexts/user";
 import { client, components } from "../../apiClient";
 import { Task } from "@lit/task";
 import "../elements/cup-context-club.js";
@@ -31,9 +30,6 @@ export default class CupViewAdmin extends LitElement {
       -webkit-font-smoothing: antialiased;
     }
   `;
-
-  @consume({ context: userContext, subscribe: true })
-  user: User | null = null;
 
   users = new Task(this, {
     task: async () => {
@@ -82,6 +78,7 @@ export default class CupViewAdmin extends LitElement {
 
   override render() {
     return html`
+      <a href="/admin-starters">Starter Tabellen</a>
       <h2>Users</h2>
       ${this.users.render({
         complete: (data) =>
