@@ -4,6 +4,7 @@ import { consume } from "@lit/context";
 import { Club, clubContext } from "../../contexts/club";
 import "./cup-club-starter-manager.js";
 import "./cup-club-judge-manager.js";
+import "./cup-club-act-manager.js";
 
 @customElement("cup-club-manager")
 export default class CupClubManager extends LitElement {
@@ -18,7 +19,8 @@ export default class CupClubManager extends LitElement {
       margin-bottom: 0.5em;
     }
     h4,
-    p {
+    p,
+    hr {
       margin-top: 1em;
       margin-bottom: 0.5em;
     }
@@ -48,6 +50,9 @@ export default class CupClubManager extends LitElement {
       <cup-club-starter-manager
         ?adminMode=${this.adminMode}
       ></cup-club-starter-manager>
+      <hr />
+      <cup-club-act-manager></cup-club-act-manager>
+      <hr />
       <cup-club-judge-manager
         ?adminMode=${this.adminMode}
       ></cup-club-judge-manager> `;

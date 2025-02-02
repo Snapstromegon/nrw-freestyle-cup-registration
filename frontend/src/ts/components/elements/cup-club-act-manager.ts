@@ -125,6 +125,10 @@ export default class CupClubActManager extends LitElement {
       border-radius: 0;
     }
 
+    audio {
+      max-width: 100%;
+    }
+
     /* If screen narrower than 1200px */
     @media screen and (max-width: 1200px) {
       table {
@@ -204,8 +208,41 @@ export default class CupClubActManager extends LitElement {
       <h5>Zusammenfassung</h5>
       <table id="summary">
         <tr>
-          <th>Act</th>
+          <th>Küren</th>
           <td>${this.acts.value?.length}</td>
+        </tr>
+        <tr>
+          <th>Namen vorhanden</th>
+          <td>
+            ${this.acts.value?.filter((act) => act.name).length}/${this.acts
+              .value?.length}
+            ${this.acts.value?.filter((act) => act.name).length ==
+            this.acts.value?.length
+              ? "✔️"
+              : "⌛"}
+          </td>
+        </tr>
+        <tr>
+          <th>Beschreibung vorhanden</th>
+          <td>
+            ${this.acts.value?.filter((act) => act.description).length}/${this.acts
+              .value?.length}
+            ${this.acts.value?.filter((act) => act.description).length ==
+            this.acts.value?.length
+              ? "✔️"
+              : "⌛"}
+          </td>
+        </tr>
+        <tr>
+          <th>Musik vorhanden</th>
+          <td>
+            ${this.acts.value?.filter((act) => act.song_file).length}/${this
+              .acts.value?.length}
+            ${this.acts.value?.filter((act) => act.song_file).length ==
+            this.acts.value?.length
+              ? "✔️"
+              : "⌛"}
+          </td>
         </tr>
       </table>
 
@@ -275,7 +312,7 @@ ${editAct.description || ""}</textarea
                           @submit=${(e: SubmitEvent) =>
                             this.uploadSong(editAct, e)}
                         >
-                          <input type="file" accept="audio/*"/>
+                          <input type="file" accept="audio/*" />
                           <button type="submit" class="blue material-icon">
                             cloud_upload
                           </button>
@@ -329,7 +366,13 @@ ${editAct.description || ""}</textarea
                       </td>
                       <td>
                         <label><span>Musik</span></label>
-                        ${act.song_file ? html`${act.song_file_name}<br><audio preload=none controls src="/songs/${act.song_file}"></audio>` : "❌"}
+                        ${act.song_file
+                          ? html`${act.song_file_name}<br /><audio
+                                preload="none"
+                                controls
+                                src="/songs/${act.song_file}"
+                              ></audio>`
+                          : "❌"}
                       </td>
                       <td>
                         <label><span>StarterInnen</span></label>
