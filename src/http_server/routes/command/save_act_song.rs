@@ -7,8 +7,11 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
-use tokio::{fs::{DirBuilder, File}, io::AsyncWriteExt};
-use tracing::{info, instrument};
+use tokio::{
+    fs::{DirBuilder, File},
+    io::AsyncWriteExt,
+};
+use tracing::instrument;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -29,8 +32,10 @@ pub type Metadata = HashMap<String, String>;
 
 #[derive(ToSchema, Debug)]
 pub struct Upload {
+    #[allow(dead_code)]
     #[schema(value_type = String, format = Binary)]
     pub file_content: Vec<u8>,
+    #[allow(dead_code)]
     pub metadata: Option<Metadata>,
 }
 
@@ -75,10 +80,7 @@ pub async fn save_act_song(
 
     let save_file_name = format!("{}.{}", query.act_id, extension.to_string_lossy());
 
-    let path =
-        http_options
-            .data_path
-            .join(&save_file_name);
+    let path = http_options.data_path.join(&save_file_name);
     let data = entry
         .bytes()
         .await

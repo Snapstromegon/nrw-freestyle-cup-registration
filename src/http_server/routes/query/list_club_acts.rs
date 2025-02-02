@@ -1,6 +1,6 @@
 use axum::{extract::Query, Extension, Json};
 use sqlx::SqlitePool;
-use tracing::{info, instrument};
+use tracing::instrument;
 use uuid::Uuid;
 
 use crate::http_server::{ClientError, HttpError};

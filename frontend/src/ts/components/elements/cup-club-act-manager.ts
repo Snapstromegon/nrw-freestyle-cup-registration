@@ -414,8 +414,8 @@ ${editAct.description || ""}</textarea
     await client.POST("/api/command/save_act_song", {
       params: {
         query: { act_id: act.id },
-      },
-      body: data,
+      } as any,
+      body: data as any,
     });
 
     alert("Musik hochgeladen!");
