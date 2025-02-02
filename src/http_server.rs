@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use axum::{response::IntoResponse, Json};
 use serde::Serialize;
@@ -86,6 +86,7 @@ impl IntoResponse for ClientError {
 pub struct HttpServerOptions {
     pub bind_address: String,
     pub base_url: String,
+    pub data_path: PathBuf,
 }
 
 pub struct HttpServer {

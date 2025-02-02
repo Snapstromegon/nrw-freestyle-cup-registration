@@ -5,7 +5,7 @@ use nrw_freestyle_cup_registration::{
     http_server::{HttpServer, HttpServerOptions},
     jwt::JWTConfig,
     mailer::Mailer,
-    system_status::StatusOptions,
+    system_status::StatusOptions, utils,
 };
 use password_auth::generate_hash;
 use serde::Deserialize;
@@ -90,11 +90,13 @@ async fn main() -> anyhow::Result<()> {
         .await
         .expect("Couldn't connect to database");
 
-    migrate!().run(&db).await?;
+    migrate!("./migrations").run(&db).await?;
 
     if let Some(admin) = &args.admin {
         insert_admin_user(&db, &admin.name, &admin.email, &admin.password).await?;
     }
+
+    utils::initialize_acts(&db).await.unwrap();
 
     let jwt_algorithm = jsonwebtoken::Algorithm::HS512;
     let mut validator = jsonwebtoken::Validation::new(jwt_algorithm);
@@ -110,6 +112,7 @@ async fn main() -> anyhow::Result<()> {
         HttpServerOptions {
             bind_address: args.http_address,
             base_url: args.base_url.to_string(),
+            data_path: args.data,
         },
         db,
         Arc::new(jwt_config),

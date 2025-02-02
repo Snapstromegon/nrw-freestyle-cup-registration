@@ -16,6 +16,8 @@ mod edit_club_starter;
 mod add_club_judge;
 mod delete_club_judge;
 mod edit_club_judge;
+mod edit_club_act;
+mod save_act_song;
 
 pub fn get_command_router() -> OpenApiRouter {
     OpenApiRouter::new()
@@ -34,5 +36,7 @@ pub fn get_command_router() -> OpenApiRouter {
         .routes(routes!(add_club_judge::add_club_judge))
         .routes(routes!(delete_club_judge::delete_club_judge))
         .routes(routes!(edit_club_judge::edit_club_judge))
+        .routes(routes!(edit_club_act::edit_club_act))
+        .routes(routes!(save_act_song::save_act_song))
         .layer(DefaultBodyLimit::max(1024 * 1024 * 10))
 }

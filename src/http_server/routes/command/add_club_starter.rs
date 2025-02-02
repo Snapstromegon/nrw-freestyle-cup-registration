@@ -8,6 +8,7 @@ use uuid::Uuid;
 use crate::{
     http_server::{extractor::auth::Auth, ClientError, HttpError},
     system_status::Capabilities,
+    utils::set_act,
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -88,6 +89,10 @@ pub async fn add_club_starter(
         )
         .execute(&db)
         .await?;
+
+        set_act(&db, "", &[starter_id, partner_id], None, true)
+            .await
+            .map_err(HttpError::ErrorMessages)?;
     }
 
     sqlx::query!(
@@ -122,6 +127,12 @@ pub async fn add_club_starter(
     )
     .execute(&db)
     .await?;
+
+    if body.single_female || body.single_male {
+        set_act(&db, "", &[starter_id], None, false)
+            .await
+            .map_err(HttpError::ErrorMessages)?;
+    }
 
     if let Some(partner_id) = partner_id {
         sqlx::query!(

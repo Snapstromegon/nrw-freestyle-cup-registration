@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS acts (
 CREATE TABLE IF NOT EXISTS act_participants (
   "act_id" BLOB NOT NULL,
   "starter_id" BLOB NOT NULL,
-  FOREIGN KEY ("act_id") REFERENCES acts ("id"),
+  FOREIGN KEY ("act_id") REFERENCES acts ("id") ON DELETE CASCADE,
   FOREIGN KEY ("starter_id") REFERENCES starter ("id"),
   PRIMARY KEY ("act_id", "starter_id")
 );

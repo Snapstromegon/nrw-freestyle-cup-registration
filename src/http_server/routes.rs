@@ -9,8 +9,7 @@ use sqlx::SqlitePool;
 use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::{
-    request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
-    trace::TraceLayer,
+    request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer}, services::ServeDir, trace::TraceLayer
 };
 use tracing::{error, info_span};
 use utoipa::{openapi::OpenApi, OpenApi as OpenApiTrait};
@@ -119,6 +118,7 @@ pub fn get_router(
 
     Router::new()
         .fallback_service(serve_assets)
+        .nest_service("/songs", ServeDir::new(http_options.data_path.clone()))
         .merge(get_api_router(http_options, db, mailer, jwt_config, status_options))
         .layer(request_id_layer)
 }

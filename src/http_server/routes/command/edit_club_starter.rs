@@ -8,6 +8,7 @@ use uuid::Uuid;
 use crate::{
     http_server::{extractor::auth::Auth, ClientError, HttpError},
     system_status::Capabilities,
+    utils::{delete_act, get_act_id_for_starter_id, set_act},
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -152,6 +153,28 @@ pub async fn edit_club_starter(
             )
             .execute(&db)
             .await?;
+
+            // Reset act
+            if let Some(own_act_id) = get_act_id_for_starter_id(&db, body.starter_id, true)
+                .await
+                .map_err(HttpError::ErrorMessages)?
+            {
+                delete_act(&db, own_act_id)
+                    .await
+                    .map_err(HttpError::ErrorMessages)?;
+            }
+            if let Some(partner_act_id) = get_act_id_for_starter_id(&db, partner_id, true)
+                .await
+                .map_err(HttpError::ErrorMessages)?
+            {
+                delete_act(&db, partner_act_id)
+                    .await
+                    .map_err(HttpError::ErrorMessages)?;
+            }
+
+            set_act(&db, "", &[body.starter_id, partner_id], None, true)
+                .await
+                .map_err(HttpError::ErrorMessages)?;
         }
     }
 
@@ -184,6 +207,19 @@ pub async fn edit_club_starter(
     )
     .execute(&db)
     .await?;
+
+    let existing_act = get_act_id_for_starter_id(&db, body.starter_id, false)
+        .await
+        .map_err(HttpError::ErrorMessages)?;
+    if (body.single_female || body.single_male) && existing_act.is_none() {
+        set_act(&db, "", &[body.starter_id], None, false)
+            .await
+            .map_err(HttpError::ErrorMessages)?;
+    } else if (!body.single_female && !body.single_male) && existing_act.is_some() {
+        delete_act(&db, existing_act.unwrap())
+            .await
+            .map_err(HttpError::ErrorMessages)?;
+    }
 
     Ok(Json(EditClubStarterResponse {}))
 }
