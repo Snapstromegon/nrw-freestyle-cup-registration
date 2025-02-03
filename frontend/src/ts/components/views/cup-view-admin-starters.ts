@@ -215,6 +215,6 @@ export default class CupViewAdminStarters extends LitElement {
 }
 
 const isU15 = (birthdate: Date) => {
-  const cutoff = new Date("2010-03-15");
+  const cutoff = new Date("2010-03-16");
   return birthdate >= cutoff;
 };
