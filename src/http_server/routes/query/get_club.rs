@@ -10,6 +10,7 @@ pub struct Club {
     id: Uuid,
     name: String,
     owner_id: Uuid,
+    payment: Option<f64>,
 }
 
 #[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
@@ -45,7 +46,7 @@ pub async fn get_club(
         let club = sqlx::query_as!(
             Club,
             r#"
-        SELECT id as "id!: Uuid", name, owner_id as "owner_id: Uuid" FROM clubs WHERE id = ?
+        SELECT id as "id!: Uuid", name, owner_id as "owner_id: Uuid", payment FROM clubs WHERE id = ?
         "#,
             club_id
         )

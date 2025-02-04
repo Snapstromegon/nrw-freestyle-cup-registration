@@ -151,6 +151,6 @@ export default class CupViewCreateClub extends LitElement {
       return;
     }
 
-    window.location.href = "/manage_club?club=" + resp.data.club_id;
+    window.location.href = "/";
   }
 }

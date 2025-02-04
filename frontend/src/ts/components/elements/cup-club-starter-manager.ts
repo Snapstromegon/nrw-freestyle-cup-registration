@@ -243,6 +243,14 @@ export default class CupClubStarterManager extends LitElement {
             )}€
           </td>
         </tr>
+        <tr>
+          <th>Bezahlt</th>
+          <td>
+            ${this.club?.payment?.toFixed(2).toString().replace(".", ",") || 0}€${this.adminMode
+              ? html` <button @click=${this.pay}>Betrag aktualisieren</button>`
+              : nothing}
+          </td>
+        </tr>
       </table>
 
       <h5>Starter</h5>
@@ -882,9 +890,31 @@ export default class CupClubStarterManager extends LitElement {
     };
     this.addStarterMode = false;
   }
+
+  async pay() {
+    if (!this.club) {
+      return;
+    }
+    const amount = parseFloat(prompt("Betrag in Euro:")?.replace(",", ".") || "0");
+    if (!amount) {
+      alert("Ungültiger Betrag.");
+      return;
+    }
+    let resp = await client.POST("/api/command/set_payment", {
+      body: { club_id: this.club?.id, amount },
+    });
+    if (resp.error) {
+      alert("Fehler beim Speichern: " + resp.error);
+      return;
+    }
+    console.log(resp);
+    alert(`Zahlung von ${amount}€ eingetragen.`);
+    this.club.payment = amount;
+    document.location.reload();
+  }
 }
 
-const getStarterPrice = (starter: MaybeNewStarter) => {
+export const getStarterPrice = (starter: MaybeNewStarter) => {
   let singlePricePerStart = starter.single_sonderpokal ? 12 : 10;
   let pairPricePerStart = starter.pair_sonderpokal ? 12 : 10;
   let price = 0;

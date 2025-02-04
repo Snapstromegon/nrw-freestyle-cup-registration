@@ -205,6 +205,12 @@ export default class CupClubActManager extends LitElement {
 
   override render() {
     return html`<h4>Küren</h4>
+      ${this.adminMode
+        ? nothing
+        : html` <p>
+            Änderungen können noch bis zum Musik Einsendeschluss am
+            <strong>02.03.2025</strong> vorgenommen werden.
+          </p>`}
       <h5>Zusammenfassung</h5>
       <table id="summary">
         <tr>
@@ -225,8 +231,8 @@ export default class CupClubActManager extends LitElement {
         <tr>
           <th>Beschreibung vorhanden</th>
           <td>
-            ${this.acts.value?.filter((act) => act.description).length}/${this.acts
-              .value?.length}
+            ${this.acts.value?.filter((act) => act.description).length}/${this
+              .acts.value?.length}
             ${this.acts.value?.filter((act) => act.description).length ==
             this.acts.value?.length
               ? "✔️"
@@ -251,7 +257,7 @@ export default class CupClubActManager extends LitElement {
         <thead>
           <tr>
             ${this.adminMode ? html`<th>ID</th>` : nothing}
-            <th>Name</th>
+            <th>Kürtitel</th>
             <th>Beschreibung</th>
             <th>Typ</th>
             <th>Kategorie</th>
@@ -270,13 +276,13 @@ export default class CupClubActManager extends LitElement {
                       ${this.adminMode ? html`<td>${act.id}</td>` : nothing}
                       <td>
                         <label
-                          ><span>Name</span
+                          ><span>Kürtitel</span
                           ><input
                             type="text"
                             .value=${editAct.name}
                             @input=${(e: InputEvent) =>
                               this.updateEditActName(editAct, e)}
-                            placeholder="Name"
+                            placeholder="Der Titel deiner Kür"
                         /></label>
                       </td>
                       <td>
