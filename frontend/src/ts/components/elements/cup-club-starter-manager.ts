@@ -180,14 +180,14 @@ export default class CupClubStarterManager extends LitElement {
   systemStatus: SystemStatus | null = null;
   @consume({ context: userContext, subscribe: true }) user: User | null = null;
 
-  @property({ type: Boolean }) adminMode = false;
+  @property({ type: Boolean, attribute: "admin-mode" }) adminMode = false;
 
   starters = new Task(this, {
     task: async ([clubId]) => {
       if (!clubId) {
         return [];
       }
-      let resp = await client.GET("/api/query/list_club_starters", {
+      const resp = await client.GET("/api/query/list_club_starters", {
         params: { query: { club_id: clubId } },
       });
       if (resp.error) {
@@ -201,7 +201,7 @@ export default class CupClubStarterManager extends LitElement {
     args: () => [this.club?.id],
   });
 
-  @state() starterEdits: Map<string, Starter> = new Map();
+  @state() starterEdits = new Map<string, Starter>();
   @state() addStarter: MaybeNewStarter = {
     firstname: "",
     lastname: "",
@@ -711,7 +711,7 @@ export default class CupClubStarterManager extends LitElement {
       return;
     }
 
-    let resp = await client.POST("/api/command/edit_club_starter", {
+    const resp = await client.POST("/api/command/edit_club_starter", {
       body: {
         ...starter,
         starter_id: starter.id,
@@ -737,7 +737,7 @@ export default class CupClubStarterManager extends LitElement {
     ) {
       return;
     }
-    let resp = await client.POST("/api/command/delete_club_starter", {
+    const resp = await client.POST("/api/command/delete_club_starter", {
       body: { starter_id: starter.id },
     });
     if (resp.error) {
@@ -857,7 +857,7 @@ export default class CupClubStarterManager extends LitElement {
       return;
     }
 
-    let resp = await client.POST("/api/command/add_club_starter", {
+    const resp = await client.POST("/api/command/add_club_starter", {
       body: {
         ...this.addStarter,
         club_id: this.club?.id,
@@ -900,7 +900,7 @@ export default class CupClubStarterManager extends LitElement {
       alert("Ungültiger Betrag.");
       return;
     }
-    let resp = await client.POST("/api/command/set_payment", {
+    const resp = await client.POST("/api/command/set_payment", {
       body: { club_id: this.club?.id, amount },
     });
     if (resp.error) {
@@ -915,8 +915,8 @@ export default class CupClubStarterManager extends LitElement {
 }
 
 export const getStarterPrice = (starter: MaybeNewStarter) => {
-  let singlePricePerStart = starter.single_sonderpokal ? 12 : 10;
-  let pairPricePerStart = starter.pair_sonderpokal ? 12 : 10;
+  const singlePricePerStart = starter.single_sonderpokal ? 12 : 10;
+  const pairPricePerStart = starter.pair_sonderpokal ? 12 : 10;
   let price = 0;
   if (starter.single_male) {
     price += singlePricePerStart;

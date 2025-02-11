@@ -29,6 +29,11 @@ export default class CupViewAdminStarters extends LitElement {
       font-feature-settings: "liga";
       -webkit-font-smoothing: antialiased;
     }
+
+    nav a {
+      padding: 0.5rem;
+      display: inline-block;
+    }
   `;
 
   starters = new Task(this, {
@@ -86,7 +91,9 @@ export default class CupViewAdminStarters extends LitElement {
   });
 
   override render() {
-    return html` <a href="/admin">Anmeldeübersicht</a>
+    return html`<nav>
+        <a href="/admin">Anmeldeübersicht</a>
+      </nav>
       ${this.starters.render({
         loading: () => html`Loading...`,
         error: (error) => html`Error: ${error}`,

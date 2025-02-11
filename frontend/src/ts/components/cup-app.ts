@@ -44,6 +44,11 @@ export default class CupApp extends LitElement {
       render: () => authed(html`<cup-view-admin-starters></cup-view-admin-starters>`),
     },
     {
+      path: new URLPattern({ pathname: "/admin-payments" }),
+      load: () => import("./views/cup-view-admin-payments.js"),
+      render: () => authed(html`<cup-view-admin-payments></cup-view-admin-payments>`),
+    },
+    {
       path: new URLPattern({ pathname: "/register" }),
       load: () => import("./views/cup-view-register.js"),
       render: () => html`<cup-view-register></cup-view-register>`,
