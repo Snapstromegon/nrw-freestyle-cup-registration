@@ -29,6 +29,9 @@ backend: migrate-db
 release: clean-frontend openapi frontend-release migrate-db
 	cargo build --release
 
+centos-release: clean-frontend openapi frontend-release migrate-db
+	cargo build --release --target x86_64-unknown-linux-musl
+
 run-release: release
 	cargo run --release
 
