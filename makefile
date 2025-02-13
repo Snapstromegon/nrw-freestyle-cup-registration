@@ -48,3 +48,7 @@ clean: clean-frontend
 reset: clean-frontend
 	rm -rf data
 	rm -rf db.sqlite3
+
+download:
+	scp uberspace:nrw-freestyle-cup-registration/db.sqlite db.sqlite
+	scp -r uberspace:nrw-freestyle-cup-registration/data data
