@@ -1,6 +1,6 @@
 import { LitElement, html, css } from "lit";
 import { customElement } from "lit/decorators.js";
-import { client } from "../../apiClient";
+import { client, components } from "../../apiClient";
 import { Task } from "@lit/task";
 import "../elements/cup-context-club.js";
 import "../elements/cup-club-manager.js";
@@ -88,22 +88,14 @@ export default class CupViewAdminActsOverview extends LitElement {
           user,
           acts,
           actsReady: acts.reduce(
-            (a, act) =>
-              a +
-              (act.song_file && act.name ? 1 : 0),
+            (a, act) => a + (act.song_file && act.name ? 1 : 0),
             0
           ),
-          actsWithSong: acts.reduce(
-            (a, act) => a + (act.song_file ? 1 : 0),
-            0
-          ),
-          actsWithName: acts.reduce(
-            (a, act) => a + (act.name ? 1 : 0),
-            0
-          ),
+          actsWithSong: acts.reduce((a, act) => a + (act.song_file ? 1 : 0), 0),
+          actsWithName: acts.reduce((a, act) => a + (act.name ? 1 : 0), 0),
         });
       }
-      console.log(clubs)
+      console.log(clubs);
       return clubs;
     },
     args: () => [],
@@ -115,6 +107,36 @@ export default class CupViewAdminActsOverview extends LitElement {
       const acts = await client.GET("/api/query/list_acts");
       return acts.data || [];
     },
+  });
+  categories = new Task(this, {
+    args: () => [],
+    task: async () => {
+      const data = await client.GET("/api/query/list_categories");
+      if (data.error) {
+        throw new Error((data.error as { message: string }).message);
+      }
+      return data.data;
+    },
+  });
+  acts = new Task(this, {
+    task: async ([categories]) => {
+      if (!categories) return [];
+      const data = await client.GET("/api/query/list_acts");
+      if (data.error) {
+        throw new Error((data.error as { message: string }).message);
+      }
+      const acts = data.data;
+
+      const actsByCategory: { [type: string]: components["schemas"]["Act"][] } =
+        {};
+      for (const category of categories) {
+        actsByCategory[category.name] = acts.filter(
+          (act) => act.category === category.name
+        );
+      }
+      return actsByCategory;
+    },
+    args: () => [this.categories.value],
   });
 
   override render() {
@@ -175,11 +197,44 @@ export default class CupViewAdminActsOverview extends LitElement {
                   <td class="right">${c.actsWithSong}</td>
                   <td class="right">${c.actsWithName}</td>
                   <td class="right">${c.actsReady}</td>
-                  <td>${c.actsReady == c.acts.length ? '✔️' : c.actsReady ? '⌛' : '❌'}</td>
+                  <td>
+                    ${c.actsReady == c.acts.length
+                      ? "✔️"
+                      : c.actsReady
+                      ? "⌛"
+                      : "❌"}
+                  </td>
                 </tr>`
               )}
             </tbody>
           </table>
+        `,
+      })}
+      <hr>
+      ${this.acts.render({
+        complete: (actsByCategory) => html`
+          ${Object.entries(actsByCategory).map(
+            ([category, acts]) => html`
+              <section class="category">
+                <h3>${category}</h3>
+                <table>
+                  ${acts.map(
+                    (act) => html`
+                      <tr>
+                        <td>${act.name}</td>
+                        <td>
+                          ${act.participants
+                            .map((p) => p.firstname + " " + p.lastname)
+                            .join(" & ")}
+                        </td>
+                        <td>${act.song_file ? "✔️" : "❌"}</td>
+                      </tr>
+                    `
+                  )}
+                </table>
+              </section>
+            `
+          )}
         `,
       })}`;
   }
