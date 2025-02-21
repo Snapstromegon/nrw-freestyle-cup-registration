@@ -86,6 +86,8 @@ export default class CupViewAdmin extends LitElement {
       <nav>
         <a href="/admin-starters">Starter Tabellen</a>
         <a href="/admin-payments">Zahlungsmanager</a>
+        <a href="/admin-acts-overview">Küren Übersicht</a>
+        <a href="/admin-judges">Judges Übersicht</a>
       </nav>
       <h2>Users</h2>
       ${this.users.render({

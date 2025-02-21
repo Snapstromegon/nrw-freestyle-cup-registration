@@ -1,0 +1,96 @@
+use axum::{Extension, Json};
+use sqlx::SqlitePool;
+use tracing::instrument;
+use uuid::Uuid;
+
+use crate::http_server::{extractor::auth::Auth, ClientError, HttpError};
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, utoipa::ToSchema, Clone)]
+pub struct ActParticipant {
+    firstname: String,
+    lastname: String,
+    id: Uuid,
+}
+
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct Act {
+    id: Uuid,
+    name: String,
+    song_file: Option<String>,
+    description: Option<String>,
+    song_file_name: Option<String>,
+    is_pair: Option<bool>,
+    max_age: Option<f64>,
+    is_sonderpokal: Option<bool>,
+    participants: Vec<ActParticipant>,
+    category: Option<String>,
+}
+
+/// List all users.
+#[utoipa::path(
+    get,
+    tags=["query", "acts"],
+    path="/list_acts",
+    responses(
+        (status=200, content_type="application/json", body=Vec<Act>),
+        (status=404, content_type="application/json", body=ClientError),
+        (status=500, content_type="application/json", body=ClientError),
+    ),
+)]
+#[instrument(skip(db))]
+pub async fn list_acts(
+    Extension(db): Extension<SqlitePool>,
+    auth: Auth,
+) -> Result<Json<Vec<Act>>, HttpError> {
+    if !auth.is_admin {
+        return Err(HttpError::InvalidCredentials);
+    }
+    pub struct DBAct {
+        id: Uuid,
+        name: String,
+        song_file: Option<String>,
+        description: Option<String>,
+        song_file_name: Option<String>,
+        is_pair: Option<bool>,
+        max_age: Option<f64>,
+        is_sonderpokal: Option<bool>,
+        participants: sqlx::types::Json<Vec<ActParticipant>>,
+        category: Option<String>,
+    }
+    impl From<DBAct> for Act {
+        fn from(db_act: DBAct) -> Self {
+            Act {
+                id: db_act.id,
+                name: db_act.name,
+                song_file: db_act.song_file,
+                description: db_act.description,
+                song_file_name: db_act.song_file_name,
+                is_pair: db_act.is_pair,
+                max_age: db_act.max_age,
+                is_sonderpokal: db_act.is_sonderpokal,
+                participants: db_act.participants.0,
+                category: db_act.category,
+            }
+        }
+    }
+    let acts = sqlx::query_as!(
+        DBAct,
+        r#"
+        SELECT
+            id as "id!: Uuid",
+            name,
+            song_file,
+            description,
+            song_file_name,
+            is_pair as "is_pair: bool",
+            max_age,
+            is_sonderpokal as "is_sonderpokal: bool",
+            participants as "participants!: sqlx::types::Json<Vec<ActParticipant>>",
+            category
+        FROM view_act
+        "#
+    )
+    .fetch_all(&db)
+    .await?;
+    Ok(Json(acts.into_iter().map(|a| a.into()).collect()))
+}

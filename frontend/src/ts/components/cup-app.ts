@@ -39,14 +39,36 @@ export default class CupApp extends LitElement {
       render: () => authed(html`<cup-view-admin></cup-view-admin>`),
     },
     {
+      path: new URLPattern({ pathname: "/admin-judges" }),
+      load: () => import("./views/cup-view-admin-judges.js"),
+      render: () =>
+        authed(html`<cup-view-admin-judges></cup-view-admin-judges>`),
+    },
+    {
+      path: new URLPattern({ pathname: "/admin-judges-old" }),
+      load: () => import("./views/cup-view-admin-judges-old.js"),
+      render: () =>
+        authed(html`<cup-view-admin-judges></cup-view-admin-judges>`),
+    },
+    {
       path: new URLPattern({ pathname: "/admin-starters" }),
       load: () => import("./views/cup-view-admin-starters.js"),
-      render: () => authed(html`<cup-view-admin-starters></cup-view-admin-starters>`),
+      render: () =>
+        authed(html`<cup-view-admin-starters></cup-view-admin-starters>`),
     },
     {
       path: new URLPattern({ pathname: "/admin-payments" }),
       load: () => import("./views/cup-view-admin-payments.js"),
-      render: () => authed(html`<cup-view-admin-payments></cup-view-admin-payments>`),
+      render: () =>
+        authed(html`<cup-view-admin-payments></cup-view-admin-payments>`),
+    },
+    {
+      path: new URLPattern({ pathname: "/admin-acts-overview" }),
+      load: () => import("./views/cup-view-admin-acts-overview.js"),
+      render: () =>
+        authed(
+          html`<cup-view-admin-acts-overview></cup-view-admin-acts-overview>`
+        ),
     },
     {
       path: new URLPattern({ pathname: "/register" }),
@@ -106,7 +128,11 @@ export default class CupApp extends LitElement {
       error: () =>
         html`<cup-view-not-found .url=${this.location}></cup-view-not-found>`,
       complete: ({ route, urlPatternExec }) =>
-        html`<cup-context-system-status>${route ? route.render(urlPatternExec) : nothing}</cup-context-system-status>`,
+        html`<cup-context-system-status
+          >${route
+            ? route.render(urlPatternExec)
+            : nothing}</cup-context-system-status
+        >`,
     });
   }
 }

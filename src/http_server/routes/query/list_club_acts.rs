@@ -16,11 +16,11 @@ pub struct ClubAct {
     is_sonderpokal: bool,
     #[serde(with = "time::serde::iso8601")]
     created_at: time::OffsetDateTime,
-    participants: Vec<ActParticipant>,
+    participants: Vec<ClubActParticipant>,
 }
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
-pub struct ActParticipant {
+pub struct ClubActParticipant {
     id: Uuid,
     starter_firstname: String,
     starter_lastname: String,
@@ -109,7 +109,7 @@ pub async fn list_club_acts(
             }),
             participants: participants
                 .into_iter()
-                .map(|participant| ActParticipant {
+                .map(|participant| ClubActParticipant {
                     id: participant.id,
                     starter_firstname: participant.firstname,
                     starter_lastname: participant.lastname,

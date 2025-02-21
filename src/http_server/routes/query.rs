@@ -8,6 +8,9 @@ mod get_system_status;
 mod list_club_judges;
 mod list_starters;
 mod list_club_acts;
+mod list_acts;
+mod list_judges;
+mod list_categories;
 
 pub fn get_query_router() -> OpenApiRouter {
     OpenApiRouter::new()
@@ -19,4 +22,7 @@ pub fn get_query_router() -> OpenApiRouter {
         .routes(routes!(list_club_judges::list_club_judges))
         .routes(routes!(list_starters::list_starters))
         .routes(routes!(list_club_acts::list_club_acts))
+        .routes(routes!(list_acts::list_acts))
+        .routes(routes!(list_judges::list_judges))
+        .routes(routes!(list_categories::list_categories))
 }
