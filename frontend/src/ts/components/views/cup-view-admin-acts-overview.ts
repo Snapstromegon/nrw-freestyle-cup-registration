@@ -57,6 +57,10 @@ export default class CupViewAdminActsOverview extends LitElement {
       padding: 0.5rem;
       display: inline-block;
     }
+
+    audio {
+      height: 2rem;
+    }
   `;
 
   clubs = new Task(this, {
@@ -210,7 +214,7 @@ export default class CupViewAdminActsOverview extends LitElement {
           </table>
         `,
       })}
-      <hr>
+      <hr />
       ${this.acts.render({
         complete: (actsByCategory) => html`
           ${Object.entries(actsByCategory).map(
@@ -224,10 +228,18 @@ export default class CupViewAdminActsOverview extends LitElement {
                         <td>${act.name}</td>
                         <td>
                           ${act.participants
-                            .map((p) => p.firstname + " " + p.lastname)
+                            .map((p) => `${p.firstname} ${p.lastname} (${p.club_name})`)
                             .join(" & ")}
                         </td>
-                        <td>${act.song_file ? "✔️" : "❌"}</td>
+                        <td>
+                          ${act.song_file
+                            ? html` <audio
+                                preload="none"
+                                controls
+                                src="/songs/${act.song_file}"
+                              ></audio>`
+                            : "❌"}
+                        </td>
                       </tr>
                     `
                   )}

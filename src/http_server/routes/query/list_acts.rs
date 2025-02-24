@@ -10,6 +10,7 @@ pub struct ActParticipant {
     firstname: String,
     lastname: String,
     id: Uuid,
+    club_name: String,
 }
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
