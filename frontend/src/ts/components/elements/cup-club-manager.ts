@@ -137,7 +137,7 @@ export default class CupClubManager extends LitElement {
       <cup-club-act-manager></cup-club-act-manager>
       <hr />
       <cup-club-starter-manager
-        ?adminMode=${this.adminMode}
+        ?admin-mode=${this.adminMode}
       ></cup-club-starter-manager>
       <hr />
       <cup-club-judge-manager

@@ -125,7 +125,8 @@ export default class CupViewAdminActsOverview extends LitElement {
   });
   acts = new Task(this, {
     task: async ([categories, acts]) => {
-      if (!categories || !acts) return [];
+      if (!categories || !acts)
+        return new Map<string, components["schemas"]["Act"][]>();
 
       const actsByCategory = new Map<string, components["schemas"]["Act"][]>();
       for (const category of categories) {
@@ -213,56 +214,84 @@ export default class CupViewAdminActsOverview extends LitElement {
       })}
       <hr />
       ${cache(
-        this.acts.render({
-          complete: (actsByCategory) => html`
-            ${repeat(
-              actsByCategory,
-              ([category]) => category,
-              ([category, acts]) => html`
-                <section class="category">
-                  <h3>${category}</h3>
-                  <table>
-                    ${repeat(
-                      acts,
-                      (act) => act.id,
-                      (act) => html`
-                        <tr>
-                          <td>${act.name}</td>
-                          <td>
-                            ${act.participants
-                              .map(
-                                (p) =>
-                                  `${p.firstname} ${p.lastname} (${p.club_name})`
-                              )
-                              .join(" & ")}
-                          </td>
-                          <td>
-                            ${act.song_file
-                              ? html` <audio
-                                  preload="none"
-                                  controls
-                                  src="/songs/${act.song_file}"
-                                ></audio>`
-                              : "❌"}
-                          </td>
-                          <td>
-                            ${act.song_file
-                              ? html`<input
-                                  type="checkbox"
-                                  ?checked=${act.song_checked}
-                                  @change=${(e: Event) =>
-                                    this.setSongChecked(act, e)}
-                                />`
-                              : nothing}
-                          </td>
-                        </tr>
-                      `
-                    )}
-                  </table>
-                </section>
-              `
-            )}
-          `,
+        this.categories.render({
+          complete: (categories) =>
+            this.acts.render({
+              complete: (actsByCategory) => html`
+                ${repeat(
+                  categories,
+                  (category) => category.name,
+                  (category) => {
+                    const acts = actsByCategory.get(category.name) || [];
+                    return html`
+                      <section class="category">
+                        <h3>${category.description}</h3>
+                        <button @click=${() => this.shuffleOrder(acts)}>
+                          Shuffle
+                        </button>
+                        <table>
+                          ${repeat(
+                            acts,
+                            (act) => act.id,
+                            (act, i) => html`
+                              <tr>
+                                <td>
+                                  <button
+                                    ?disabled=${i == 0}
+                                    class="material-icon"
+                                    @click=${() =>
+                                      this.swapActs(act, acts[i - 1])}
+                                  >
+                                    arrow_upward
+                                  </button>
+                                  <button
+                                    ?disabled=${i == acts.length - 1}
+                                    class="material-icon"
+                                    @click=${() =>
+                                      this.swapActs(act, acts[i + 1])}
+                                  >
+                                    arrow_downward
+                                  </button>
+                                </td>
+                                <td>${act.act_order || "⌛"}</td>
+                                <td>${act.name}</td>
+                                <td>
+                                  ${act.participants
+                                    .map(
+                                      (p) =>
+                                        `${p.firstname} ${p.lastname} (${p.club_name})`
+                                    )
+                                    .join(" & ")}
+                                </td>
+                                <td>
+                                  ${act.song_file
+                                    ? html` <audio
+                                        preload="none"
+                                        controls
+                                        src="/songs/${act.song_file}"
+                                      ></audio>`
+                                    : "❌"}
+                                </td>
+                                <td>
+                                  ${act.song_file
+                                    ? html`<input
+                                        type="checkbox"
+                                        ?checked=${act.song_checked}
+                                        @change=${(e: Event) =>
+                                          this.setSongChecked(act, e)}
+                                      />`
+                                    : nothing}
+                                </td>
+                              </tr>
+                            `
+                          )}
+                        </table>
+                      </section>
+                    `;
+                  }
+                )}
+              `,
+            }),
         })
       )}`;
   }
@@ -271,6 +300,29 @@ export default class CupViewAdminActsOverview extends LitElement {
     const checked = (e.target as HTMLInputElement).checked;
     await client.POST("/api/command/set_song_checked", {
       body: { act_id: act.id, checked },
+    });
+    this.allActs.run();
+  }
+
+  async shuffleOrder(acts: components["schemas"]["Act"][]) {
+    const shuffled = [...acts].sort(() => Math.random() - 0.5);
+    for (let i = 0; i < shuffled.length; i++) {
+      await client.POST("/api/command/set_act_order", {
+        body: { act_id: shuffled[i].id, order: i + 1 },
+      });
+    }
+    this.allActs.run();
+  }
+
+  async swapActs(
+    act1: components["schemas"]["Act"],
+    act2: components["schemas"]["Act"]
+  ) {
+    await client.POST("/api/command/set_act_order", {
+      body: { act_id: act1.id, order: act2.act_order },
+    });
+    await client.POST("/api/command/set_act_order", {
+      body: { act_id: act2.id, order: act1.act_order },
     });
     this.allActs.run();
   }
