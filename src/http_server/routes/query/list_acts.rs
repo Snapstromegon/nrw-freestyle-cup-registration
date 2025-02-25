@@ -20,6 +20,7 @@ pub struct Act {
     song_file: Option<String>,
     description: Option<String>,
     song_file_name: Option<String>,
+    song_checked: bool,
     is_pair: Option<bool>,
     max_age: Option<f64>,
     is_sonderpokal: Option<bool>,
@@ -57,6 +58,7 @@ pub async fn list_acts(
         is_sonderpokal: Option<bool>,
         participants: sqlx::types::Json<Vec<ActParticipant>>,
         category: Option<String>,
+        song_checked: bool,
     }
     impl From<DBAct> for Act {
         fn from(db_act: DBAct) -> Self {
@@ -71,6 +73,7 @@ pub async fn list_acts(
                 is_sonderpokal: db_act.is_sonderpokal,
                 participants: db_act.participants.0,
                 category: db_act.category,
+                song_checked: db_act.song_checked,
             }
         }
     }
@@ -87,7 +90,8 @@ pub async fn list_acts(
             max_age,
             is_sonderpokal as "is_sonderpokal: bool",
             participants as "participants!: sqlx::types::Json<Vec<ActParticipant>>",
-            category
+            category,
+            song_checked
         FROM view_act
         "#
     )

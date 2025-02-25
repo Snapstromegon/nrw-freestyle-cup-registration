@@ -1,4 +1,4 @@
-import { LitElement, html, css } from "lit";
+import { LitElement, html, css, nothing } from "lit";
 import { customElement } from "lit/decorators.js";
 import { client, components } from "../../apiClient";
 import { Task } from "@lit/task";
@@ -6,6 +6,7 @@ import "../elements/cup-context-club.js";
 import "../elements/cup-club-manager.js";
 import "../elements/cup-starter-table.js";
 import { repeat } from "lit/directives/repeat.js";
+import { cache } from "lit/directives/cache.js";
 
 @customElement("cup-view-admin-acts-overview")
 export default class CupViewAdminActsOverview extends LitElement {
@@ -123,58 +124,54 @@ export default class CupViewAdminActsOverview extends LitElement {
     },
   });
   acts = new Task(this, {
-    task: async ([categories]) => {
-      if (!categories) return [];
-      const data = await client.GET("/api/query/list_acts");
-      if (data.error) {
-        throw new Error((data.error as { message: string }).message);
-      }
-      const acts = data.data;
+    task: async ([categories, acts]) => {
+      if (!categories || !acts) return [];
 
-      const actsByCategory: { [type: string]: components["schemas"]["Act"][] } =
-        {};
+      const actsByCategory = new Map<string, components["schemas"]["Act"][]>();
       for (const category of categories) {
-        actsByCategory[category.name] = acts.filter(
-          (act) => act.category === category.name
+        actsByCategory.set(
+          category.name,
+          (acts as components["schemas"]["Act"][]).filter(
+            (act) => act.category === category.name
+          )
         );
       }
       return actsByCategory;
     },
-    args: () => [this.categories.value],
+    args: () => [this.categories.value, this.allActs.value],
   });
 
   override render() {
     return html`<nav>
         <a href="/admin">Anmeldeübersicht</a>
       </nav>
-      ${this.allActs.render({
-        loading: () => html`Loading...`,
-        error: (error) => html`Error: ${error}`,
-        complete: (acts) => html`
-          <table>
-            <tbody>
-              <tr>
-                <th>Erwartet</th>
-                <td class="right">${acts.length}</td>
-              </tr>
-              <tr>
-                <th>Songs Fertig</th>
-                <td class="right">
-                  ${acts.reduce((a, c) => a + (c.song_file ? 1 : 0), 0)}
-                </td>
-              </tr>
-              <tr>
-                <th>Songs Fehlen</th>
-                <td class="right">
-                  ${acts.reduce((a, c) => a + (c.song_file ? 0 : 1), 0)}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        `,
-      })}
+      <table>
+        <tbody>
+          <tr>
+            <th>Erwartet</th>
+            <td class="right">
+              ${this.allActs.render({ complete: (acts) => acts.length })}
+            </td>
+          </tr>
+          <tr>
+            <th>Songs Fertig</th>
+            <td class="right">
+              ${this.allActs.render({
+                complete: (acts) => acts.filter((a) => a.song_file).length,
+              })}
+            </td>
+          </tr>
+          <tr>
+            <th>Songs Fehlen</th>
+            <td class="right">
+              ${this.allActs.render({
+                complete: (acts) => acts.filter((a) => !a.song_file).length,
+              })}
+            </td>
+          </tr>
+        </tbody>
+      </table>
       ${this.clubs.render({
-        loading: () => html`Loading...`,
         error: (error) => html`Error: ${error}`,
         complete: (clubs) => html`
           <table>
@@ -215,39 +212,66 @@ export default class CupViewAdminActsOverview extends LitElement {
         `,
       })}
       <hr />
-      ${this.acts.render({
-        complete: (actsByCategory) => html`
-          ${Object.entries(actsByCategory).map(
-            ([category, acts]) => html`
-              <section class="category">
-                <h3>${category}</h3>
-                <table>
-                  ${acts.map(
-                    (act) => html`
-                      <tr>
-                        <td>${act.name}</td>
-                        <td>
-                          ${act.participants
-                            .map((p) => `${p.firstname} ${p.lastname} (${p.club_name})`)
-                            .join(" & ")}
-                        </td>
-                        <td>
-                          ${act.song_file
-                            ? html` <audio
-                                preload="none"
-                                controls
-                                src="/songs/${act.song_file}"
-                              ></audio>`
-                            : "❌"}
-                        </td>
-                      </tr>
-                    `
-                  )}
-                </table>
-              </section>
-            `
-          )}
-        `,
-      })}`;
+      ${cache(
+        this.acts.render({
+          complete: (actsByCategory) => html`
+            ${repeat(
+              actsByCategory,
+              ([category]) => category,
+              ([category, acts]) => html`
+                <section class="category">
+                  <h3>${category}</h3>
+                  <table>
+                    ${repeat(
+                      acts,
+                      (act) => act.id,
+                      (act) => html`
+                        <tr>
+                          <td>${act.name}</td>
+                          <td>
+                            ${act.participants
+                              .map(
+                                (p) =>
+                                  `${p.firstname} ${p.lastname} (${p.club_name})`
+                              )
+                              .join(" & ")}
+                          </td>
+                          <td>
+                            ${act.song_file
+                              ? html` <audio
+                                  preload="none"
+                                  controls
+                                  src="/songs/${act.song_file}"
+                                ></audio>`
+                              : "❌"}
+                          </td>
+                          <td>
+                            ${act.song_file
+                              ? html`<input
+                                  type="checkbox"
+                                  ?checked=${act.song_checked}
+                                  @change=${(e: Event) =>
+                                    this.setSongChecked(act, e)}
+                                />`
+                              : nothing}
+                          </td>
+                        </tr>
+                      `
+                    )}
+                  </table>
+                </section>
+              `
+            )}
+          `,
+        })
+      )}`;
+  }
+
+  async setSongChecked(act: components["schemas"]["Act"], e: Event) {
+    const checked = (e.target as HTMLInputElement).checked;
+    await client.POST("/api/command/set_song_checked", {
+      body: { act_id: act.id, checked },
+    });
+    this.allActs.run();
   }
 }
