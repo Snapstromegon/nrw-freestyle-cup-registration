@@ -36,6 +36,6 @@ tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
 url = "2.5.4"
 utoipa = { version = "5", features = ["axum_extras", "debug", "time", "uuid", "yaml"] }
-utoipa-axum = { version = "0.1", features = ["debug"] }
-utoipa-swagger-ui = { version = "8", features = ["axum", "vendored"] }
+utoipa-axum = { version = "0.2", features = ["debug"] }
+utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
 uuid = { version = "1.11.0", features = ["serde", "v7"] }
