@@ -87,7 +87,11 @@ impl JWTConfig {
         jsonwebtoken::encode(&self.get_header(), &claims, self.encoding_key())
     }
 
-    pub fn add_jwt_cookie(&self, cookies: CookieJar, user_id: Uuid) -> Result<CookieJar, jsonwebtoken::errors::Error> {
+    pub fn add_jwt_cookie(
+        &self,
+        cookies: CookieJar,
+        user_id: Uuid,
+    ) -> Result<CookieJar, jsonwebtoken::errors::Error> {
         Ok(cookies.add(
             Cookie::build(("jwt", self.create_user_token(user_id)?))
                 .http_only(true)

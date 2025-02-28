@@ -1,26 +1,26 @@
 use axum::extract::DefaultBodyLimit;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
-mod register;
-mod verify_email;
-mod resend_mail_validation;
-mod request_password_reset;
-mod reset_password;
+mod add_club_judge;
+mod add_club_starter;
+mod create_club;
+mod delete_club_judge;
+mod delete_club_starter;
+mod edit_club_act;
+mod edit_club_judge;
+mod edit_club_starter;
 mod login;
 mod logout;
-mod create_club;
+mod register;
 mod rename_club;
-mod add_club_starter;
-mod delete_club_starter;
-mod edit_club_starter;
-mod add_club_judge;
-mod delete_club_judge;
-mod edit_club_judge;
-mod edit_club_act;
+mod request_password_reset;
+mod resend_mail_validation;
+mod reset_password;
 mod save_act_song;
+mod set_act_order;
 mod set_payment;
 mod set_song_checked;
-mod set_act_order;
+mod verify_email;
 
 pub fn get_command_router() -> OpenApiRouter {
     OpenApiRouter::new()

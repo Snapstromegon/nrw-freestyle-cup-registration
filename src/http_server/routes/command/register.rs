@@ -12,7 +12,12 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    http_server::{ClientError, HttpError, HttpServerOptions}, jwt::JWTConfig, mailer::Mailer, system_status::Capabilities, templates::VerifyMail, utils::check_password
+    http_server::{ClientError, HttpError, HttpServerOptions},
+    jwt::JWTConfig,
+    mailer::Mailer,
+    system_status::Capabilities,
+    templates::VerifyMail,
+    utils::check_password,
 };
 
 #[derive(Debug, Serialize, ToSchema)]

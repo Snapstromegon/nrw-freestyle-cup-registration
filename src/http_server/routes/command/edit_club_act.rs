@@ -55,7 +55,9 @@ pub async fn edit_club_act(
         body.name,
         body.description,
         body.id,
-    ).execute(&db).await?;
+    )
+    .execute(&db)
+    .await?;
 
     Ok(Json(EditClubActResponse {}))
 }

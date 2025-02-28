@@ -15,7 +15,7 @@ pub struct Judge {
     mail: String,
     #[serde(with = "time::serde::iso8601")]
     birthdate: time::OffsetDateTime,
-    
+
     n_ew_u15_p: bool,
     n_ew_u15_p_hosp: bool,
     n_ew_u15_t: bool,

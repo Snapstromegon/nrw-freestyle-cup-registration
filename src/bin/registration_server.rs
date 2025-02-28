@@ -5,7 +5,8 @@ use nrw_freestyle_cup_registration::{
     http_server::{HttpServer, HttpServerOptions},
     jwt::JWTConfig,
     mailer::Mailer,
-    system_status::StatusOptions, utils,
+    system_status::StatusOptions,
+    utils,
 };
 use password_auth::generate_hash;
 use serde::Deserialize;

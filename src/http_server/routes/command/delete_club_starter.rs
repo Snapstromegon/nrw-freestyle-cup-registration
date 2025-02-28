@@ -5,7 +5,10 @@ use tracing::instrument;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{http_server::{extractor::auth::Auth, ClientError, HttpError}, system_status::Capabilities};
+use crate::{
+    http_server::{extractor::auth::Auth, ClientError, HttpError},
+    system_status::Capabilities,
+};
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct DeleteClubStarterResponse {}
