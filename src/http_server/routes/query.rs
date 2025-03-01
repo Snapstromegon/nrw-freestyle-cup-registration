@@ -12,6 +12,7 @@ mod list_starters;
 mod list_users;
 mod startlist;
 mod whoami;
+mod predict_timeplan;
 
 pub fn get_query_router() -> OpenApiRouter {
     OpenApiRouter::new()
@@ -27,4 +28,5 @@ pub fn get_query_router() -> OpenApiRouter {
         .routes(routes!(list_judges::list_judges))
         .routes(routes!(list_categories::list_categories))
         .routes(routes!(startlist::startlist))
+        .routes(routes!(predict_timeplan::predict_timeplan))
 }
