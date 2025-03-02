@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    http_server::{extractor::auth::Auth, ClientError, HttpError, HttpServerOptions},
+    http_server::{ClientError, HttpError, HttpServerOptions, extractor::auth::Auth},
     mailer::Mailer,
     templates::VerifyMail,
 };

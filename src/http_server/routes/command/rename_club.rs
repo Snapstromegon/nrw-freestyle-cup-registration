@@ -1,4 +1,4 @@
-use axum::{http::StatusCode, Extension, Json};
+use axum::{Extension, Json, http::StatusCode};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tracing::instrument;
@@ -6,7 +6,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    http_server::{extractor::auth::Auth, HttpError},
+    http_server::{HttpError, extractor::auth::Auth},
     system_status::Capabilities,
 };
 

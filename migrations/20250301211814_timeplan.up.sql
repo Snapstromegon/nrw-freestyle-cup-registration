@@ -12,7 +12,34 @@ WHERE
   "name" = "NEWU11" OR
   "name" = "NEWU13" OR
   "name" = "NEWU14" OR
-  "name" = "NEWU15" OR
+  "name" = "NEWU15";
+
+UPDATE categories SET
+  "einfahrzeit_seconds" = 10 * 60,
+  "act_duration_seconds" = 3 * 60,
+  "judge_duration_seconds" = 6 * 60
+WHERE
+  "name" = "NEW15+";
+
+UPDATE categories SET
+  "einfahrzeit_seconds" = 10 * 60,
+  "act_duration_seconds" = 3 * 60,
+  "judge_duration_seconds" = 4.5 * 60
+WHERE
+  "name" = "SEU15";
+
+UPDATE categories SET
+  "einfahrzeit_seconds" = 10 * 60,
+  "act_duration_seconds" = 4 * 60,
+  "judge_duration_seconds" = 6 * 60
+WHERE
+  "name" = "SE15+";
+
+UPDATE categories SET
+  "einfahrzeit_seconds" = 10 * 60,
+  "act_duration_seconds" = 2 * 60,
+  "judge_duration_seconds" = 2 * 60
+WHERE
   "name" = "NPU9,5" OR
   "name" = "NPU11" OR
   "name" = "NPU13" OR
@@ -21,10 +48,8 @@ WHERE
 UPDATE categories SET
   "einfahrzeit_seconds" = 10 * 60,
   "act_duration_seconds" = 3 * 60,
-  "judge_duration_seconds" = 4 * 60
+  "judge_duration_seconds" = 3 * 60
 WHERE
-  "name" = "NEW15+" OR
-  "name" = "SEU15" OR
   "name" = "NP15+" OR
   "name" = "SPU15";
 
@@ -33,7 +58,6 @@ UPDATE categories SET
   "act_duration_seconds" = 4 * 60,
   "judge_duration_seconds" = 4 * 60
 WHERE
-  "name" = "SE15+" OR
   "name" = "SP15+";
 
 -- A timeplan entry is either a reference to a category or a custom entry
@@ -53,7 +77,7 @@ CREATE TABLE timeplan (
 
 INSERT INTO timeplan (earliest_start_time, duration_seconds, label, category)
 VALUES
-  (datetime('2025-03-15 11:00:00'), NULL, NULL, 'NEM'),
+  (datetime('2025-03-15 11:00:00+01:00'), NULL, NULL, 'NEM'),
   (NULL, NULL, NULL, 'NEWU11'),
   (NULL, NULL, NULL, 'NEWU13'),
   (NULL, NULL, NULL, 'NEWU14'),
@@ -64,7 +88,7 @@ VALUES
   (NULL, NULL, NULL, 'SEU15'),
   (NULL, NULL, NULL, 'SE15+'),
   (NULL, 30*60, "Siegerehrung Sonderpokal Einzel", NULL),
-  (datetime("2025-03-16 10:00:00"), NULL, NULL, 'NPU9,5'),
+  (datetime("2025-03-16 10:00:00+01:00"), NULL, NULL, 'NPU9,5'),
   (NULL, NULL, NULL, 'NPU11'),
   (NULL, NULL, NULL, 'NPU13'),
   (NULL, NULL, NULL, 'NPU15'),

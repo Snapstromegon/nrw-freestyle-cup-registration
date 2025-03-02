@@ -2,7 +2,7 @@ pub mod command;
 pub mod http_types;
 pub mod query;
 
-use axum::{extract::Request, http::HeaderName, Extension, Router};
+use axum::{Extension, Router, extract::Request, http::HeaderName};
 use axum_embed::{FallbackBehavior, ServeEmbed};
 use rust_embed::RustEmbed;
 use sqlx::SqlitePool;
@@ -14,7 +14,7 @@ use tower_http::{
     trace::TraceLayer,
 };
 use tracing::{error, info_span};
-use utoipa::{openapi::OpenApi, OpenApi as OpenApiTrait};
+use utoipa::{OpenApi as OpenApiTrait, openapi::OpenApi};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_swagger_ui::SwaggerUi;
 

@@ -10,9 +10,9 @@ mod list_club_starters;
 mod list_judges;
 mod list_starters;
 mod list_users;
+mod predict_timeplan;
 mod startlist;
 mod whoami;
-mod predict_timeplan;
 
 pub fn get_query_router() -> OpenApiRouter {
     OpenApiRouter::new()

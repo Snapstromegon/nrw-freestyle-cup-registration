@@ -3,7 +3,7 @@ use sqlx::SqlitePool;
 use tracing::instrument;
 use uuid::Uuid;
 
-use crate::http_server::{extractor::auth::Auth, ClientError, HttpError};
+use crate::http_server::{ClientError, HttpError, extractor::auth::Auth};
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct Judge {

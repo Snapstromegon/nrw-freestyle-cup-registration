@@ -1,11 +1,11 @@
-use axum::{http::StatusCode, Extension, Json};
+use axum::{Extension, Json, http::StatusCode};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tracing::{info, instrument};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::http_server::{extractor::auth::Auth, ClientError, HttpError};
+use crate::http_server::{ClientError, HttpError, extractor::auth::Auth};
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct SetSongCheckedResponse {}

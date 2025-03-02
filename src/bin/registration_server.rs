@@ -11,7 +11,7 @@ use nrw_freestyle_cup_registration::{
 use password_auth::generate_hash;
 use serde::Deserialize;
 use sqlx::migrate;
-use time::{format_description::well_known::Iso8601, OffsetDateTime};
+use time::{OffsetDateTime, format_description::well_known::Iso8601};
 use tokio::signal;
 use tracing_subscriber::FmtSubscriber;
 use url::Url;
