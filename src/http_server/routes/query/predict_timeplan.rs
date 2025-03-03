@@ -146,7 +146,9 @@ pub async fn predict_timeplan(
         let mut entry_offset = None;
         if let Some(earliest_start_time) = top_level_timeplan_entry.earliest_start_time {
             next_planned_start_time = earliest_start_time.max(next_planned_start_time);
-            next_predicted_start_time = earliest_start_time.max(next_predicted_start_time);
+            next_predicted_start_time = top_level_timeplan_entry
+                .started_at
+                .unwrap_or(earliest_start_time.max(next_predicted_start_time));
         }
 
         let item_planned_start_time = next_planned_start_time;
@@ -205,14 +207,27 @@ pub async fn predict_timeplan(
                             Some((started_at - next_predicted_start_time).whole_seconds());
                     }
 
+                    next_predicted_start_time =
+                        time::OffsetDateTime::now_utc().max(next_predicted_start_time);
+
+                    if let Some(started_at) = act.started_at {
+                        next_predicted_start_time = started_at;
+                    }
+
+                    let next_predicted_end_time = if let Some(ended_at) = act.ended_at {
+                        ended_at
+                    } else {
+                        next_predicted_start_time
+                            + time::Duration::seconds(cat.act_duration_seconds)
+                    };
+
                     timeplan_acts.push(TimeplanAct {
                         id: act.id,
                         name: act.name,
                         started_at: act.started_at,
                         ended_at: act.ended_at,
                         predicted_start: next_predicted_start_time,
-                        predicted_end: next_predicted_start_time
-                            + time::Duration::seconds(cat.act_duration_seconds),
+                        predicted_end: next_predicted_end_time,
                         planned_start: next_planned_start_time,
                         planned_end: next_planned_start_time
                             + time::Duration::seconds(cat.act_duration_seconds),
@@ -274,8 +289,12 @@ pub async fn predict_timeplan(
                     ));
                 }
             },
-            predicted_start: item_predicted_start_time,
-            predicted_end: item_predicted_start_time + entry.duration(),
+            predicted_start: top_level_timeplan_entry
+                .started_at
+                .unwrap_or(item_predicted_start_time),
+            predicted_end: top_level_timeplan_entry
+                .ended_at
+                .unwrap_or(item_predicted_start_time + entry.duration()),
             planned_start: item_planned_start_time,
             planned_end: item_planned_start_time + entry.duration(),
             planned_duration: entry.duration().whole_seconds(),
