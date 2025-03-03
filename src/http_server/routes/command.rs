@@ -22,6 +22,7 @@ mod set_payment;
 mod set_song_checked;
 mod verify_email;
 mod timeplan_forward;
+mod timeplan_backward;
 
 pub fn get_command_router() -> OpenApiRouter {
     OpenApiRouter::new()
@@ -46,5 +47,6 @@ pub fn get_command_router() -> OpenApiRouter {
         .routes(routes!(set_song_checked::set_song_checked))
         .routes(routes!(set_act_order::set_act_order))
         .routes(routes!(timeplan_forward::timeplan_forward))
+        .routes(routes!(timeplan_backward::timeplan_backward))
         .layer(DefaultBodyLimit::max(1024 * 1024 * 10))
 }

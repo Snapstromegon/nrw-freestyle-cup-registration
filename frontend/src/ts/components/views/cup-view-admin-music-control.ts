@@ -1,6 +1,6 @@
 import { LitElement, html, css } from "lit";
 import { customElement } from "lit/decorators.js";
-import { client, components } from "../../apiClient";
+import { client } from "../../apiClient";
 import { Task } from "@lit/task";
 import "../elements/cup-context-club.js";
 import "../elements/cup-club-manager.js";
@@ -157,12 +157,26 @@ export default class CupViewAdminMusicControl extends LitElement {
             </aside>
             <main>
               <h1>Aktueller Starter</h1>
-              <button class="material-icon">arrow_back</button>
-              <button class="material-icon">arrow_forward</button>
+              <button class="material-icon" @click=${this.timeplanBackward}>
+                arrow_back
+              </button>
+              <button class="material-icon" @click=${this.timeplanForward}>
+                arrow_forward
+              </button>
             </main>
           </div>
         `,
       })}
     `;
+  }
+
+  async timeplanBackward() {
+    await client.POST("/api/command/timeplan_backward");
+    this.predictedTimeplan.run();
+  }
+
+  async timeplanForward() {
+    await client.POST("/api/command/timeplan_forward");
+    this.predictedTimeplan.run();
   }
 }
