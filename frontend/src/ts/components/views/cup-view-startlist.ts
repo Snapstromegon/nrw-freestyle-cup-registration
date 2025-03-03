@@ -173,9 +173,11 @@ export default class CupViewStartlist extends LitElement {
       </header>
       <main>
         <nav>
-          <a href="/">Zurück zur Startseite</a>
+          <a href="/">Zurück zum Anmeldetool</a>
+          <a href="https://freestyle-cup.nrw/"
+            >Zurück zur Veranstaltungsseite</a
+          >
         </nav>
-        <h1>VORLÄUFIG - ÄNDERT SICH NOCH!</h1>
         ${cache(
           this.categories.render({
             complete: (categories) =>
