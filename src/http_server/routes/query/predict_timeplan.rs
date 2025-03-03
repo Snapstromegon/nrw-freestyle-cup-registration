@@ -142,6 +142,8 @@ pub async fn predict_timeplan(
         items: vec![],
     };
 
+    let mut general_offset = None;
+
     for top_level_timeplan_entry in top_level_timeplan {
         let mut entry_offset = None;
         if let Some(earliest_start_time) = top_level_timeplan_entry.earliest_start_time {
@@ -204,7 +206,7 @@ pub async fn predict_timeplan(
                 for act in acts {
                     if let (Some(started_at), None) = (act.started_at, act.ended_at) {
                         entry_offset =
-                            Some((started_at - next_predicted_start_time).whole_seconds());
+                            Some((started_at - next_planned_start_time).whole_seconds());
                     }
 
                     next_predicted_start_time =
@@ -303,20 +305,22 @@ pub async fn predict_timeplan(
             timeplan_entry: entry,
         };
 
-        if let (Some(started_at), None) = (item.started_at, item.ended_at) {
-            entry_offset = Some((started_at - item.planned_start).whole_seconds());
+        if entry_offset.is_none() {
+            if let (Some(started_at), None) = (item.started_at, item.ended_at) {
+                entry_offset = Some((started_at - item.planned_start).whole_seconds());
+            }
         }
 
         if let Some(offset) = entry_offset {
-            timeplan.offset = offset;
-        }
-
-        if item.status != TimeplanItemStatus::Planned {
-            timeplan.offset = (item.planned_start - item.started_at.unwrap()).whole_seconds();
+            general_offset = Some(offset);
+        } else if item.status == TimeplanItemStatus::Started {
+            general_offset = Some((item.started_at.unwrap() - item.planned_start).whole_seconds());
         }
 
         timeplan.items.push(item);
     }
+
+    timeplan.offset = general_offset.unwrap_or(timeplan.offset);
 
     Ok(Json(timeplan))
 }

@@ -6,6 +6,7 @@ import "../elements/cup-context-club.js";
 import "../elements/cup-club-manager.js";
 import "../elements/cup-starter-table.js";
 import { repeat } from "lit/directives/repeat.js";
+import "../elements/cup-timeplan.js";
 
 @customElement("cup-view-admin-music-control")
 export default class CupViewAdminMusicControl extends LitElement {
@@ -34,7 +35,7 @@ export default class CupViewAdminMusicControl extends LitElement {
     #wrapper {
       display: grid;
       grid-template-columns: 1fr 3fr;
-      grid-template-rows: 1fr 1fr 1fr;
+      grid-template-rows: 1fr 1fr 50dvh;
       grid-template-areas: "overview main" "previous main" "next main";
       height: 100dvh;
     }
@@ -45,8 +46,13 @@ export default class CupViewAdminMusicControl extends LitElement {
 
     #next {
       grid-area: next;
+      height: 100%;
     }
 
+    cup-timeplan {
+      height: 100%;
+      overflow: auto;
+    }
     #previous {
       grid-area: previous;
     }
@@ -59,6 +65,10 @@ export default class CupViewAdminMusicControl extends LitElement {
       padding-left: 1rem;
       margin: 1rem;
     }
+
+    .current {
+      background: #48f;
+    }
   `;
 
   predictedTimeplan = new Task(this, {
@@ -67,6 +77,62 @@ export default class CupViewAdminMusicControl extends LitElement {
       return res.data;
     },
     args: () => [],
+  });
+
+  currentTimeplanEntry = new Task(this, {
+    task: async ([predictedTimeplan]) =>
+      predictedTimeplan?.items.find((item) => item.status === "Started"),
+    args: () => [this.predictedTimeplan.value],
+  });
+
+  currentOrNextTimeplanEntry = new Task(this, {
+    task: async ([predictedTimeplan]) =>
+      predictedTimeplan?.items.find(
+        (item) => item.status === "Started" || item.status === "Planned"
+      ),
+    args: () => [this.predictedTimeplan.value],
+  });
+
+  upcomingTimeplan = new Task(this, {
+    task: async ([predictedTimeplan]) =>
+      predictedTimeplan?.items.filter(
+        (item) => item.status === "Planned" || item.status === "Started"
+      ),
+    args: () => [this.predictedTimeplan.value],
+  });
+
+  currentStarter = new Task(this, {
+    task: async ([predictTimeplan]) => {
+      const entry = predictTimeplan?.items.find(
+        (item) => item.status === "Started"
+      );
+      if (!entry) {
+        return undefined;
+      }
+      if ("Category" in entry.timeplan_entry) {
+        const act = entry.timeplan_entry.Category.acts.find(
+          (act) => act.status == "Started"
+        );
+        const completeAct = act
+          ? (
+              await client.GET("/api/query/get_act", {
+                params: {
+                  query: {
+                    act_id: act?.id,
+                  },
+                },
+              })
+            ).data
+          : null;
+        return {
+          entry: entry,
+          act: act,
+          completeAct,
+        };
+      }
+      return { entry };
+    },
+    args: () => [this.predictedTimeplan.value],
   });
 
   toDuration(seconds: number) {
@@ -78,85 +144,70 @@ export default class CupViewAdminMusicControl extends LitElement {
   }
 
   override render() {
-    return html`
+    return html`<div id="wrapper">
       ${this.predictedTimeplan.render({
         loading: () => html`Loading...`,
         error: (error) => html`Error: ${error}`,
         complete: (predictedTimeplan) => html`
-          <div id="wrapper">
-            <aside id="overview">
-              <h2>Overview</h2>
-              <h3>Verzug</h3>
-              ${this.toDuration(predictedTimeplan?.offset || 0)}
-            </aside>
+          <aside id="overview">
+            <h2>Overview</h2>
+            <h3>Verzug</h3>
+            ${this.toDuration(predictedTimeplan?.offset || 0)}
+          </aside>
+        `,
+      })}
             <aside id="next">
-              <h2>Next</h2>
-              <ul>
-                ${repeat(
-                  predictedTimeplan?.items || [],
-                  (item) =>
-                    "Category" in item.timeplan_entry
-                      ? item.timeplan_entry.Category.name
-                      : item.timeplan_entry.Custom.label,
-                  (item) => html`
-                    <li>
-                      ${"Category" in item.timeplan_entry
-                        ? html` ${new Date(
-                              item.predicted_start
-                            ).toLocaleTimeString()}
-                            -
-                            ${new Date(
-                              item.predicted_end
-                            ).toLocaleTimeString()}<br />${item.timeplan_entry
-                              .Category.name}
-                            <ol>
-                              <li>
-                                ${new Date(
-                                  item.predicted_start
-                                ).toLocaleTimeString()}
-                                -
-                                ${new Date(
-                                  new Date(item.predicted_start).getTime() +
-                                    item.timeplan_entry.Category
-                                      .einfahrzeit_seconds *
-                                      1000
-                                ).toLocaleTimeString()}<br />
-                                Einfahrzeit
-                              </li>
-                              ${repeat(
-                                item.timeplan_entry.Category.acts || [],
-                                (acts) => acts.id,
-                                (acts) =>
-                                  html`<li>
-                                    ${new Date(
-                                      acts.predicted_start
-                                    ).toLocaleTimeString()}
-                                    -
-                                    ${new Date(
-                                      acts.predicted_end
-                                    ).toLocaleTimeString()}<br />
-                                    ${acts.name}
-                                  </li> `
-                              )}
-                            </ol>`
-                        : html` ${new Date(
-                              item.predicted_start
-                            ).toLocaleTimeString()}
-                            -
-                            ${new Date(
-                              item.predicted_end
-                            ).toLocaleTimeString()}<br />${item.timeplan_entry
-                              .Custom.label}`}
-                    </li>
-                  `
-                )}
-              </ul>
-            </aside>
-            <aside id="previous">
-              <h2>Previous</h2>
-            </aside>
+              <cup-timeplan .timeplan=${
+                this.predictedTimeplan.value
+              }></cup-timeplan>
+              </aside>
             <main>
-              <h1>Aktueller Starter</h1>
+              <h1>Aktueller Stand</h1>
+              ${this.currentTimeplanEntry.render({
+                loading: () => html`Loading...`,
+                error: (error) => html`Error: ${error}`,
+                complete: (currentTimeplanEntry) => html`
+                  <h2>
+                    ${currentTimeplanEntry
+                      ? "Category" in currentTimeplanEntry.timeplan_entry
+                        ? currentTimeplanEntry.timeplan_entry.Category.name
+                        : currentTimeplanEntry.timeplan_entry.Custom.label
+                      : "Inaktiv"}
+                  </h2>
+                `,
+              })}
+              ${this.currentStarter.render({
+                loading: () => html`Loading...`,
+                error: (error) => html`Error: ${error}`,
+                complete: (currentStarter) => html`
+                  ${currentStarter
+                    ? "Category" in currentStarter?.entry.timeplan_entry
+                      ? currentStarter.act
+                        ? html`
+                            <h3>
+                              ${currentStarter.completeAct?.participants
+                                .map((p) => `${p.firstname} ${p.lastname}`)
+                                .join(" & ")}
+                            </h3>
+                            <h4>${currentStarter.completeAct?.name}</h4>
+                            <p>${currentStarter.completeAct?.description}</p>
+                            <audio
+                              controls
+                              src="/songs/${currentStarter.completeAct
+                                ?.song_file || ""}"
+                              preload="auto"
+                            ></audio>
+                          `
+                        : html` <h3>Einfahrzeit</h3>`
+                      : html`
+                          <h3>
+                            ${currentStarter?.entry.timeplan_entry.Custom
+                              ?.label}
+                          </h3>
+                        `
+                    : "No current starter"}
+                `,
+              })}
               <button class="material-icon" @click=${this.timeplanBackward}>
                 arrow_back
               </button>
@@ -165,9 +216,8 @@ export default class CupViewAdminMusicControl extends LitElement {
               </button>
             </main>
           </div>
-        `,
-      })}
-    `;
+        
+    </div> `;
   }
 
   async timeplanBackward() {

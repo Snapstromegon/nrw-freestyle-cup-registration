@@ -1,26 +1,33 @@
-use axum::{Extension, Json};
+use axum::{Extension, Json, extract::Query};
 use sqlx::SqlitePool;
 use tracing::instrument;
 use uuid::Uuid;
 
 use crate::http_server::{extractor::auth::Auth, routes::http_types::{Act, ActParticipant}, ClientError, HttpError};
 
-/// List all users.
+#[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
+pub struct GetActQuery {
+    act_id: Uuid,
+}
+
+/// Get information about an act.
 #[utoipa::path(
     get,
-    tags=["query", "acts"],
-    path="/list_acts",
+    tags=["query", "act"],
+    path="/get_act",
+    params(GetActQuery),
     responses(
-        (status=200, content_type="application/json", body=Vec<Act>),
+        (status=200, content_type="application/json", body=Act),
         (status=404, content_type="application/json", body=ClientError),
         (status=500, content_type="application/json", body=ClientError),
     ),
 )]
 #[instrument(skip(db))]
-pub async fn list_acts(
+pub async fn get_act(
     Extension(db): Extension<SqlitePool>,
-    auth: Auth,
-) -> Result<Json<Vec<Act>>, HttpError> {
+    Query(query): Query<GetActQuery>,
+    auth: Option<Auth>,
+) -> Result<Json<Act>, HttpError> {
     pub struct DBAct {
         id: Uuid,
         name: String,
@@ -30,7 +37,7 @@ pub async fn list_acts(
         is_pair: Option<bool>,
         max_age: Option<f64>,
         is_sonderpokal: Option<bool>,
-        participants: sqlx::types::Json<Vec<ActParticipant>>,
+        participants: sqlx::types::Json<Vec<ActParticipant >>,
         category: Option<String>,
         song_checked: bool,
         act_order: Option<i64>,
@@ -55,7 +62,7 @@ pub async fn list_acts(
             }
         }
     }
-    let acts = sqlx::query_as!(
+    let act = sqlx::query_as!(
         DBAct,
         r#"
         SELECT
@@ -67,16 +74,17 @@ pub async fn list_acts(
             view_act.description,
             song_file_name,
             view_act.is_pair as "is_pair: bool",
-            max_age,
+            max_age as "max_age: f64",
             view_act.is_sonderpokal as "is_sonderpokal: bool",
             participants as "participants!: sqlx::types::Json<Vec<ActParticipant>>",
             category,
             song_checked
         FROM view_act JOIN categories ON view_act.category = categories.name
-        ORDER BY categories."order", view_act."order" ASC
-        "#
+        WHERE id = ?
+        "#,
+        query.act_id
     )
-    .fetch_all(&db)
+    .fetch_one(&db)
     .await?;
-    Ok(Json(acts.into_iter().map(|a| a.into()).collect()))
+    Ok(Json(act.into()))
 }

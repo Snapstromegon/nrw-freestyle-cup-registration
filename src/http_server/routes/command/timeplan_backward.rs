@@ -1,7 +1,7 @@
 use axum::{Extension, Json, http::StatusCode};
 use serde::Serialize;
 use sqlx::SqlitePool;
-use tracing::{info, instrument};
+use tracing::instrument;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -51,9 +51,20 @@ pub async fn timeplan_backward(
                 .execute(&db)
                 .await?;
             } else {
-                sqlx::query!("UPDATE timeplan SET started_at = NULL WHERE id = ?", id)
-                    .execute(&db)
-                    .await?;
+                let finished_acts = sqlx::query!(
+                    "SELECT id as 'id!: Uuid' FROM view_act WHERE category = ? AND ended_at IS NOT NULL ORDER BY `order` DESC",
+                    category
+                ).fetch_all(&db).await?;
+                if finished_acts.is_empty() {
+                    sqlx::query!("UPDATE timeplan SET started_at = NULL WHERE id = ?", id)
+                        .execute(&db)
+                        .await?;
+                } else {
+                    let last_act_id = finished_acts[0].id;
+                    sqlx::query!("UPDATE acts SET ended_at = NULL WHERE id = ?", last_act_id)
+                        .execute(&db)
+                        .await?;
+                }
             }
         }
         Some((id, None)) => {
@@ -62,9 +73,18 @@ pub async fn timeplan_backward(
                 .await?;
         }
         None => {
-            sqlx::query!(
-                "UPDATE timeplan SET ended_at = NULL WHERE id = (SELECT id FROM timeplan WHERE ended_at IS NOT NULL ORDER BY id DESC LIMIT 1)"
-            ).execute(&db).await?;
+            let category = sqlx::query!(
+                "UPDATE timeplan SET ended_at = NULL WHERE id = (SELECT id FROM timeplan WHERE ended_at IS NOT NULL ORDER BY id DESC LIMIT 1) RETURNING category"
+            ).fetch_optional(&db).await?.map(|row| row.category);
+
+            if let Some(category) = category {
+                sqlx::query!(
+                    "UPDATE acts SET ended_at = NULL WHERE id = (SELECT id FROM view_act WHERE category = ? ORDER BY `order` DESC LIMIT 1)",
+                    category
+                )
+                .execute(&db)
+                .await?;
+            }
         }
     }
 
