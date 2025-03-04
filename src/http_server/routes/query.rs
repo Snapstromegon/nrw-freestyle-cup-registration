@@ -1,5 +1,6 @@
 use utoipa_axum::{router::OpenApiRouter, routes};
 
+mod get_act;
 mod get_club;
 mod get_startlist_csv;
 mod get_system_status;
@@ -11,11 +12,13 @@ mod list_club_starters;
 mod list_judges;
 mod list_starters;
 mod list_users;
+mod predict_timeplan;
 mod startlist;
 mod whoami;
 
 pub fn get_query_router() -> OpenApiRouter {
     OpenApiRouter::new()
+        .routes(routes!(get_act::get_act))
         .routes(routes!(get_club::get_club))
         .routes(routes!(list_club_starters::list_club_starters))
         .routes(routes!(list_users::list_users))
@@ -29,4 +32,5 @@ pub fn get_query_router() -> OpenApiRouter {
         .routes(routes!(list_categories::list_categories))
         .routes(routes!(startlist::startlist))
         .routes(routes!(get_startlist_csv::get_startlist_csv))
+        .routes(routes!(predict_timeplan::predict_timeplan))
 }

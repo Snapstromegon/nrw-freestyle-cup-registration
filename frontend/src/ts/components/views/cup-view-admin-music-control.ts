@@ -2,10 +2,10 @@ import { LitElement, html, css } from "lit";
 import { customElement } from "lit/decorators.js";
 import { client } from "../../apiClient";
 import { Task } from "@lit/task";
+import { classMap } from "lit/directives/class-map.js";
 import "../elements/cup-context-club.js";
 import "../elements/cup-club-manager.js";
 import "../elements/cup-starter-table.js";
-import { repeat } from "lit/directives/repeat.js";
 import "../elements/cup-timeplan.js";
 
 @customElement("cup-view-admin-music-control")
@@ -35,30 +35,79 @@ export default class CupViewAdminMusicControl extends LitElement {
     #wrapper {
       display: grid;
       grid-template-columns: 1fr 3fr;
-      grid-template-rows: 1fr 1fr 50dvh;
-      grid-template-areas: "overview main" "previous main" "next main";
+      grid-template-rows: auto 1fr;
+      grid-template-areas: "overview main" "next main";
       height: 100dvh;
     }
 
     main {
       grid-area: main;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: auto auto 1fr auto auto;
+      display: grid;
+      grid-template-areas: "title title" "subtitle subtitle" "description description" "audio audio" "back next";
+    }
+
+    main h1 {
+      grid-area: title;
+      padding: 1rem;
+    }
+
+    main h2 {
+      grid-area: subtitle;
+      padding: 1rem;
+    }
+
+    main > section,
+    main > h3 {
+      grid-area: description;
+      padding: 1rem;
+    }
+
+    main audio {
+      grid-area: audio;
+      width: 100%;
+    }
+
+    main button {
+      padding: 1rem;
+    }
+
+    main .back-button {
+      grid-area: back;
+    }
+    main .next-button {
+      grid-area: next;
     }
 
     #next {
       grid-area: next;
       height: 100%;
+      min-height: 0;
     }
 
     cup-timeplan {
       height: 100%;
       overflow: auto;
     }
-    #previous {
-      grid-area: previous;
-    }
 
     #overview {
       grid-area: overview;
+      padding: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #eee;
+    }
+
+    #overview.good {
+      color: #0a0;
+    }
+    #overview.neutral {
+      color: #000;
+    }
+    #overview.bad {
+      color: #f00;
     }
 
     li {
@@ -136,7 +185,7 @@ export default class CupViewAdminMusicControl extends LitElement {
   });
 
   toDuration(seconds: number) {
-    return `${seconds <= 0 ? "-" : ""}${Math.floor(Math.abs(seconds) / 60)
+    return `${seconds < 0 ? "-" : "+"}${Math.floor(Math.abs(seconds) / 60)
       .toString()
       .padStart(2, "0")}:${(Math.abs(seconds) % 60)
       .toString()
@@ -149,75 +198,89 @@ export default class CupViewAdminMusicControl extends LitElement {
         loading: () => html`Loading...`,
         error: (error) => html`Error: ${error}`,
         complete: (predictedTimeplan) => html`
-          <aside id="overview">
-            <h2>Overview</h2>
-            <h3>Verzug</h3>
-            ${this.toDuration(predictedTimeplan?.offset || 0)}
+          <aside
+            id="overview"
+            class=${classMap({
+              good: (predictedTimeplan?.offset || 0) < 0,
+              neutral:
+                (predictedTimeplan?.offset || 0) >= 0 &&
+                (predictedTimeplan?.offset || 0) < 60 * 10,
+              bad: (predictedTimeplan?.offset || 0) >= 60 * 10,
+            })}
+          >
+            <h2>Verzug</h2>
+            <h3>${this.toDuration(predictedTimeplan?.offset || 0)}</h3>
           </aside>
         `,
       })}
-            <aside id="next">
-              <cup-timeplan .timeplan=${
-                this.predictedTimeplan.value
-              }></cup-timeplan>
-              </aside>
-            <main>
-              <h1>Aktueller Stand</h1>
-              ${this.currentTimeplanEntry.render({
-                loading: () => html`Loading...`,
-                error: (error) => html`Error: ${error}`,
-                complete: (currentTimeplanEntry) => html`
-                  <h2>
-                    ${currentTimeplanEntry
-                      ? "Category" in currentTimeplanEntry.timeplan_entry
-                        ? currentTimeplanEntry.timeplan_entry.Category.name
-                        : currentTimeplanEntry.timeplan_entry.Custom.label
-                      : "Inaktiv"}
-                  </h2>
-                `,
-              })}
-              ${this.currentStarter.render({
-                loading: () => html`Loading...`,
-                error: (error) => html`Error: ${error}`,
-                complete: (currentStarter) => html`
-                  ${currentStarter
-                    ? "Category" in currentStarter?.entry.timeplan_entry
-                      ? currentStarter.act
-                        ? html`
-                            <h3>
-                              ${currentStarter.completeAct?.participants
-                                .map((p) => `${p.firstname} ${p.lastname}`)
-                                .join(" & ")}
-                            </h3>
-                            <h4>${currentStarter.completeAct?.name}</h4>
-                            <p>${currentStarter.completeAct?.description}</p>
-                            <audio
-                              controls
-                              src="/songs/${currentStarter.completeAct
-                                ?.song_file || ""}"
-                              preload="auto"
-                            ></audio>
-                          `
-                        : html` <h3>Einfahrzeit</h3>`
-                      : html`
-                          <h3>
-                            ${currentStarter?.entry.timeplan_entry.Custom
-                              ?.label}
-                          </h3>
-                        `
-                    : "No current starter"}
-                `,
-              })}
-              <button class="material-icon" @click=${this.timeplanBackward}>
-                arrow_back
-              </button>
-              <button class="material-icon" @click=${this.timeplanForward}>
-                arrow_forward
-              </button>
-            </main>
-          </div>
-        
-    </div> `;
+      <aside id="next">
+        <cup-timeplan .timeplan=${this.predictedTimeplan.value}></cup-timeplan>
+      </aside>
+      <main>
+        <h1>Aktueller Stand</h1>
+        ${this.currentTimeplanEntry.render({
+          loading: () => html`Loading...`,
+          error: (error) => html`Error: ${error}`,
+          complete: (currentTimeplanEntry) => html`
+            <h2>
+              ${currentTimeplanEntry
+                ? "Category" in currentTimeplanEntry.timeplan_entry
+                  ? currentTimeplanEntry.timeplan_entry.Category.description
+                  : currentTimeplanEntry.timeplan_entry.Custom.label
+                : "Inaktiv"}
+            </h2>
+          `,
+        })}
+        ${this.currentStarter.render({
+          loading: () => html`Loading...`,
+          error: (error) => html`Error: ${error}`,
+          complete: (currentStarter) => html`
+            ${currentStarter
+              ? "Category" in (currentStarter?.entry.timeplan_entry || {})
+                ? currentStarter.act
+                  ? html`
+                      <section>
+                        <h3>
+                          ${currentStarter.completeAct?.participants
+                            .map((p) => `${p.firstname} ${p.lastname}`)
+                            .join(" & ")}
+                        </h3>
+                        <h4>${currentStarter.completeAct?.name}</h4>
+                        <p>${currentStarter.completeAct?.description}</p>
+                      </section>
+                      <audio
+                        controls
+                        src="/songs/${currentStarter.completeAct?.song_file ||
+                        ""}"
+                        preload="auto"
+                      ></audio>
+                    `
+                  : html` <h3>Einfahrzeit</h3>`
+                : html`
+                    <h3>
+                      ${currentStarter &&
+                      "Custom" in currentStarter.entry.timeplan_entry
+                        ? currentStarter?.entry.timeplan_entry.Custom?.label
+                        : ""}
+                    </h3>
+                  `
+              : html`<h3>No current starter</h3>`}
+          `,
+        })}
+        <button
+          class="material-icon back-button"
+          @click=${this.timeplanBackward}
+        >
+          arrow_back
+        </button>
+        <button
+          class="material-icon next-button"
+          @click=${this.timeplanForward}
+        >
+          arrow_forward
+        </button>
+      </main>
+    </div>`;
   }
 
   async timeplanBackward() {

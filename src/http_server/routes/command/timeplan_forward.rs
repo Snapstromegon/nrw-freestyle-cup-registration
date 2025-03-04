@@ -15,7 +15,7 @@ pub struct SetTimeplanForwardResponse {}
 /// This endpoint is used to create a new user.
 #[utoipa::path(
     post,
-    tags=["command", "club"],
+    tags=["command", "timeplan"],
     path="/timeplan_forward",
     responses(
         (status=200, content_type="application/json", body=SetTimeplanForwardResponse),
