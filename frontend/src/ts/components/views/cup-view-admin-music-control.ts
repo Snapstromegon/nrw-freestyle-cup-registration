@@ -290,6 +290,9 @@ export default class CupViewAdminMusicControl extends LitElement {
 
   async timeplanForward() {
     await client.POST("/api/command/timeplan_forward");
+    if(this.currentStarter.value?.act) {
+      await client.POST("/api/command/timeplan_forward");
+    }
     this.predictedTimeplan.run();
   }
 }
