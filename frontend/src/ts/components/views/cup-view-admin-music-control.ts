@@ -215,7 +215,7 @@ export default class CupViewAdminMusicControl extends LitElement {
         `,
       })}
       <aside id="next">
-        <cup-timeplan .timeplan=${this.predictedTimeplan.value}></cup-timeplan>
+        <cup-timeplan is-admin .timeplan=${this.predictedTimeplan.value}></cup-timeplan>
       </aside>
       <main>
         <h1>Aktueller Stand</h1>
