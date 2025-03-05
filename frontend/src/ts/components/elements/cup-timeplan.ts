@@ -32,6 +32,10 @@ export default class CupTimeplan extends LitElement {
           background: linear-gradient(to right, #002242 66%, #00224200);
         }
       }
+
+      .event {
+        background: linear-gradient(to right, #400 66%, #fff0);
+      }
     }
   `;
 
@@ -66,61 +70,71 @@ export default class CupTimeplan extends LitElement {
                 : item.timeplan_entry.Custom.label,
             (item) =>
               "Category" in item.timeplan_entry
-                ? html`<section class="category-header">
-                      <h3 class="title">
-                        ${item.timeplan_entry.Category.description}
-                      </h3>
-                      <p class="time">${niceTime(item.predicted_start)}</p>
-                      ${this.isAdmin
-                        ? html`<input
-                            type="checkbox"
-                            ?checked=${acts
-                              ?.filter(
-                                (completeAct) =>
-                                  "Category" in item.timeplan_entry &&
-                                  completeAct.category ==
-                                    item.timeplan_entry.Category.name
-                              )
-                              ?.every((a) => a.song_checked)}
-                            disabled
-                          />`
-                        : nothing}
-                    </section>
-                    ${repeat(
-                      item.timeplan_entry.Category.acts.filter(
-                        (a) =>
-                          (this.includePast || a.status != "Ended") &&
-                          (this.includeActiveAct || a.status != "Started")
-                      ),
-                      (act) => act.id,
-                      (act) => html`
-                        <section>
-                          <h3>
-                            ${repeat(
-                              acts?.find(
-                                (completeAct) => completeAct.id == act.id
-                              )?.participants || [],
-                              (p) =>
-                                html`${p.firstname} ${p.lastname}
-                                  (${p.club_name})<br />`
-                            )}
-                          </h3>
-                          <h4>${act.name}</h4>
-                          <p class="time">${niceTime(act.predicted_start)}</p>
-                          ${this.isAdmin
-                            ? html`<input
-                                type="checkbox"
-                                ?checked=${acts?.find(
+                ? item.timeplan_entry.Category.acts.filter(
+                    (a) =>
+                      (this.includePast || a.status != "Ended") &&
+                      (this.includeActiveAct || a.status != "Started")
+                  ).length
+                  ? html`<section class="category-header">
+                        <h3 class="title">
+                          ${item.timeplan_entry.Category.description}
+                        </h3>
+                        ${item.started_at
+                          ? nothing
+                          : html`<p class="time">
+                              ${niceTime(item.predicted_start)}
+                            </p>`}
+                        ${this.isAdmin
+                          ? html`<input
+                              type="checkbox"
+                              ?checked=${acts
+                                ?.filter(
+                                  (completeAct) =>
+                                    "Category" in item.timeplan_entry &&
+                                    completeAct.category ==
+                                      item.timeplan_entry.Category.name
+                                )
+                                ?.every((a) => a.song_checked)}
+                              disabled
+                            />`
+                          : nothing}
+                      </section>
+                      ${repeat(
+                        item.timeplan_entry.Category.acts.filter(
+                          (a) =>
+                            (this.includePast || a.status != "Ended") &&
+                            (this.includeActiveAct || a.status != "Started")
+                        ),
+                        (act) => act.id,
+                        (act) => html`
+                          <section>
+                            <h3>
+                              ${repeat(
+                                acts?.find(
                                   (completeAct) => completeAct.id == act.id
-                                )?.song_checked}
-                                disabled
-                              />`
-                            : nothing}
-                        </section>
-                      `
-                    )} `
+                                )?.participants || [],
+                                (p) =>
+                                  html`${p.firstname} ${p.lastname}
+                                    (${p.club_name})<br />`
+                              )}
+                            </h3>
+                            <h4>${act.name}</h4>
+                            <p class="time">${niceTime(act.predicted_start)}</p>
+                            ${this.isAdmin
+                              ? html`<input
+                                  type="checkbox"
+                                  ?checked=${acts?.find(
+                                    (completeAct) => completeAct.id == act.id
+                                  )?.song_checked}
+                                  disabled
+                                />`
+                              : nothing}
+                          </section>
+                        `
+                      )}`
+                  : nothing
                 : html`
-                    <section>
+                    <section class="event">
                       <h3 class="title">${item.timeplan_entry.Custom.label}</h3>
                       <p class="time">${niceTime(item.predicted_start)}</p>
                     </section>

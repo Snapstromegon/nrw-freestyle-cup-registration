@@ -6,6 +6,15 @@ import "../elements/cup-context-club.js";
 import "../elements/cup-club-manager.js";
 import "../elements/cup-starter-table.js";
 import "../elements/cup-timeplan.js";
+import {
+  currentTimeplanAct,
+  currentTimeplanEntry,
+  lastTimeplanAct,
+  TimeplanStatus,
+  timeplanStatus,
+} from "../../utils";
+import "../elements/cup-clock.js";
+import "../elements/cup-countdown.js";
 
 @customElement("cup-view-info-board")
 export default class CupViewInfoBoard extends LitElement {
@@ -14,6 +23,7 @@ export default class CupViewInfoBoard extends LitElement {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
+      font-family: "Mona Sans";
     }
     .material-icon {
       font-family: "Material Symbols Outlined";
@@ -39,7 +49,11 @@ export default class CupViewInfoBoard extends LitElement {
       height: 100dvh;
       overflow: hidden;
       gap: 5vh;
-      background: radial-gradient(circle at center, #002d56 .1vh, #002d5600 .1vh);
+      background: radial-gradient(
+        circle at center,
+        #002d56 0.1vh,
+        #002d5600 0.1vh
+      );
       background-size: 5vh 5vh;
       background-repeat: repeat;
     }
@@ -125,77 +139,101 @@ export default class CupViewInfoBoard extends LitElement {
     main {
       min-height: 0;
       grid-area: main;
+      padding: 10vh;
       align-self: center;
       position: relative;
-      display: flex;
       img#fallback {
-        width: 66vh;
-        margin: auto;
+        width: 50vh;
+      }
+
+      .break,
+      .warmup,
+      .award,
+      .act {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 5vh;
+        text-align: center;
+        & h1 {
+          font-size: 10vh;
+        }
+        & h2 {
+          font-size: 6vh;
+        }
+        & h3 {
+          font-size: 4vh;
+        }
+      }
+
+      .act {
+        gap: 10vh;
+        & h1 {
+          font-size: 8vh;
+        }
+
+        & h2 {
+          font-size: 6vh;
+        }
+
+        & h3 {
+          font-size: 3vh;
+        }
       }
     }
+
+    .judging {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      text-align: center;
+      gap: 3vh;
+
+      & section {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 5vh;
+        text-align: center;
+      }
+
+      & h1 {
+        font-size: 8vh;
+      }
+
+      & h2 {
+        font-size: 5vh;
+      }
+
+      & h3 {
+        font-size: 3vh;
+      }
+    }
+
+    .starters {
+      display: flex;
+      flex-direction: row;
+      display: grid;
+      grid-auto-columns: 1fr;
+      grid-auto-flow: column;
+      align-items: center;
+      gap: 10vh;
+      text-align: center;
+    }
   `;
-  predictedTimeplan = new Task(this, {
-    task: async () => {
-      const res = await client.GET("/api/query/predict_timeplan");
-      return res.data;
-    },
+
+  rawTimeplan = new Task(this, {
+    task: async () => (await client.GET("/api/query/predict_timeplan")).data,
     args: () => [],
   });
 
-  currentTimeplanEntry = new Task(this, {
-    task: async ([predictedTimeplan]) =>
-      predictedTimeplan?.items.find((item) => item.status === "Started"),
-    args: () => [this.predictedTimeplan.value],
+  predictedTimeplan = new Task(this, {
+    task: async ([rawTimeplan]) => rawTimeplan,
+    args: () => [this.rawTimeplan.value],
   });
 
-  currentOrNextTimeplanEntry = new Task(this, {
-    task: async ([predictedTimeplan]) =>
-      predictedTimeplan?.items.find(
-        (item) => item.status === "Started" || item.status === "Planned"
-      ),
-    args: () => [this.predictedTimeplan.value],
-  });
-
-  upcomingTimeplan = new Task(this, {
-    task: async ([predictedTimeplan]) =>
-      predictedTimeplan?.items.filter(
-        (item) => item.status === "Planned" || item.status === "Started"
-      ),
-    args: () => [this.predictedTimeplan.value],
-  });
-
-  currentStarter = new Task(this, {
-    task: async ([predictTimeplan]) => {
-      const entry = predictTimeplan?.items.find(
-        (item) => item.status === "Started"
-      );
-      if (!entry) {
-        return undefined;
-      }
-      if ("Category" in entry.timeplan_entry) {
-        const act = entry.timeplan_entry.Category.acts.find(
-          (act) => act.status == "Started"
-        );
-        const completeAct = act
-          ? (
-              await client.GET("/api/query/get_act", {
-                params: {
-                  query: {
-                    act_id: act?.id,
-                  },
-                },
-              })
-            ).data
-          : null;
-        return {
-          entry: entry,
-          act: act,
-          completeAct,
-        };
-      }
-      return { entry };
-    },
-    args: () => [this.predictedTimeplan.value],
+  allActs = new Task(this, {
+    task: async () => (await client.GET("/api/query/list_acts")).data,
+    args: () => [],
   });
 
   dataUpdateInterval?: number;
@@ -203,8 +241,8 @@ export default class CupViewInfoBoard extends LitElement {
   override connectedCallback() {
     super.connectedCallback();
     this.dataUpdateInterval = setInterval(() => {
-      this.predictedTimeplan.run();
-    }, 10000);
+      this.rawTimeplan.run();
+    }, 1000);
   }
 
   override disconnectedCallback() {
@@ -227,7 +265,106 @@ export default class CupViewInfoBoard extends LitElement {
           ></cup-timeplan>
         </aside>
         <main>
-          <img id="fallback" src="/assets/images/logo_with_blobs.svg" alt="NRW Freestyle Cup 2025" />
+          ${this.predictedTimeplan.render({
+            complete: (timeplan) => {
+              if (!timeplan) {
+                return html`<img
+                  id="fallback"
+                  src="/assets/images/logo_with_blobs.svg"
+                  alt="NRW Freestyle Cup 2025"
+                />`;
+              }
+              const status = timeplanStatus(timeplan);
+              console.log(status);
+              switch (status) {
+                case TimeplanStatus.Break:
+                  return html`<div class="break">
+                    <img
+                      id="fallback"
+                      src="/assets/images/logo_with_blobs.svg"
+                      alt="NRW Freestyle Cup 2025"
+                    /><cup-clock></cup-clock>
+                  </div>`;
+                case TimeplanStatus.Warmup:
+                  return html`<div class="warmup">
+                    <h1>Einfahrzeit</h1>
+                    <h2>
+                      ${currentTimeplanEntry(timeplan)?.timeplan_entry.Category
+                        .description}
+                    </h2>
+                    <cup-countdown
+                      .time=${new Date(
+                        new Date(
+                          currentTimeplanEntry(timeplan)?.predicted_start || ""
+                        ).getTime() +
+                          currentTimeplanEntry(timeplan)?.timeplan_entry
+                            .Category.einfahrzeit_seconds *
+                            1000
+                      )}
+                    ></cup-countdown>
+                  </div>`;
+                case TimeplanStatus.Act:
+                  return html`<div class="act">
+                    <h1>${currentTimeplanAct(timeplan)?.name}</h1>
+                    <div class="starters">
+                      ${this.allActs.value
+                        ?.find((a) => a.id == currentTimeplanAct(timeplan)?.id)
+                        ?.participants.map(
+                          (p) => html`
+                            <div class="starter">
+                              <h2>${p.firstname} ${p.lastname}</h2>
+                              <h3>${p.club_name}</h3>
+                            </div>
+                          `
+                        )}
+                    </div>
+                    <h3>
+                      ${currentTimeplanEntry(timeplan)?.timeplan_entry.Category
+                        .description}
+                    </h3>
+                  </div>`;
+                case TimeplanStatus.Judging:
+                  return html`<div class="judging">
+                    <img
+                      id="fallback"
+                      src="/assets/images/example.jpg"
+                      alt="NRW Freestyle Cup 2025"
+                    />
+                    <section>
+                      <h3>Das war...</h3>
+                      <h1>${lastTimeplanAct(timeplan)?.name}</h1>
+                      <div class="starters">
+                        ${this.allActs.value
+                          ?.find((a) => a.id == lastTimeplanAct(timeplan)?.id)
+                          ?.participants.map(
+                            (p) => html`
+                              <div class="starter">
+                                <h2>${p.firstname} ${p.lastname}</h2>
+                                <h3>${p.club_name}</h3>
+                              </div>
+                            `
+                          )}
+                      </div>
+                      <h3>
+                        ${currentTimeplanEntry(timeplan)?.timeplan_entry.Category
+                          .description}
+                      </h3>
+                      <cup-clock></cup-clock>
+                    </section>
+                  </div>`;
+                case TimeplanStatus.Award:
+                  return html`<div class="award">
+                    <img
+                      id="fallback"
+                      src="/assets/images/logo_with_blobs.svg"
+                      alt="NRW Freestyle Cup 2025"
+                    />
+                    <h1>Siegerehrung</h1>
+                  </div>`;
+              }
+              return html``;
+            },
+          })}
         </main>
         <footer>
           <img src="/assets/images/gwn.svg" alt="NRW Freestyle Cup 2025" />

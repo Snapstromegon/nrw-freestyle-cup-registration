@@ -193,6 +193,7 @@ export default class CupViewAdminMusicControl extends LitElement {
   }
 
   override render() {
+    console.log(this.currentStarter.value);
     return html`<div id="wrapper">
       ${this.predictedTimeplan.render({
         loading: () => html`Loading...`,
@@ -242,7 +243,7 @@ export default class CupViewAdminMusicControl extends LitElement {
                       <section>
                         <h3>
                           ${currentStarter.completeAct?.participants
-                            .map((p) => `${p.firstname} ${p.lastname}`)
+                            .map((p) => `${p.firstname} ${p.lastname} (${p.club_name})`)
                             .join(" & ")}
                         </h3>
                         <h4>${currentStarter.completeAct?.name}</h4>
@@ -255,6 +256,10 @@ export default class CupViewAdminMusicControl extends LitElement {
                         preload="auto"
                       ></audio>
                     `
+                  : "Category" in currentStarter.entry.timeplan_entry &&
+                    currentStarter.entry.timeplan_entry.Category.acts[0]
+                      .status != "Planned"
+                  ? html`<h3>Judging</h3>`
                   : html` <h3>Einfahrzeit</h3>`
                 : html`
                     <h3>
@@ -290,9 +295,6 @@ export default class CupViewAdminMusicControl extends LitElement {
 
   async timeplanForward() {
     await client.POST("/api/command/timeplan_forward");
-    if(this.currentStarter.value?.act) {
-      await client.POST("/api/command/timeplan_forward");
-    }
     this.predictedTimeplan.run();
   }
 }
