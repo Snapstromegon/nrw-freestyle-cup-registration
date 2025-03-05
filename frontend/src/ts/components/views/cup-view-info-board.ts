@@ -39,6 +39,9 @@ export default class CupViewInfoBoard extends LitElement {
       height: 100dvh;
       overflow: hidden;
       gap: 5vh;
+      background: radial-gradient(circle at center, #002d56 .1vh, #002d5600 .1vh);
+      background-size: 5vh 5vh;
+      background-repeat: repeat;
     }
 
     footer {
@@ -124,9 +127,10 @@ export default class CupViewInfoBoard extends LitElement {
       grid-area: main;
       align-self: center;
       position: relative;
-      img {
-        height: 66%;
-        width: 66%;
+      display: flex;
+      img#fallback {
+        width: 66vh;
+        margin: auto;
       }
     }
   `;
@@ -223,7 +227,7 @@ export default class CupViewInfoBoard extends LitElement {
           ></cup-timeplan>
         </aside>
         <main>
-          <img src="/assets/images/logo_with_blobs.svg" alt="NRW Freestyle Cup 2025" />
+          <img id="fallback" src="/assets/images/logo_with_blobs.svg" alt="NRW Freestyle Cup 2025" />
         </main>
         <footer>
           <img src="/assets/images/gwn.svg" alt="NRW Freestyle Cup 2025" />
