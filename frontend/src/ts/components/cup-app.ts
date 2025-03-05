@@ -34,6 +34,14 @@ export default class CupApp extends LitElement {
       render: () => authed(html`<cup-view-acts></cup-view-acts>`),
     },
     {
+      path: new URLPattern({ pathname: "/admin-music-control" }),
+      load: () => import("./views/cup-view-admin-music-control.js"),
+      render: () =>
+        authed(
+          html`<cup-view-admin-music-control></cup-view-admin-music-control>`
+        ),
+    },
+    {
       path: new URLPattern({ pathname: "/admin" }),
       load: () => import("./views/cup-view-admin.js"),
       render: () => authed(html`<cup-view-admin></cup-view-admin>`),
@@ -100,6 +108,11 @@ export default class CupApp extends LitElement {
       path: new URLPattern({ pathname: "/startlist" }),
       load: () => import("./views/cup-view-startlist.js"),
       render: () => html`<cup-view-startlist></cup-view-startlist>`,
+    },
+    {
+      path: new URLPattern({ pathname: "/info-board" }),
+      load: () => import("./views/cup-view-info-board.js"),
+      render: () => html`<cup-view-info-board></cup-view-info-board>`,
     },
   ];
 

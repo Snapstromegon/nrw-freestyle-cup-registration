@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use askama::Template;
-use axum::{http::StatusCode, Extension, Json};
+use axum::{Extension, Json, http::StatusCode};
 use axum_extra::extract::CookieJar;
 use password_auth::generate_hash;
 use serde::{Deserialize, Serialize};

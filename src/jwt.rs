@@ -1,8 +1,8 @@
 use std::fmt::Debug;
 
 use axum_extra::extract::{
-    cookie::{Cookie, SameSite},
     CookieJar,
+    cookie::{Cookie, SameSite},
 };
 use jsonwebtoken::{DecodingKey, EncodingKey};
 use uuid::Uuid;

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::{
     extract::{FromRequestParts, OptionalFromRequestParts},
-    http::{request::Parts, StatusCode},
+    http::{StatusCode, request::Parts},
     response::IntoResponse,
 };
 use axum_extra::extract::CookieJar;

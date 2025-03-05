@@ -1,6 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
-use axum::{response::IntoResponse, Json};
+use axum::{Json, response::IntoResponse};
 use serde::Serialize;
 use sqlx::SqlitePool;
 use tracing::{error, info};

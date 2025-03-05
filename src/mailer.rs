@@ -1,6 +1,6 @@
 use lettre::{
-    message::header::ContentType, transport::smtp::authentication::Credentials, AsyncSmtpTransport,
-    AsyncTransport, Tokio1Executor,
+    AsyncSmtpTransport, AsyncTransport, Tokio1Executor, message::header::ContentType,
+    transport::smtp::authentication::Credentials,
 };
 
 pub struct Mailer {

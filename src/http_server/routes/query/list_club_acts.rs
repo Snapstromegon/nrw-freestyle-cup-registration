@@ -1,4 +1,4 @@
-use axum::{extract::Query, Extension, Json};
+use axum::{Extension, Json, extract::Query};
 use sqlx::SqlitePool;
 use tracing::instrument;
 use uuid::Uuid;

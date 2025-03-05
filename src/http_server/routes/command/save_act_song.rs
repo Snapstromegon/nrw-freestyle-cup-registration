@@ -1,9 +1,9 @@
 use std::{collections::HashMap, path::Path, sync::Arc};
 
 use axum::{
+    Extension, Json,
     extract::{Multipart, Query},
     http::StatusCode,
-    Extension, Json,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
@@ -16,7 +16,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    http_server::{extractor::auth::Auth, ClientError, HttpError, HttpServerOptions},
+    http_server::{ClientError, HttpError, HttpServerOptions, extractor::auth::Auth},
     system_status::Capabilities,
 };
 
