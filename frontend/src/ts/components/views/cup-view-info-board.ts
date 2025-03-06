@@ -281,7 +281,7 @@ export default class CupViewInfoBoard extends LitElement {
                   return html`<div class="break">
                     <img
                       id="fallback"
-                      src="/assets/images/logo_with_blobs.svg"
+                      src="http://nrw-cup-fotos:8080/random"
                       alt="NRW Freestyle Cup 2025"
                     /><cup-clock></cup-clock>
                   </div>`;
@@ -327,7 +327,9 @@ export default class CupViewInfoBoard extends LitElement {
                   return html`<div class="judging">
                     <img
                       id="fallback"
-                      src="/assets/images/example.jpg"
+                      src="http://nrw-cup-fotos:8080/newest?${lastTimeplanAct(
+                        timeplan
+                      )?.id}"
                       alt="NRW Freestyle Cup 2025"
                     />
                     <section>
@@ -346,8 +348,8 @@ export default class CupViewInfoBoard extends LitElement {
                           )}
                       </div>
                       <h3>
-                        ${currentTimeplanEntry(timeplan)?.timeplan_entry.Category
-                          .description}
+                        ${currentTimeplanEntry(timeplan)?.timeplan_entry
+                          .Category.description}
                       </h3>
                       <cup-clock></cup-clock>
                     </section>
