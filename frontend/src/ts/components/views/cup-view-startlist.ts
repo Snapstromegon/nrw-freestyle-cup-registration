@@ -143,7 +143,7 @@ export default class CupViewStartlist extends LitElement {
     },
   });
   acts = new Task(this, {
-    task: async ([categories, acts]) => {
+    task: async ([categories, acts, predictTimeplan]) => {
       if (!categories || !acts)
         return new Map<string, components["schemas"]["StartlistAct"][]>();
 
@@ -154,14 +154,36 @@ export default class CupViewStartlist extends LitElement {
       for (const category of categories) {
         actsByCategory.set(
           category.name,
-          (acts as components["schemas"]["StartlistAct"][]).filter(
-            (act) => act.category === category.name
-          )
+          (acts as components["schemas"]["StartlistAct"][])
+            .filter((act) => act.category === category.name)
+            .map((act) => ({
+              ...act,
+              tpAct: predictTimeplan?.items
+                .find(
+                  (item) => item.timeplan_entry?.Category?.name == category.name
+                )
+                .timeplan_entry?.Category?.acts.find(
+                  (tpAct) => tpAct.id == act.id
+                ),
+            }))
         );
       }
+      console.log(actsByCategory);
       return actsByCategory;
     },
-    args: () => [this.categories.value, this.allActs.value],
+    args: () => [
+      this.categories.value,
+      this.allActs.value,
+      this.predictedTimeplan.value,
+    ],
+  });
+
+  predictedTimeplan = new Task(this, {
+    task: async () => {
+      const res = await client.GET("/api/query/predict_timeplan");
+      return res.data;
+    },
+    args: () => [],
   });
 
   override render() {
@@ -178,6 +200,7 @@ export default class CupViewStartlist extends LitElement {
             >Zurück zur Veranstaltungsseite</a
           >
         </nav>
+        <i>Alle Zeitangaben sind vorläufig und können sich am Wettkampftag nach vorne UND hinten verschieben.</i>
         ${cache(
           this.categories.render({
             complete: (categories) =>
@@ -206,6 +229,14 @@ export default class CupViewStartlist extends LitElement {
                                           `${p.firstname} ${p.lastname} (${p.club_name})`
                                       )
                                       .join(" & ")}
+                                  </td>
+                                  <td>
+                                    ${new Date(
+                                      act.tpAct.predicted_start
+                                    ).toLocaleTimeString(undefined, {
+                                      minute: "2-digit",
+                                      hour: "2-digit",
+                                    })}
                                   </td>
                                 </tr>
                               `
