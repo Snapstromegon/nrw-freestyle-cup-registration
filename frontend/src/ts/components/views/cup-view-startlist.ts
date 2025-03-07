@@ -143,39 +143,50 @@ export default class CupViewStartlist extends LitElement {
     },
   });
   acts = new Task(this, {
-    task: async ([categories, acts, predictTimeplan]) => {
-      if (!categories || !acts)
-        return new Map<string, components["schemas"]["StartlistAct"][]>();
+    task: async ([categories, acts, predictTimeplan]): Promise<
+      Map<string, { act: components["schemas"]["StartlistAct"]; tpAct: any }[]>
+    > => {
+      if (!categories || !acts) return new Map();
 
       const actsByCategory = new Map<
         string,
-        components["schemas"]["StartlistAct"][]
+        { act: components["schemas"]["StartlistAct"]; tpAct: any }[]
       >();
       for (const category of categories) {
         actsByCategory.set(
           category.name,
-          (acts as components["schemas"]["StartlistAct"][])
+          acts
             .filter((act) => act.category === category.name)
-            .map((act) => ({
-              ...act,
-              tpAct: predictTimeplan?.items
-                .find(
-                  (item) => item.timeplan_entry?.Category?.name == category.name
-                )
-                .timeplan_entry?.Category?.acts.find(
-                  (tpAct) => tpAct.id == act.id
-                ),
-            }))
+            .map((act) => {
+              const tpEntry = predictTimeplan?.items.find((item) =>
+                item.timeplan_entry && "Category" in item.timeplan_entry
+                  ? item.timeplan_entry?.Category?.name == category.name
+                  : undefined
+              )?.timeplan_entry;
+              const tpAct =
+                tpEntry && "Category" in tpEntry
+                  ? tpEntry.Category.acts.find((tpAct) => tpAct.id == act.id)
+                  : undefined;
+              return {
+                act,
+                tpAct,
+              };
+            })
         );
       }
       console.log(actsByCategory);
       return actsByCategory;
     },
-    args: () => [
-      this.categories.value,
-      this.allActs.value,
-      this.predictedTimeplan.value,
-    ],
+    args: () =>
+      [
+        this.categories.value,
+        this.allActs.value,
+        this.predictedTimeplan.value,
+      ] as [
+        components["schemas"]["Category"][],
+        components["schemas"]["StartlistAct"][],
+        components["schemas"]["Timeplan"]
+      ],
   });
 
   predictedTimeplan = new Task(this, {
@@ -200,7 +211,10 @@ export default class CupViewStartlist extends LitElement {
             >Zurück zur Veranstaltungsseite</a
           >
         </nav>
-        <i>Alle Zeitangaben sind vorläufig und können sich am Wettkampftag nach vorne UND hinten verschieben.</i>
+        <i
+          >Alle Zeitangaben sind vorläufig und können sich am Wettkampftag nach
+          vorne UND hinten verschieben.</i
+        >
         ${cache(
           this.categories.render({
             complete: (categories) =>
@@ -217,13 +231,13 @@ export default class CupViewStartlist extends LitElement {
                           <table>
                             ${repeat(
                               acts,
-                              (act) => act.id,
+                              (act) => act.act.id,
                               (act) => html`
                                 <tr>
-                                  <td>${act.act_order || "⌛"}</td>
-                                  <td>${act.name}</td>
+                                  <td>${act.act.act_order || "⌛"}</td>
+                                  <td>${act.act.name}</td>
                                   <td>
-                                    ${act.participants
+                                    ${act.act.participants
                                       .map(
                                         (p) =>
                                           `${p.firstname} ${p.lastname} (${p.club_name})`
