@@ -1,4 +1,4 @@
-import { LitElement, html, css } from "lit";
+import { LitElement, html, css, nothing } from "lit";
 import { customElement } from "lit/decorators.js";
 import { client } from "../../apiClient";
 import { Task } from "@lit/task";
@@ -239,14 +239,14 @@ export default class CupViewInfoBoard extends LitElement {
   dataUpdateInterval?: number;
 
   override connectedCallback() {
-    super.connectedCallback();
+    super.connectedCallback?.();
     this.dataUpdateInterval = setInterval(() => {
       this.rawTimeplan.run();
     }, 1000);
   }
 
   override disconnectedCallback() {
-    super.disconnectedCallback();
+    super.disconnectedCallback?.();
     clearInterval(this.dataUpdateInterval);
   }
 
@@ -276,6 +276,8 @@ export default class CupViewInfoBoard extends LitElement {
               }
               const status = timeplanStatus(timeplan);
               console.log(status);
+              const currentEntry = currentTimeplanEntry(timeplan);
+              const currentAct = currentTimeplanAct(timeplan);
               switch (status) {
                 case TimeplanStatus.Break:
                   return html`<div class="break">
@@ -289,26 +291,30 @@ export default class CupViewInfoBoard extends LitElement {
                   return html`<div class="warmup">
                     <h1>Einfahrzeit</h1>
                     <h2>
-                      ${currentTimeplanEntry(timeplan)?.timeplan_entry.Category
-                        .description}
+                      ${currentEntry &&
+                      "Category" in currentEntry.timeplan_entry
+                        ? currentEntry.timeplan_entry.Category.description
+                        : "Invalid State"}
                     </h2>
                     <cup-countdown
                       .time=${new Date(
                         new Date(
-                          currentTimeplanEntry(timeplan)?.predicted_start || ""
+                          currentEntry?.predicted_start || ""
                         ).getTime() +
-                          currentTimeplanEntry(timeplan)?.timeplan_entry
-                            .Category.einfahrzeit_seconds *
-                            1000
+                          (currentEntry &&
+                          "Category" in currentEntry.timeplan_entry
+                            ? currentEntry.timeplan_entry.Category
+                                .einfahrzeit_seconds * 1000
+                            : 0)
                       )}
                     ></cup-countdown>
                   </div>`;
                 case TimeplanStatus.Act:
                   return html`<div class="act">
-                    <h1>${currentTimeplanAct(timeplan)?.name}</h1>
+                    <h1>${currentAct?.name}</h1>
                     <div class="starters">
                       ${this.allActs.value
-                        ?.find((a) => a.id == currentTimeplanAct(timeplan)?.id)
+                        ?.find((a) => a.id == currentAct?.id)
                         ?.participants.map(
                           (p) => html`
                             <div class="starter">
@@ -319,8 +325,10 @@ export default class CupViewInfoBoard extends LitElement {
                         )}
                     </div>
                     <h3>
-                      ${currentTimeplanEntry(timeplan)?.timeplan_entry.Category
-                        .description}
+                      ${currentEntry &&
+                      "Category" in currentEntry.timeplan_entry
+                        ? currentEntry.timeplan_entry.Category.description
+                        : "Invalid State"}
                     </h3>
                   </div>`;
                 case TimeplanStatus.Judging:
@@ -348,8 +356,10 @@ export default class CupViewInfoBoard extends LitElement {
                           )}
                       </div>
                       <h3>
-                        ${currentTimeplanEntry(timeplan)?.timeplan_entry
-                          .Category.description}
+                        ${currentEntry &&
+                        "Category" in currentEntry.timeplan_entry
+                          ? currentEntry.timeplan_entry.Category.description
+                          : "Invalid State"}
                       </h3>
                       <cup-clock></cup-clock>
                     </section>
@@ -364,7 +374,7 @@ export default class CupViewInfoBoard extends LitElement {
                     <h1>Siegerehrung</h1>
                   </div>`;
               }
-              return html``;
+              return nothing;
             },
           })}
         </main>
