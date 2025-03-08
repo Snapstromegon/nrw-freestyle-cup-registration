@@ -1,6 +1,6 @@
 import { LitElement, html, css, nothing } from "lit";
 import { customElement } from "lit/decorators.js";
-import { client } from "../../apiClient";
+import { client, components } from "../../apiClient";
 import { Task } from "@lit/task";
 import "../elements/cup-context-club.js";
 import "../elements/cup-club-manager.js";
@@ -10,11 +10,13 @@ import {
   currentTimeplanAct,
   currentTimeplanEntry,
   lastTimeplanAct,
+  lastTimeplanEntry,
   TimeplanStatus,
   timeplanStatus,
-} from "../../utils";
+} from "../../utils.js";
 import "../elements/cup-clock.js";
 import "../elements/cup-countdown.js";
+import "../elements/cup-fotobox.js";
 
 @customElement("cup-view-info-board")
 export default class CupViewInfoBoard extends LitElement {
@@ -138,10 +140,13 @@ export default class CupViewInfoBoard extends LitElement {
 
     main {
       min-height: 0;
+      min-width: 0;
       grid-area: main;
       padding: 10vh;
       align-self: center;
       position: relative;
+      width: 100%;
+      height: 100%;
       img#fallback {
         width: 50vh;
       }
@@ -155,6 +160,9 @@ export default class CupViewInfoBoard extends LitElement {
         align-items: center;
         gap: 5vh;
         text-align: center;
+        height: 100%;
+        width: 100%;
+
         & h1 {
           font-size: 10vh;
         }
@@ -180,6 +188,12 @@ export default class CupViewInfoBoard extends LitElement {
           font-size: 3vh;
         }
       }
+    }
+
+    .break cup-fotobox {
+      width: 100%;
+      height: 100%;
+      flex-shrink: 1;
     }
 
     .judging {
@@ -221,8 +235,20 @@ export default class CupViewInfoBoard extends LitElement {
     }
   `;
 
+  lastRawTimeplan?: components["schemas"]["Timeplan"];
+
   rawTimeplan = new Task(this, {
-    task: async () => (await client.GET("/api/query/predict_timeplan")).data,
+    task: async () => {
+      const newTimeplan = (await client.GET("/api/query/predict_timeplan"))
+        .data;
+      if (
+        JSON.stringify(newTimeplan) !== JSON.stringify(this.lastRawTimeplan)
+      ) {
+        this.lastRawTimeplan = newTimeplan;
+        return newTimeplan;
+      }
+      return this.lastRawTimeplan;
+    },
     args: () => [],
   });
 
@@ -275,17 +301,22 @@ export default class CupViewInfoBoard extends LitElement {
                 />`;
               }
               const status = timeplanStatus(timeplan);
-              console.log(status);
               const currentEntry = currentTimeplanEntry(timeplan);
               const currentAct = currentTimeplanAct(timeplan);
+              const lastEntry = lastTimeplanEntry(timeplan);
               switch (status) {
                 case TimeplanStatus.Break:
                   return html`<div class="break">
-                    <img
-                      id="fallback"
-                      src="http://nrw-cup-fotos:8080/random"
-                      alt="NRW Freestyle Cup 2025"
-                    /><cup-clock></cup-clock>
+                    ${lastEntry
+                      ? html`<cup-fotobox
+                          src="http://nrw-cup-fotos:8080/random"
+                        ></cup-fotobox>`
+                      : html`<img
+                          id="fallback"
+                          src="/assets/images/logo_with_blobs.svg"
+                          alt="NRW Freestyle Cup 2025"
+                        />`}
+                    <cup-clock></cup-clock>
                   </div>`;
                 case TimeplanStatus.Warmup:
                   return html`<div class="warmup">
@@ -333,13 +364,11 @@ export default class CupViewInfoBoard extends LitElement {
                   </div>`;
                 case TimeplanStatus.Judging:
                   return html`<div class="judging">
-                    <img
-                      id="fallback"
+                    <cup-fotobox
                       src="http://nrw-cup-fotos:8080/newest?${lastTimeplanAct(
                         timeplan
                       )?.id}"
-                      alt="NRW Freestyle Cup 2025"
-                    />
+                    ></cup-fotobox>
                     <section>
                       <h3>Das war...</h3>
                       <h1>${lastTimeplanAct(timeplan)?.name}</h1>
