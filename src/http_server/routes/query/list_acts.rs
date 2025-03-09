@@ -19,7 +19,6 @@ use crate::http_server::{extractor::auth::Auth, routes::http_types::{Act, ActPar
 #[instrument(skip(db))]
 pub async fn list_acts(
     Extension(db): Extension<SqlitePool>,
-    auth: Auth,
 ) -> Result<Json<Vec<Act>>, HttpError> {
     pub struct DBAct {
         id: Uuid,
