@@ -3,7 +3,7 @@ use sqlx::SqlitePool;
 use tracing::instrument;
 use uuid::Uuid;
 
-use crate::http_server::{extractor::auth::Auth, routes::http_types::{Act, ActParticipant}, ClientError, HttpError};
+use crate::http_server::{routes::http_types::{Act, ActParticipant}, ClientError, HttpError};
 
 /// List all users.
 #[utoipa::path(
