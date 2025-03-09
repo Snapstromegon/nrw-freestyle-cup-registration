@@ -47,6 +47,8 @@ struct Args {
     pub end_register_date: OffsetDateTime,
     #[clap(long, env = "END_MUSIC_UPLOAD_DATE", value_parser = parse_date)]
     pub end_music_upload_date: OffsetDateTime,
+    #[clap(long, env = "INSECURE_COOKIES")]
+    pub insecure_cookies: bool,
 }
 
 fn parse_date(s: &str) -> Result<OffsetDateTime, time::error::Parse> {
@@ -107,6 +109,7 @@ async fn main() -> anyhow::Result<()> {
         jsonwebtoken::DecodingKey::from_secret(args.jwt_secret.as_bytes()),
         jwt_algorithm,
         validator,
+        args.insecure_cookies,
     );
 
     HttpServer::new(

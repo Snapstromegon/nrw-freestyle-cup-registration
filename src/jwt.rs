@@ -37,6 +37,7 @@ pub struct JWTConfig {
     algorithm: jsonwebtoken::Algorithm,
     validation: jsonwebtoken::Validation,
     validity: std::time::Duration,
+    insecure_cookies: bool,
 }
 
 impl JWTConfig {
@@ -46,6 +47,7 @@ impl JWTConfig {
         decode_key: DecodingKey,
         algorithm: jsonwebtoken::Algorithm,
         validation: jsonwebtoken::Validation,
+        insecure_cookies: bool,
     ) -> Self {
         Self {
             encoding_key,
@@ -53,6 +55,7 @@ impl JWTConfig {
             algorithm,
             validation,
             validity: std::time::Duration::from_secs(60 * 60 * 24 * 31 * 6),
+            insecure_cookies,
         }
     }
 
@@ -95,8 +98,23 @@ impl JWTConfig {
         Ok(cookies.add(
             Cookie::build(("jwt", self.create_user_token(user_id)?))
                 .http_only(true)
-                .secure(true)
+                .secure(!self.insecure_cookies)
                 .max_age(time::Duration::try_from(self.validity).unwrap())
+                .path("/")
+                .same_site(SameSite::Strict)
+                .build(),
+        ))
+    }
+
+    pub fn remove_jwt_cookie(
+        &self,
+        cookies: CookieJar,
+    ) -> Result<CookieJar, jsonwebtoken::errors::Error> {
+        Ok(cookies.add(
+            Cookie::build(("jwt", ""))
+                .http_only(true)
+                .secure(!self.insecure_cookies)
+                .max_age(time::Duration::seconds(0))
                 .path("/")
                 .same_site(SameSite::Strict)
                 .build(),

@@ -1,11 +1,10 @@
-use axum::Json;
-use axum_extra::extract::{
-    CookieJar,
-    cookie::{Cookie, SameSite},
-};
+use std::sync::Arc;
+
+use axum::{Extension, Json};
+use axum_extra::extract::CookieJar;
 use tracing::instrument;
 
-use crate::http_server::HttpError;
+use crate::{http_server::HttpError, jwt::JWTConfig};
 
 /// Log out the currently authenticated user.
 #[utoipa::path(
@@ -17,17 +16,15 @@ use crate::http_server::HttpError;
     ),
 )]
 #[instrument(skip(cookies))]
-pub async fn logout(cookies: CookieJar) -> Result<(CookieJar, Json<String>), HttpError> {
+pub async fn logout(
+    cookies: CookieJar,
+    Extension(jwt_config): Extension<Arc<JWTConfig>>,
+) -> Result<(CookieJar, Json<String>), HttpError> {
     Ok((
-        cookies.add(
-            Cookie::build(("jwt", ""))
-                .http_only(true)
-                .secure(true)
-                .max_age(time::Duration::seconds(0))
-                .path("/")
-                .same_site(SameSite::Strict)
-                .build(),
-        ),
+        jwt_config.remove_jwt_cookie(cookies).map_err(|e| {
+            tracing::error!("Failed to remove JWT cookie: {:?}", e);
+            HttpError::InvalidCredentials
+        })?,
         Json("Logged out".into()),
     ))
 }
