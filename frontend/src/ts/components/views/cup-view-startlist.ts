@@ -246,7 +246,7 @@ export default class CupViewStartlist extends LitElement {
                                   </td>
                                   <td>
                                     ${new Date(
-                                      act.tpAct.predicted_start
+                                      act.tpAct.planned_start
                                     ).toLocaleTimeString(undefined, {
                                       minute: "2-digit",
                                       hour: "2-digit",
