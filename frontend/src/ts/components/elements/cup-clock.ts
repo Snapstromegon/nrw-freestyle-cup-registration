@@ -33,11 +33,12 @@ export default class CupClock extends LitElement {
 
   override render() {
     return html`<div id="wrapper">
-      ${new Date().toLocaleTimeString(undefined, {
+      ${new Date().toLocaleTimeString("de-DE", {
         hour: "2-digit",
         minute: "2-digit",
         second: "2-digit",
         hourCycle: "h23",
+        hour12: false,
       })}
     </div>`;
   }
