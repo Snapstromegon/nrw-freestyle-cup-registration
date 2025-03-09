@@ -201,6 +201,8 @@ export default class CupViewInfoBoard extends LitElement {
       grid-template-columns: 1fr 1fr;
       text-align: center;
       gap: 3vh;
+      height: 100%;
+      width: 100%;
 
       & section {
         display: flex;
