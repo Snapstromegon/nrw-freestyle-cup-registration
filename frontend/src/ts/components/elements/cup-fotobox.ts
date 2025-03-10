@@ -20,15 +20,15 @@ export default class CupFotobox extends LitElement {
       width: 100%;
       min-height: 0;
       min-width: 0;
+      place-items: center;
     }
 
     img {
       grid-area: img;
-      height: 100%;
-      width: 100%;
+      max-height: 100%;
+      max-width: 100%;
       min-height: 0;
       min-width: 0;
-      object-fit: contain;
       opacity: 0;
       transition: opacity 1s;
     }
@@ -43,7 +43,7 @@ export default class CupFotobox extends LitElement {
   override connectedCallback(): void {
     super.connectedCallback();
     this.#intervalId = setInterval(() => {
-      this.counter=Date.now() / 1000 / 5;
+      this.counter = Date.now() / 1000 / 5;
       this.requestUpdate();
     }, 5000);
   }
@@ -56,6 +56,10 @@ export default class CupFotobox extends LitElement {
   }
 
   @property() src?: string;
+
+  @property({ type: Boolean, reflect: true }) invisible = true;
+  @property({ type: Boolean, reflect: true }) loaded = false;
+  @property({ type: Boolean, attribute: "auto-reload" }) autoReload = false;
 
   /*
   0123456789
@@ -77,16 +81,34 @@ export default class CupFotobox extends LitElement {
   }
 
   override render() {
-    console.log(this.counter, this.aIndex, this.bIndex, this.aActive);
+    console.log("Fotobox updating");
     return html`<div id="wrapper">
       <img
-        src="${this.src || ""}?${this.aIndex}-a"
+        id="image-a"
+        src="${this.src || ""}${this.autoReload ? `?${this.aIndex}-a` : ""}"
         class=${classMap({ visible: this.aActive })}
+        @error=${this.loadFailed}
+        @load=${this.loadSuccess}
       />
       <img
-        src="${this.src || ""}?${this.bIndex}-b"
+        id="image-b"
+        src="${this.src || ""}${this.autoReload ? `?${this.bIndex}-b` : ""}"
         class=${classMap({ visible: !this.aActive })}
+        @error=${this.loadFailed}
+        @load=${this.loadSuccess}
       />
     </div>`;
+  }
+
+  loadFailed(event: ErrorEvent) {
+    console.error("Image failed to load", event);
+    this.invisible = true;
+    this.loaded = false;
+  }
+  
+  loadSuccess(event: Event) {
+    this.loaded = true;
+    this.invisible = false;
+    console.log("Image loaded", event);
   }
 }

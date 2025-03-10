@@ -1,5 +1,5 @@
 import { LitElement, html, css, nothing } from "lit";
-import { customElement } from "lit/decorators.js";
+import { customElement, state } from "lit/decorators.js";
 import { client, components } from "../../apiClient";
 import { Task } from "@lit/task";
 import "../elements/cup-context-club.js";
@@ -143,6 +143,7 @@ export default class CupViewInfoBoard extends LitElement {
       min-width: 0;
       grid-area: main;
       padding: 10vh;
+      padding-bottom: 0;
       align-self: center;
       position: relative;
       width: 100%;
@@ -160,6 +161,7 @@ export default class CupViewInfoBoard extends LitElement {
         align-items: center;
         gap: 5vh;
         text-align: center;
+        justify-content: center;
         height: 100%;
         width: 100%;
 
@@ -190,19 +192,27 @@ export default class CupViewInfoBoard extends LitElement {
       }
     }
 
-    .break cup-fotobox {
-      width: 100%;
-      height: 100%;
-      flex-shrink: 1;
+    main .break {
+      gap: 1vh;
     }
 
     .judging {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 50% 50%;
       text-align: center;
       gap: 3vh;
       height: 100%;
       width: 100%;
+      animation: show-judge-image 1s;
+
+      &:has(cup-fotobox[invisible]) {
+        grid-template-columns: 25% 50% 25%;
+        animation: none;
+      }
+
+      & cup-fotobox {
+        animation: show-judge-image-inside 1s;
+      }
 
       & section {
         display: flex;
@@ -210,6 +220,7 @@ export default class CupViewInfoBoard extends LitElement {
         align-items: center;
         gap: 5vh;
         text-align: center;
+        grid-column: 2 / 3;
       }
 
       & h1 {
@@ -235,29 +246,47 @@ export default class CupViewInfoBoard extends LitElement {
       gap: 10vh;
       text-align: center;
     }
+
+    cup-fotobox {
+      min-height: 0;
+      width: 100%;
+    }
+
+    @keyframes show-judge-image-inside {
+      from {
+        opacity: 0;
+        display: none;
+      }
+      49.9999% {
+        opacity: 0;
+        display: none;
+      }
+      50% {
+        opacity: 0;
+        display: block;
+      }
+      to {
+        opacity: 1;
+        display: block;
+      }
+    }
+
+    @keyframes show-judge-image {
+      from {
+        grid-template-columns: 25% 50% 25%;
+      }
+      50% {
+        grid-template-columns: 50% 50% 0%;
+      }
+      to {
+        grid-template-columns: 50% 50%;
+      }
+    }
   `;
 
   lastRawTimeplan?: components["schemas"]["Timeplan"];
 
-  rawTimeplan = new Task(this, {
-    task: async () => {
-      const newTimeplan = (await client.GET("/api/query/predict_timeplan"))
-        .data;
-      if (
-        JSON.stringify(newTimeplan) !== JSON.stringify(this.lastRawTimeplan)
-      ) {
-        this.lastRawTimeplan = newTimeplan;
-        return newTimeplan;
-      }
-      return this.lastRawTimeplan;
-    },
-    args: () => [],
-  });
-
-  predictedTimeplan = new Task(this, {
-    task: async ([rawTimeplan]) => rawTimeplan,
-    args: () => [this.rawTimeplan.value],
-  });
+  @state() predictedTimeplan?: components["schemas"]["Timeplan"];
 
   allActs = new Task(this, {
     task: async () => (await client.GET("/api/query/list_acts")).data,
@@ -268,8 +297,15 @@ export default class CupViewInfoBoard extends LitElement {
 
   override connectedCallback() {
     super.connectedCallback?.();
-    this.dataUpdateInterval = setInterval(() => {
-      this.rawTimeplan.run();
+    this.dataUpdateInterval = setInterval(async () => {
+      const newTimeplan = (await client.GET("/api/query/predict_timeplan"))
+        .data;
+      if (
+        JSON.stringify(newTimeplan) !== JSON.stringify(this.lastRawTimeplan)
+      ) {
+        this.predictedTimeplan = newTimeplan;
+        this.lastRawTimeplan = this.predictedTimeplan;
+      }
     }, 1000);
   }
 
@@ -278,7 +314,112 @@ export default class CupViewInfoBoard extends LitElement {
     clearInterval(this.dataUpdateInterval);
   }
 
+  renderMain() {
+    if (!this.predictedTimeplan) {
+      return html`<div class="break">
+        <cup-fotobox
+          src="/assets/images/logo_with_blobs.svg"
+          auto-reload
+        ></cup-fotobox>
+        <cup-clock></cup-clock>
+      </div>`;
+    }
+    let timeplan = this.predictedTimeplan;
+    const status = timeplanStatus(timeplan);
+    const currentEntry = currentTimeplanEntry(timeplan);
+    const currentAct = currentTimeplanAct(timeplan);
+    const lastEntry = lastTimeplanEntry(timeplan);
+    switch (status) {
+      case TimeplanStatus.Break:
+        return html`<div class="break">
+          <cup-fotobox
+            src="${lastEntry
+              ? "http://nrw-cup-fotos:8080/random"
+              : "/assets/images/logo_with_blobs.svg"}"
+            auto-reload
+          ></cup-fotobox>
+          <cup-clock></cup-clock>
+        </div>`;
+      case TimeplanStatus.Warmup:
+        return html`<div class="warmup">
+          <h1>Einfahrzeit</h1>
+          <h2>
+            ${currentEntry && "Category" in currentEntry.timeplan_entry
+              ? currentEntry.timeplan_entry.Category.description
+              : "Invalid State"}
+          </h2>
+          <cup-countdown
+            .time=${new Date(
+              new Date(currentEntry?.predicted_start || "").getTime() +
+                (currentEntry && "Category" in currentEntry.timeplan_entry
+                  ? currentEntry.timeplan_entry.Category.einfahrzeit_seconds *
+                    1000
+                  : 0)
+            )}
+          ></cup-countdown>
+        </div>`;
+      case TimeplanStatus.Act:
+        return html`<div class="act">
+          <h1>${currentAct?.name}</h1>
+          <div class="starters">
+            ${this.allActs.value
+              ?.find((a) => a.id == currentAct?.id)
+              ?.participants.map(
+                (p) => html`
+                  <div class="starter">
+                    <h2>${p.firstname} ${p.lastname}</h2>
+                    <h3>${p.club_name}</h3>
+                  </div>
+                `
+              )}
+          </div>
+          <h3>
+            ${currentEntry && "Category" in currentEntry.timeplan_entry
+              ? currentEntry.timeplan_entry.Category.description
+              : "Invalid State"}
+          </h3>
+        </div>`;
+      case TimeplanStatus.Judging:
+        return html`<div class="judging">
+          <cup-fotobox src="http://nrw-cup-fotos:8080/newest"></cup-fotobox>
+          <section>
+            <h3>Das war...</h3>
+            <h1>${lastTimeplanAct(timeplan)?.name}</h1>
+            <div class="starters">
+              ${this.allActs.value
+                ?.find((a) => a.id == lastTimeplanAct(timeplan)?.id)
+                ?.participants.map(
+                  (p) => html`
+                    <div class="starter">
+                      <h2>${p.firstname} ${p.lastname}</h2>
+                      <h3>${p.club_name}</h3>
+                    </div>
+                  `
+                )}
+            </div>
+            <h3>
+              ${currentEntry && "Category" in currentEntry.timeplan_entry
+                ? currentEntry.timeplan_entry.Category.description
+                : "Invalid State"}
+            </h3>
+            <cup-clock></cup-clock>
+          </section>
+        </div>`;
+      case TimeplanStatus.Award:
+        return html`<div class="award">
+          <img
+            id="fallback"
+            src="/assets/images/logo_with_blobs.svg"
+            alt="NRW Freestyle Cup 2025"
+          />
+          <h1>Siegerehrung</h1>
+        </div>`;
+    }
+    return nothing;
+  }
+
   override render() {
+    console.log("Info Board Rendering", this.predictedTimeplan);
     return html`
       <div id="wrapper">
         <aside>
@@ -288,127 +429,9 @@ export default class CupViewInfoBoard extends LitElement {
             src="/assets/images/nrw-freestyle-cup.svg"
             alt="NRW Freestyle Cup 2025"
           />
-          <cup-timeplan
-            .timeplan=${this.predictedTimeplan.value}
-          ></cup-timeplan>
+          <cup-timeplan .timeplan=${this.predictedTimeplan}></cup-timeplan>
         </aside>
-        <main>
-          ${this.predictedTimeplan.render({
-            complete: (timeplan) => {
-              if (!timeplan) {
-                return html`<img
-                  id="fallback"
-                  src="/assets/images/logo_with_blobs.svg"
-                  alt="NRW Freestyle Cup 2025"
-                />`;
-              }
-              const status = timeplanStatus(timeplan);
-              const currentEntry = currentTimeplanEntry(timeplan);
-              const currentAct = currentTimeplanAct(timeplan);
-              const lastEntry = lastTimeplanEntry(timeplan);
-              switch (status) {
-                case TimeplanStatus.Break:
-                  return html`<div class="break">
-                    ${lastEntry
-                      ? html`<cup-fotobox
-                          src="http://nrw-cup-fotos:8080/random"
-                        ></cup-fotobox>`
-                      : html`<img
-                          id="fallback"
-                          src="/assets/images/logo_with_blobs.svg"
-                          alt="NRW Freestyle Cup 2025"
-                        />`}
-                    <cup-clock></cup-clock>
-                  </div>`;
-                case TimeplanStatus.Warmup:
-                  return html`<div class="warmup">
-                    <h1>Einfahrzeit</h1>
-                    <h2>
-                      ${currentEntry &&
-                      "Category" in currentEntry.timeplan_entry
-                        ? currentEntry.timeplan_entry.Category.description
-                        : "Invalid State"}
-                    </h2>
-                    <cup-countdown
-                      .time=${new Date(
-                        new Date(
-                          currentEntry?.predicted_start || ""
-                        ).getTime() +
-                          (currentEntry &&
-                          "Category" in currentEntry.timeplan_entry
-                            ? currentEntry.timeplan_entry.Category
-                                .einfahrzeit_seconds * 1000
-                            : 0)
-                      )}
-                    ></cup-countdown>
-                  </div>`;
-                case TimeplanStatus.Act:
-                  return html`<div class="act">
-                    <h1>${currentAct?.name}</h1>
-                    <div class="starters">
-                      ${this.allActs.value
-                        ?.find((a) => a.id == currentAct?.id)
-                        ?.participants.map(
-                          (p) => html`
-                            <div class="starter">
-                              <h2>${p.firstname} ${p.lastname}</h2>
-                              <h3>${p.club_name}</h3>
-                            </div>
-                          `
-                        )}
-                    </div>
-                    <h3>
-                      ${currentEntry &&
-                      "Category" in currentEntry.timeplan_entry
-                        ? currentEntry.timeplan_entry.Category.description
-                        : "Invalid State"}
-                    </h3>
-                  </div>`;
-                case TimeplanStatus.Judging:
-                  return html`<div class="judging">
-                    <cup-fotobox
-                      src="http://nrw-cup-fotos:8080/newest?${lastTimeplanAct(
-                        timeplan
-                      )?.id}"
-                    ></cup-fotobox>
-                    <section>
-                      <h3>Das war...</h3>
-                      <h1>${lastTimeplanAct(timeplan)?.name}</h1>
-                      <div class="starters">
-                        ${this.allActs.value
-                          ?.find((a) => a.id == lastTimeplanAct(timeplan)?.id)
-                          ?.participants.map(
-                            (p) => html`
-                              <div class="starter">
-                                <h2>${p.firstname} ${p.lastname}</h2>
-                                <h3>${p.club_name}</h3>
-                              </div>
-                            `
-                          )}
-                      </div>
-                      <h3>
-                        ${currentEntry &&
-                        "Category" in currentEntry.timeplan_entry
-                          ? currentEntry.timeplan_entry.Category.description
-                          : "Invalid State"}
-                      </h3>
-                      <cup-clock></cup-clock>
-                    </section>
-                  </div>`;
-                case TimeplanStatus.Award:
-                  return html`<div class="award">
-                    <img
-                      id="fallback"
-                      src="/assets/images/logo_with_blobs.svg"
-                      alt="NRW Freestyle Cup 2025"
-                    />
-                    <h1>Siegerehrung</h1>
-                  </div>`;
-              }
-              return nothing;
-            },
-          })}
-        </main>
+        <main>${this.renderMain()}</main>
         <footer>
           <img src="/assets/images/gwn.svg" alt="NRW Freestyle Cup 2025" />
           <img
