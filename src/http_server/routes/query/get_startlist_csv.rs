@@ -1,9 +1,11 @@
 use axum::Extension;
-use sqlx::SqlitePool;
 use tracing::{info, instrument};
 use uuid::Uuid;
 
-use crate::http_server::{ClientError, HttpError, routes::http_types::ActParticipant};
+use crate::{
+    http_server::{ClientError, HttpError, routes::http_types::ActParticipant},
+    reloadable_sqlite::ReloadableSqlite,
+};
 
 #[derive(Debug, serde::Serialize)]
 pub struct TimeplanAct {
@@ -101,7 +103,10 @@ pub struct Timeplan {
     ),
 )]
 #[instrument(skip(db))]
-pub async fn get_startlist_csv(Extension(db): Extension<SqlitePool>) -> Result<String, HttpError> {
+pub async fn get_startlist_csv(
+    Extension(db): Extension<ReloadableSqlite>,
+) -> Result<String, HttpError> {
+    let db = db.get().await.clone();
     let top_level_timeplan = sqlx::query!(
         r#"
         SELECT

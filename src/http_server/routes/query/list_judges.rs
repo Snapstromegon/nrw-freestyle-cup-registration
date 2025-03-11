@@ -1,9 +1,11 @@
 use axum::{Extension, Json};
-use sqlx::SqlitePool;
 use tracing::instrument;
 use uuid::Uuid;
 
-use crate::http_server::{ClientError, HttpError, extractor::auth::Auth};
+use crate::{
+    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    reloadable_sqlite::ReloadableSqlite,
+};
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct Judge {
@@ -91,7 +93,7 @@ pub struct Judge {
 )]
 #[instrument(skip(db))]
 pub async fn list_judges(
-    Extension(db): Extension<SqlitePool>,
+    Extension(db): Extension<ReloadableSqlite>,
     auth: Option<Auth>,
 ) -> Result<Json<Vec<Judge>>, HttpError> {
     auth.ok_or(HttpError::InvalidCredentials).map(|auth| {
@@ -101,6 +103,7 @@ pub async fn list_judges(
             Err(HttpError::InvalidCredentials)
         }
     })??;
+    let db = db.get().await.clone();
     let club_judges = sqlx::query_as!(
         Judge,
         r#"

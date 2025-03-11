@@ -1,8 +1,10 @@
 use axum::{Extension, Json};
-use sqlx::SqlitePool;
 use tracing::instrument;
 
-use crate::http_server::{ClientError, HttpError, extractor::auth::Auth};
+use crate::{
+    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    reloadable_sqlite::ReloadableSqlite,
+};
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct Category {
@@ -31,9 +33,10 @@ pub struct Category {
 )]
 #[instrument(skip(db))]
 pub async fn list_categories(
-    Extension(db): Extension<SqlitePool>,
+    Extension(db): Extension<ReloadableSqlite>,
     auth: Option<Auth>,
 ) -> Result<Json<Vec<Category>>, HttpError> {
+    let db = db.get().await.clone();
     let club_categories = sqlx::query_as!(
         Category,
         r#"

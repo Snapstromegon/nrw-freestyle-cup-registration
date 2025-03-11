@@ -1,9 +1,11 @@
 use axum::{Extension, Json};
-use sqlx::SqlitePool;
 use tracing::instrument;
 use uuid::Uuid;
 
-use crate::http_server::{ClientError, HttpError, extractor::auth::Auth};
+use crate::{
+    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    reloadable_sqlite::ReloadableSqlite,
+};
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct Starter {
@@ -38,7 +40,7 @@ pub struct Starter {
 )]
 #[instrument(skip(db))]
 pub async fn list_starters(
-    Extension(db): Extension<SqlitePool>,
+    Extension(db): Extension<ReloadableSqlite>,
     auth: Option<Auth>,
 ) -> Result<Json<Vec<Starter>>, HttpError> {
     auth.ok_or(HttpError::InvalidCredentials).map(|auth| {
@@ -48,6 +50,7 @@ pub async fn list_starters(
             Err(HttpError::InvalidCredentials)
         }
     })??;
+    let db = db.get().await.clone();
     let club_starters = sqlx::query_as!(
         Starter,
         r#"

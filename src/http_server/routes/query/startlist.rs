@@ -1,9 +1,11 @@
 use axum::{Extension, Json};
-use sqlx::SqlitePool;
 use tracing::instrument;
 use uuid::Uuid;
 
-use crate::http_server::{ClientError, HttpError};
+use crate::{
+    http_server::{ClientError, HttpError},
+    reloadable_sqlite::ReloadableSqlite,
+};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, utoipa::ToSchema, Clone)]
 pub struct StartlistActParticipant {
@@ -39,7 +41,7 @@ pub struct StartlistAct {
 )]
 #[instrument(skip(db))]
 pub async fn startlist(
-    Extension(db): Extension<SqlitePool>,
+    Extension(db): Extension<ReloadableSqlite>,
 ) -> Result<Json<Vec<StartlistAct>>, HttpError> {
     pub struct DBStartlistAct {
         id: Uuid,
@@ -67,6 +69,7 @@ pub async fn startlist(
             }
         }
     }
+    let db = db.get().await.clone();
     let acts = sqlx::query_as!(
         DBStartlistAct,
         r#"

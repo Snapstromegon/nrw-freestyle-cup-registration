@@ -1,9 +1,11 @@
 use axum::{Extension, Json};
-use sqlx::SqlitePool;
 use tracing::{info, instrument};
 use uuid::Uuid;
 
-use crate::http_server::{ClientError, HttpError};
+use crate::{
+    http_server::{ClientError, HttpError},
+    reloadable_sqlite::ReloadableSqlite,
+};
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct TimeplanAct {
@@ -100,8 +102,9 @@ pub struct Timeplan {
 )]
 #[instrument(skip(db))]
 pub async fn predict_timeplan(
-    Extension(db): Extension<SqlitePool>,
+    Extension(db): Extension<ReloadableSqlite>,
 ) -> Result<Json<Timeplan>, HttpError> {
+    let db = db.get().await.clone();
     let top_level_timeplan = sqlx::query!(
         r#"
         SELECT

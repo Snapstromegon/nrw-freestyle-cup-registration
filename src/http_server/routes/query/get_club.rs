@@ -1,9 +1,11 @@
 use axum::{Extension, Json, extract::Query};
-use sqlx::SqlitePool;
 use tracing::instrument;
 use uuid::Uuid;
 
-use crate::http_server::{ClientError, HttpError, extractor::auth::Auth};
+use crate::{
+    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    reloadable_sqlite::ReloadableSqlite,
+};
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct Club {
@@ -32,10 +34,11 @@ pub struct GetClubQuery {
 )]
 #[instrument(skip(db))]
 pub async fn get_club(
-    Extension(db): Extension<SqlitePool>,
+    Extension(db): Extension<ReloadableSqlite>,
     Query(query): Query<GetClubQuery>,
     auth: Option<Auth>,
 ) -> Result<Json<Club>, HttpError> {
+    let db = db.get().await.clone();
     let mut club_id = query.club_id;
     if let Some(auth) = auth {
         if club_id.is_none() {

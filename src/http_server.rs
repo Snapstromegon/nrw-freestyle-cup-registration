@@ -2,10 +2,12 @@ use std::{path::PathBuf, sync::Arc};
 
 use axum::{Json, response::IntoResponse};
 use serde::Serialize;
-use sqlx::SqlitePool;
 use tracing::{error, info};
 
-use crate::{jwt::JWTConfig, mailer::Mailer, system_status::StatusOptions};
+use crate::{
+    jwt::JWTConfig, mailer::Mailer, reloadable_sqlite::ReloadableSqlite,
+    system_status::StatusOptions,
+};
 
 pub mod extractor;
 pub mod routes;
@@ -87,10 +89,11 @@ pub struct HttpServerOptions {
     pub bind_address: String,
     pub base_url: String,
     pub data_path: PathBuf,
+    pub reload_db_token: String,
 }
 
 pub struct HttpServer {
-    db: SqlitePool,
+    db: ReloadableSqlite,
     mailer: Arc<Mailer>,
     jwt: Arc<JWTConfig>,
     options: Arc<HttpServerOptions>,
@@ -100,7 +103,7 @@ pub struct HttpServer {
 impl HttpServer {
     pub fn new(
         options: HttpServerOptions,
-        db: SqlitePool,
+        db: ReloadableSqlite,
         jwt: Arc<JWTConfig>,
         mailer: Arc<Mailer>,
         status_options: Arc<StatusOptions>,

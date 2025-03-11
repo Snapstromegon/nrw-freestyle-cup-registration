@@ -1,11 +1,13 @@
 use axum::{Extension, Json};
-use sqlx::SqlitePool;
 use tracing::instrument;
 use uuid::Uuid;
 
-use crate::http_server::{
-    ClientError, HttpError,
-    routes::http_types::{Act, ActParticipant},
+use crate::{
+    http_server::{
+        ClientError, HttpError,
+        routes::http_types::{Act, ActParticipant},
+    },
+    reloadable_sqlite::ReloadableSqlite,
 };
 
 /// List all users.
@@ -20,7 +22,9 @@ use crate::http_server::{
     ),
 )]
 #[instrument(skip(db))]
-pub async fn list_acts(Extension(db): Extension<SqlitePool>) -> Result<Json<Vec<Act>>, HttpError> {
+pub async fn list_acts(
+    Extension(db): Extension<ReloadableSqlite>,
+) -> Result<Json<Vec<Act>>, HttpError> {
     pub struct DBAct {
         id: Uuid,
         name: String,
@@ -55,6 +59,7 @@ pub async fn list_acts(Extension(db): Extension<SqlitePool>) -> Result<Json<Vec<
             }
         }
     }
+    let db = db.get().await.clone();
     let acts = sqlx::query_as!(
         DBAct,
         r#"

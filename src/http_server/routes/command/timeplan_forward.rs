@@ -1,11 +1,13 @@
 use axum::{Extension, Json, http::StatusCode};
 use serde::Serialize;
-use sqlx::SqlitePool;
 use tracing::{info, instrument};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::http_server::{ClientError, HttpError, extractor::auth::Auth};
+use crate::{
+    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    reloadable_sqlite::ReloadableSqlite,
+};
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct SetTimeplanForwardResponse {}
@@ -26,12 +28,13 @@ pub struct SetTimeplanForwardResponse {}
 #[instrument(skip(db))]
 #[axum::debug_handler]
 pub async fn timeplan_forward(
-    Extension(db): Extension<SqlitePool>,
+    Extension(db): Extension<ReloadableSqlite>,
     auth: Auth,
 ) -> Result<Json<SetTimeplanForwardResponse>, HttpError> {
     if !auth.is_admin() {
         return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
     }
+    let db = db.get().await.clone();
 
     let running_timeplan_entry = sqlx::query!(
         "SELECT id, category FROM timeplan WHERE started_at IS NOT NULL AND ended_at IS NULL ORDER BY id LIMIT 1"

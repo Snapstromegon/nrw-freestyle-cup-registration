@@ -1,9 +1,11 @@
 use axum::{Extension, Json};
-use sqlx::SqlitePool;
 use tracing::instrument;
 use uuid::Uuid;
 
-use crate::http_server::{HttpError, extractor::auth::Auth, routes::http_types::User};
+use crate::{
+    http_server::{HttpError, extractor::auth::Auth, routes::http_types::User},
+    reloadable_sqlite::ReloadableSqlite,
+};
 
 /// Get information about the currently authenticated user.
 #[utoipa::path(
@@ -16,9 +18,10 @@ use crate::http_server::{HttpError, extractor::auth::Auth, routes::http_types::U
 )]
 #[instrument(skip(db))]
 pub async fn whoami(
-    Extension(db): Extension<SqlitePool>,
+    Extension(db): Extension<ReloadableSqlite>,
     auth: Auth,
 ) -> Result<Json<User>, HttpError> {
+    let db = db.get().await.clone();
     let user = sqlx::query_as!(
         User,
         r#"

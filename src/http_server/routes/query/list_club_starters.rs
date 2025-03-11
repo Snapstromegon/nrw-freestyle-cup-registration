@@ -1,9 +1,11 @@
 use axum::{Extension, Json, extract::Query};
-use sqlx::SqlitePool;
 use tracing::instrument;
 use uuid::Uuid;
 
-use crate::http_server::{ClientError, HttpError, extractor::auth::Auth};
+use crate::{
+    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    reloadable_sqlite::ReloadableSqlite,
+};
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct ClubStarter {
@@ -43,10 +45,11 @@ pub struct ListClubStartersQuery {
 )]
 #[instrument(skip(db))]
 pub async fn list_club_starters(
-    Extension(db): Extension<SqlitePool>,
+    Extension(db): Extension<ReloadableSqlite>,
     Query(query): Query<ListClubStartersQuery>,
     auth: Option<Auth>,
 ) -> Result<Json<Vec<ClubStarter>>, HttpError> {
+    let db = db.get().await.clone();
     let club_id = query.club_id;
     let club_starters = sqlx::query_as!(
         ClubStarter,

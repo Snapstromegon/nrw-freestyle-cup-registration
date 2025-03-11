@@ -5,6 +5,7 @@ use nrw_freestyle_cup_registration::{
     http_server::{HttpServer, HttpServerOptions},
     jwt::JWTConfig,
     mailer::Mailer,
+    reloadable_sqlite::ReloadableSqlite,
     system_status::StatusOptions,
     utils,
 };
@@ -49,6 +50,8 @@ struct Args {
     pub end_music_upload_date: OffsetDateTime,
     #[clap(long, env = "INSECURE_COOKIES")]
     pub insecure_cookies: bool,
+    #[clap(long, env = "RELOAD_DB_TOKEN", default_value = "reload_db")]
+    pub reload_db_token: String,
 }
 
 fn parse_date(s: &str) -> Result<OffsetDateTime, time::error::Parse> {
@@ -117,8 +120,9 @@ async fn main() -> anyhow::Result<()> {
             bind_address: args.http_address,
             base_url: args.base_url.to_string(),
             data_path: args.data,
+            reload_db_token: args.reload_db_token,
         },
-        db,
+        ReloadableSqlite::new(db, args.db.to_string_lossy().to_string()),
         Arc::new(jwt_config),
         Arc::new(mailer),
         Arc::new(StatusOptions {

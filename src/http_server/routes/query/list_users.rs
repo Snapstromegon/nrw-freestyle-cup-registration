@@ -1,9 +1,11 @@
 use axum::{Extension, Json};
-use sqlx::SqlitePool;
 use tracing::instrument;
 use uuid::Uuid;
 
-use crate::http_server::{ClientError, HttpError, extractor::auth::Auth, routes::http_types::User};
+use crate::{
+    http_server::{ClientError, HttpError, extractor::auth::Auth, routes::http_types::User},
+    reloadable_sqlite::ReloadableSqlite,
+};
 
 /// List all users.
 #[utoipa::path(
@@ -18,12 +20,13 @@ use crate::http_server::{ClientError, HttpError, extractor::auth::Auth, routes::
 )]
 #[instrument(skip(db))]
 pub async fn list_users(
-    Extension(db): Extension<SqlitePool>,
+    Extension(db): Extension<ReloadableSqlite>,
     auth: Auth,
 ) -> Result<Json<Vec<User>>, HttpError> {
     if !auth.is_admin {
         return Err(HttpError::InvalidCredentials);
     }
+    let db = db.get().await.clone();
     let users = sqlx::query_as!(
         User,
         r#"

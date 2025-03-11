@@ -5,7 +5,6 @@ pub mod query;
 use axum::{Extension, Router, extract::Request, http::HeaderName};
 use axum_embed::{FallbackBehavior, ServeEmbed};
 use rust_embed::RustEmbed;
-use sqlx::SqlitePool;
 use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::{
@@ -18,7 +17,10 @@ use utoipa::{OpenApi as OpenApiTrait, openapi::OpenApi};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::{jwt::JWTConfig, mailer::Mailer, system_status::StatusOptions};
+use crate::{
+    jwt::JWTConfig, mailer::Mailer, reloadable_sqlite::ReloadableSqlite,
+    system_status::StatusOptions,
+};
 
 use super::HttpServerOptions;
 
@@ -57,7 +59,7 @@ fn get_openapi_router() -> (Router, OpenApi) {
 
 pub fn get_api_router(
     http_options: Arc<HttpServerOptions>,
-    db: SqlitePool,
+    db: ReloadableSqlite,
     mailer: Arc<Mailer>,
     jwt_config: Arc<JWTConfig>,
     status_options: Arc<StatusOptions>,
@@ -79,7 +81,7 @@ pub fn get_api_openapi() -> OpenApi {
 
 pub fn get_router(
     http_options: Arc<HttpServerOptions>,
-    db: SqlitePool,
+    db: ReloadableSqlite,
     mailer: Arc<Mailer>,
     jwt_config: Arc<JWTConfig>,
     status_options: Arc<StatusOptions>,

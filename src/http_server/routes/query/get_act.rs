@@ -1,12 +1,14 @@
 use axum::{Extension, Json, extract::Query};
-use sqlx::SqlitePool;
 use tracing::instrument;
 use uuid::Uuid;
 
-use crate::http_server::{
-    ClientError, HttpError,
-    extractor::auth::Auth,
-    routes::http_types::{Act, ActParticipant},
+use crate::{
+    http_server::{
+        ClientError, HttpError,
+        extractor::auth::Auth,
+        routes::http_types::{Act, ActParticipant},
+    },
+    reloadable_sqlite::ReloadableSqlite,
 };
 
 #[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
@@ -28,7 +30,7 @@ pub struct GetActQuery {
 )]
 #[instrument(skip(db))]
 pub async fn get_act(
-    Extension(db): Extension<SqlitePool>,
+    Extension(db): Extension<ReloadableSqlite>,
     Query(query): Query<GetActQuery>,
     auth: Option<Auth>,
 ) -> Result<Json<Act>, HttpError> {
@@ -66,6 +68,7 @@ pub async fn get_act(
             }
         }
     }
+    let db = db.get().await.clone();
     let act = sqlx::query_as!(
         DBAct,
         r#"

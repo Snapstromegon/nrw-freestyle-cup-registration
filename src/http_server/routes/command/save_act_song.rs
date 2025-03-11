@@ -6,7 +6,6 @@ use axum::{
     http::StatusCode,
 };
 use serde::{Deserialize, Serialize};
-use sqlx::SqlitePool;
 use tokio::{
     fs::{DirBuilder, File},
     io::AsyncWriteExt,
@@ -17,6 +16,7 @@ use uuid::Uuid;
 
 use crate::{
     http_server::{ClientError, HttpError, HttpServerOptions, extractor::auth::Auth},
+    reloadable_sqlite::ReloadableSqlite,
     system_status::Capabilities,
 };
 
@@ -56,13 +56,14 @@ pub struct Upload {
 #[instrument(skip(db))]
 #[axum::debug_handler]
 pub async fn save_act_song(
-    Extension(db): Extension<SqlitePool>,
+    Extension(db): Extension<ReloadableSqlite>,
     http_options: Extension<Arc<HttpServerOptions>>,
     auth: Auth,
     capabilities: Capabilities,
     Query(query): Query<SaveActSongQuery>,
     mut body: Multipart,
 ) -> Result<Json<SaveActSongResponse>, HttpError> {
+    let db = db.get().await.clone();
     let entry = body
         .next_field()
         .await

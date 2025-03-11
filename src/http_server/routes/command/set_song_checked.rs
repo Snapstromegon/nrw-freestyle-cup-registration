@@ -1,11 +1,13 @@
 use axum::{Extension, Json, http::StatusCode};
 use serde::{Deserialize, Serialize};
-use sqlx::SqlitePool;
 use tracing::{info, instrument};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::http_server::{ClientError, HttpError, extractor::auth::Auth};
+use crate::{
+    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    reloadable_sqlite::ReloadableSqlite,
+};
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct SetSongCheckedResponse {}
@@ -33,13 +35,14 @@ pub struct SongCheckedBody {
 #[instrument(skip(db))]
 #[axum::debug_handler]
 pub async fn set_song_checked(
-    Extension(db): Extension<SqlitePool>,
+    Extension(db): Extension<ReloadableSqlite>,
     auth: Auth,
     Json(body): Json<SongCheckedBody>,
 ) -> Result<Json<SetSongCheckedResponse>, HttpError> {
     if !auth.is_admin() {
         return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
     }
+    let db = db.get().await.clone();
 
     info!(
         "Setting song checked to {} for act {}",

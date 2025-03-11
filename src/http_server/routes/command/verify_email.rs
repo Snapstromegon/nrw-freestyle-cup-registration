@@ -3,7 +3,6 @@ use std::sync::Arc;
 use axum::{Extension, Json};
 use axum_extra::extract::CookieJar;
 use serde::{Deserialize, Serialize};
-use sqlx::SqlitePool;
 use tracing::{info, instrument};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -11,6 +10,7 @@ use uuid::Uuid;
 use crate::{
     http_server::{ClientError, HttpError},
     jwt::JWTConfig,
+    reloadable_sqlite::ReloadableSqlite,
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -38,12 +38,13 @@ pub struct VerifyMailBody {
 #[instrument(skip(db, jwt_config))]
 #[axum::debug_handler]
 pub async fn verify_email(
-    Extension(db): Extension<SqlitePool>,
+    Extension(db): Extension<ReloadableSqlite>,
     Extension(jwt_config): Extension<Arc<JWTConfig>>,
     cookies: CookieJar,
     Json(body): Json<VerifyMailBody>,
 ) -> Result<(CookieJar, Json<VerifyMailResponse>), HttpError> {
     info!("Verifying email");
+    let db = db.get().await.clone();
     let user = sqlx::query!(
         r#"
         SELECT user_id as "user_id!: Uuid" FROM mail_verification WHERE id = ?

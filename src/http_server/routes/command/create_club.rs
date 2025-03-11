@@ -1,12 +1,12 @@
 use axum::{Extension, Json, http::StatusCode};
 use serde::{Deserialize, Serialize};
-use sqlx::SqlitePool;
 use tracing::instrument;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
     http_server::{ClientError, HttpError, extractor::auth::Auth},
+    reloadable_sqlite::ReloadableSqlite,
     system_status::Capabilities,
 };
 
@@ -37,7 +37,7 @@ pub struct CreateClubBody {
 #[instrument(skip(db))]
 #[axum::debug_handler]
 pub async fn create_club(
-    Extension(db): Extension<SqlitePool>,
+    Extension(db): Extension<ReloadableSqlite>,
     auth: Auth,
     capabilities: Capabilities,
     Json(body): Json<CreateClubBody>,
@@ -45,6 +45,7 @@ pub async fn create_club(
     if !capabilities.can_create_club {
         return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
     }
+    let db = db.get().await.clone();
     let club_id = Uuid::now_v7();
     sqlx::query!(
         r#"

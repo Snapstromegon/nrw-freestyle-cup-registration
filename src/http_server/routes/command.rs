@@ -12,6 +12,7 @@ mod edit_club_starter;
 mod login;
 mod logout;
 mod register;
+mod reload_db;
 mod rename_club;
 mod request_password_reset;
 mod resend_mail_validation;
@@ -48,5 +49,6 @@ pub fn get_command_router() -> OpenApiRouter {
         .routes(routes!(set_act_order::set_act_order))
         .routes(routes!(timeplan_forward::timeplan_forward))
         .routes(routes!(timeplan_backward::timeplan_backward))
+        .routes(routes!(reload_db::reload_db))
         .layer(DefaultBodyLimit::max(1024 * 1024 * 10))
 }

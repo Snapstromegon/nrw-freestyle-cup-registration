@@ -1,12 +1,12 @@
 use axum::{Extension, Json, http::StatusCode};
 use serde::{Deserialize, Serialize};
-use sqlx::SqlitePool;
 use tracing::instrument;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
     http_server::{ClientError, HttpError, extractor::auth::Auth},
+    reloadable_sqlite::ReloadableSqlite,
     system_status::Capabilities,
     utils::{delete_act, get_act_id_for_starter_id, set_act},
 };
@@ -47,7 +47,7 @@ pub struct EditClubStarterBody {
 #[instrument(skip(db))]
 #[axum::debug_handler]
 pub async fn edit_club_starter(
-    Extension(db): Extension<SqlitePool>,
+    Extension(db): Extension<ReloadableSqlite>,
     auth: Auth,
     capabilities: Capabilities,
     Json(mut body): Json<EditClubStarterBody>,
@@ -55,6 +55,7 @@ pub async fn edit_club_starter(
     if !capabilities.can_register_starter {
         return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
     }
+    let db = db.get().await.clone();
 
     let self_name = format!("{} {}", body.firstname, body.lastname);
 

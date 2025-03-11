@@ -6,10 +6,12 @@ use axum::{
     response::IntoResponse,
 };
 use axum_extra::extract::CookieJar;
-use sqlx::SqlitePool;
 use uuid::Uuid;
 
-use crate::jwt::{JWTClaims, JWTConfig};
+use crate::{
+    jwt::{JWTClaims, JWTConfig},
+    reloadable_sqlite::ReloadableSqlite,
+};
 
 #[derive(Debug)]
 pub struct Auth {
@@ -61,14 +63,14 @@ impl<S: Send + Sync> OptionalFromRequestParts<S> for Auth {
             )
             .map_err(|_| Error::JwtInvalid)?;
             let user_id = token_data.claims.sub();
-            let db = parts.extensions.get::<SqlitePool>().unwrap();
+            let db = parts.extensions.get::<ReloadableSqlite>().unwrap();
             let user = sqlx::query!(
                 r#"
                 SELECT email, name, is_admin, club_id as "club_id: Uuid", email_verified FROM users WHERE id = ?
                 "#,
                 user_id,
             )
-            .fetch_one(db)
+            .fetch_one(&db.get().await.clone())
             .await
             .map_err(|_| Error::UserNotFound)?;
             Ok(Some(Auth {

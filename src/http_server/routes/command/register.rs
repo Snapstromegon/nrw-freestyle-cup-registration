@@ -15,6 +15,7 @@ use crate::{
     http_server::{ClientError, HttpError, HttpServerOptions},
     jwt::JWTConfig,
     mailer::Mailer,
+    reloadable_sqlite::ReloadableSqlite,
     system_status::Capabilities,
     templates::VerifyMail,
     utils::check_password,
@@ -51,7 +52,7 @@ pub struct RegisterBody {
 pub async fn register(
     cookies: CookieJar,
     capabilities: Capabilities,
-    Extension(db): Extension<SqlitePool>,
+    Extension(db): Extension<ReloadableSqlite>,
     Extension(mailer): Extension<Arc<Mailer>>,
     Extension(jwt_config): Extension<Arc<JWTConfig>>,
     Extension(http_options): Extension<Arc<HttpServerOptions>>,
@@ -60,6 +61,7 @@ pub async fn register(
     if !capabilities.can_register {
         return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
     }
+    let db = db.get().await.clone();
     check_password(&body.password).map_err(HttpError::ErrorMessages)?;
     check_email_exists(&db, &body.email).await?;
     let user_id = Uuid::now_v7();
