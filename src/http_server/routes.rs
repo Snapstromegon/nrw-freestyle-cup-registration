@@ -39,7 +39,7 @@ struct StaticAssets;
     ),
     servers(
         (url = "http://localhost:3000"),
-        (url = "https://registrierung.freestyle-cup.nrw"),
+        (url = "https://anmeldung.freestyle-cup.nrw"),
     ),
     // security(
     //     (),

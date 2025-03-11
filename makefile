@@ -52,3 +52,6 @@ reset: clean-frontend
 download:
 	rsync -v uberspace:nrw-freestyle-cup-registration/db.sqlite db.sqlite
 	rsync -v -r uberspace:nrw-freestyle-cup-registration/data/ data/
+
+sync-up:
+	rsync -v db.sqlite uberspace:nrw-freestyle-cup-registration/db.sqlite
