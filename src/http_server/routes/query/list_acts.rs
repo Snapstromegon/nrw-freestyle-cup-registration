@@ -3,7 +3,10 @@ use sqlx::SqlitePool;
 use tracing::instrument;
 use uuid::Uuid;
 
-use crate::http_server::{routes::http_types::{Act, ActParticipant}, ClientError, HttpError};
+use crate::http_server::{
+    ClientError, HttpError,
+    routes::http_types::{Act, ActParticipant},
+};
 
 /// List all users.
 #[utoipa::path(
@@ -17,9 +20,7 @@ use crate::http_server::{routes::http_types::{Act, ActParticipant}, ClientError,
     ),
 )]
 #[instrument(skip(db))]
-pub async fn list_acts(
-    Extension(db): Extension<SqlitePool>,
-) -> Result<Json<Vec<Act>>, HttpError> {
+pub async fn list_acts(Extension(db): Extension<SqlitePool>) -> Result<Json<Vec<Act>>, HttpError> {
     pub struct DBAct {
         id: Uuid,
         name: String,

@@ -3,7 +3,11 @@ use sqlx::SqlitePool;
 use tracing::instrument;
 use uuid::Uuid;
 
-use crate::http_server::{extractor::auth::Auth, routes::http_types::{Act, ActParticipant}, ClientError, HttpError};
+use crate::http_server::{
+    ClientError, HttpError,
+    extractor::auth::Auth,
+    routes::http_types::{Act, ActParticipant},
+};
 
 #[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
 pub struct GetActQuery {
@@ -37,7 +41,7 @@ pub async fn get_act(
         is_pair: Option<bool>,
         max_age: Option<f64>,
         is_sonderpokal: Option<bool>,
-        participants: sqlx::types::Json<Vec<ActParticipant >>,
+        participants: sqlx::types::Json<Vec<ActParticipant>>,
         category: Option<String>,
         song_checked: bool,
         act_order: Option<i64>,

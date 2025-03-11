@@ -205,8 +205,7 @@ pub async fn predict_timeplan(
                 let mut timeplan_acts = vec![];
                 for act in acts {
                     if let (Some(started_at), None) = (act.started_at, act.ended_at) {
-                        entry_offset =
-                            Some((started_at - next_planned_start_time).whole_seconds());
+                        entry_offset = Some((started_at - next_planned_start_time).whole_seconds());
                     }
 
                     next_predicted_start_time =

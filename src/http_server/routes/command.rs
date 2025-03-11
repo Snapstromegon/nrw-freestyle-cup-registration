@@ -20,9 +20,9 @@ mod save_act_song;
 mod set_act_order;
 mod set_payment;
 mod set_song_checked;
-mod verify_email;
-mod timeplan_forward;
 mod timeplan_backward;
+mod timeplan_forward;
+mod verify_email;
 
 pub fn get_command_router() -> OpenApiRouter {
     OpenApiRouter::new()
