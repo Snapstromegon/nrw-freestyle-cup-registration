@@ -157,5 +157,7 @@ const niceTime = (dateString: string) => {
   return date.toLocaleTimeString(undefined, {
     hour: "2-digit",
     minute: "2-digit",
+    hourCycle: "h23",
+    hour12: false,
   });
 };
