@@ -123,9 +123,9 @@ export default class CupTimeplan extends LitElement {
                             <h4>${act.name}</h4>
                             <p class="time">${niceTime(act.predicted_start)}</p>
                             <p>
-                              ${acts?.find(
+                              ${this.description?acts?.find(
                                 (completeAct) => completeAct.id == act.id
-                              )?.description}
+                              )?.description:nothing}
                             </p>
                             ${this.isAdmin
                               ? html`<input
