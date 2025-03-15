@@ -52,6 +52,8 @@ export default class CupTimeplan extends LitElement {
     args: () => [],
   });
 
+  @property({type: Boolean}) description: boolean = false;
+
   override render() {
     return html`<div id="wrapper">
       ${this.allActs.render({
@@ -120,6 +122,11 @@ export default class CupTimeplan extends LitElement {
                             </h3>
                             <h4>${act.name}</h4>
                             <p class="time">${niceTime(act.predicted_start)}</p>
+                            <p>
+                              ${acts?.find(
+                                (completeAct) => completeAct.id == act.id
+                              )?.description}
+                            </p>
                             ${this.isAdmin
                               ? html`<input
                                   type="checkbox"

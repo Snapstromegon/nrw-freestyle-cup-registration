@@ -114,6 +114,11 @@ export default class CupApp extends LitElement {
       load: () => import("./views/cup-view-info-board.js"),
       render: () => html`<cup-view-info-board></cup-view-info-board>`,
     },
+    {
+      path: new URLPattern({ pathname: "/admin-moderation" }),
+      load: () => import("./views/cup-view-admin-moderation.js"),
+      render: () => html`<cup-view-admin-moderation></cup-view-admin-moderation>`,
+    },
   ];
 
   get currentRoute() {
