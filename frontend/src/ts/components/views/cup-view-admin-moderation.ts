@@ -105,8 +105,8 @@ export default class CupViewAdminModeration extends LitElement {
         <aside>
           <cup-timeplan
             .timeplan=${this.predictedTimeplan}
-            ?description
-            ?includeActiveAct
+            description
+            include-active-act
           ></cup-timeplan>
         </aside>
       </div>
