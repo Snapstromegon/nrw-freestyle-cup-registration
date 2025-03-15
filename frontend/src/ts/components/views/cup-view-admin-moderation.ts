@@ -1,4 +1,4 @@
-import { LitElement, html, css, nothing } from "lit";
+import { LitElement, html, css } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { client, components } from "../../apiClient";
 import { Task } from "@lit/task";
@@ -6,14 +6,6 @@ import "../elements/cup-context-club.js";
 import "../elements/cup-club-manager.js";
 import "../elements/cup-starter-table.js";
 import "../elements/cup-timeplan.js";
-import {
-  currentTimeplanAct,
-  currentTimeplanEntry,
-  lastTimeplanAct,
-  lastTimeplanEntry,
-  TimeplanStatus,
-  timeplanStatus,
-} from "../../utils.js";
 import "../elements/cup-clock.js";
 import "../elements/cup-countdown.js";
 import "../elements/cup-fotobox.js";
