@@ -381,7 +381,7 @@ export default class CupViewInfoBoard extends LitElement {
         </div>`;
       case TimeplanStatus.Judging:
         return html`<div class="judging">
-          <cup-fotobox src="http://nrw-cup-fotos:8080/newest"></cup-fotobox>
+          <cup-fotobox src="http://nrw-cup-fotos:8080/newest?date=${Math.floor(new Date().getTime()/1000/60)}"></cup-fotobox>
           <section>
             <h3>Das war...</h3>
             <h1>${lastTimeplanAct(timeplan)?.name}</h1>
