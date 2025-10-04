@@ -72,7 +72,7 @@ export default class CupViewVerifyEmail extends LitElement {
   override render() {
     return html`<cup-centered-icon-box>
       <div id="status">
-        <h1>NRW Freestyle Cup 2025</h1>
+        <h1>NRW Freestyle Cup 2026</h1>
         <h2>Email Validierung</h2>
         ${this.verificationTask.render({
           complete: () => html`<p>Email erfolgreich verifiziert!</p>`,

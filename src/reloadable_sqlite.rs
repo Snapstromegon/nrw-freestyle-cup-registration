@@ -18,7 +18,7 @@ impl ReloadableSqlite {
         }
     }
 
-    pub async fn get(&self) -> RwLockReadGuard<SqlitePool> {
+    pub async fn get(&self) -> RwLockReadGuard<'_, SqlitePool> {
         self.db.read().await
     }
 

@@ -43,16 +43,16 @@ where
 {
     type Rejection = ();
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        if let Ok(auth) = Auth::from_request_parts(parts, state).await {
-            if auth.is_admin() {
-                return Ok(Capabilities {
-                    can_register: true,
-                    can_create_club: true,
-                    can_register_starter: true,
-                    can_register_judge: true,
-                    can_upload_music: true,
-                });
-            }
+        if let Ok(auth) = Auth::from_request_parts(parts, state).await
+            && auth.is_admin()
+        {
+            return Ok(Capabilities {
+                can_register: true,
+                can_create_club: true,
+                can_register_starter: true,
+                can_register_judge: true,
+                can_upload_music: true,
+            });
         }
         let status_options = parts.extensions.get::<Arc<StatusOptions>>().unwrap();
         Ok(status_options.get_system_status())

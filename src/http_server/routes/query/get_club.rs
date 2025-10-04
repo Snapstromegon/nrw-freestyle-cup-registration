@@ -40,10 +40,10 @@ pub async fn get_club(
 ) -> Result<Json<Club>, HttpError> {
     let db = db.get().await.clone();
     let mut club_id = query.club_id;
-    if let Some(auth) = auth {
-        if club_id.is_none() {
-            club_id = auth.club_id;
-        }
+    if let Some(auth) = auth
+        && club_id.is_none()
+    {
+        club_id = auth.club_id;
     }
     if let Some(club_id) = club_id {
         let club = sqlx::query_as!(

@@ -81,14 +81,14 @@ export default class CupClubManager extends LitElement {
 
             <p>
               Änderungen können noch bis zum Anmeldeschluss am
-              <strong>02.02.2025</strong> vorgenommen werden.
+              <strong>15.03.2026</strong> vorgenommen werden.
             </p>
 
             <h4>Zahlungsinformationen</h4>
             <table class="zahlungsinformationen">
               <tr>
                 <th>Zahlungsfrist</th>
-                <td>02.03.2025</td>
+                <td>05.04.2026</td>
               </tr>
               <tr>
                 <th>Kontoinhaber</th>

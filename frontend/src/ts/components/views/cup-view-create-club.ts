@@ -98,7 +98,7 @@ export default class CupViewCreateClub extends LitElement {
   override render() {
     return html`<cup-centered-icon-box>
       <form @submit=${this.createClub}>
-        <h1>NRW Freestyle Cup 2025</h1>
+        <h1>NRW Freestyle Cup 2026</h1>
         <h2>Verein erstellen</h2>
         ${this.systemStatus?.can_create_club
           ? html`

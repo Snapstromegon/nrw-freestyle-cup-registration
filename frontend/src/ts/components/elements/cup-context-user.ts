@@ -104,7 +104,7 @@ export default class CupContextUser extends LitElement {
       ? html`<slot @login=${this.getLogin} @logout=${this.getLogin}></slot>`
       : html`<cup-centered-icon-box>
           <form @submit=${this.login}>
-            <h1>NRW Freestyle Cup 2025</h1>
+            <h1>NRW Freestyle Cup 2026</h1>
             <h2>Vereinsanmeldung</h2>
             <p>Die Anmeldung erfolgt vereinsweise. Bitte nur einen Nutzer pro Verein anlegen.</p>
             ${this.error ? html`<p id="error">${this.error}</p>` : nothing}

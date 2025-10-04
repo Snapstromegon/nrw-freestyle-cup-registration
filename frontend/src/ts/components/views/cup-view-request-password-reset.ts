@@ -94,7 +94,7 @@ export default class CupViewRequestPasswordReset extends LitElement {
   override render() {
     return html`<cup-centered-icon-box>
         <form @submit=${this.register}>
-          <h1>NRW Freestyle Cup 2025</h1>
+          <h1>NRW Freestyle Cup 2026</h1>
           <h2>Passwort zurücksetzen</h2>
           <p>Du bekommst von uns eine Mail mit einem Link, mit dem du dein Passwort zurücksetzen kannst.</p>
           ${this.error ? html`<p id="error">${this.error}</p>` : nothing}

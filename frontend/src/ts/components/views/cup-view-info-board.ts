@@ -410,7 +410,7 @@ export default class CupViewInfoBoard extends LitElement {
           <img
             id="fallback"
             src="/assets/images/logo_with_blobs.svg"
-            alt="NRW Freestyle Cup 2025"
+            alt="NRW Freestyle Cup 2026"
           />
           <h1>Siegerehrung</h1>
         </div>`;
@@ -423,25 +423,25 @@ export default class CupViewInfoBoard extends LitElement {
     return html`
       <div id="wrapper">
         <aside>
-          <h1>NRW Freestyle Cup 2025</h1>
+          <h1>NRW Freestyle Cup 2026</h1>
           <img
             id="logo"
             src="/assets/images/nrw-freestyle-cup.svg"
-            alt="NRW Freestyle Cup 2025"
+            alt="NRW Freestyle Cup 2026"
           />
           <cup-timeplan .timeplan=${this.predictedTimeplan}></cup-timeplan>
         </aside>
         <main>${this.renderMain()}</main>
         <footer>
-          <img src="/assets/images/gwn.svg" alt="NRW Freestyle Cup 2025" />
+          <img src="/assets/images/gwn.svg" alt="NRW Freestyle Cup 2026" />
           <img
             src="/assets/images/heiner-weiss.svg"
-            alt="NRW Freestyle Cup 2025"
+            alt="NRW Freestyle Cup 2026"
           />
-          <img src="/assets/images/gwn.svg" alt="NRW Freestyle Cup 2025" />
+          <img src="/assets/images/gwn.svg" alt="NRW Freestyle Cup 2026" />
           <img
             src="/assets/images/heiner-weiss.svg"
-            alt="NRW Freestyle Cup 2025"
+            alt="NRW Freestyle Cup 2026"
           />
         </footer>
       </div>

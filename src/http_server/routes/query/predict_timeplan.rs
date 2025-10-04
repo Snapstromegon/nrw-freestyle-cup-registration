@@ -307,10 +307,10 @@ pub async fn predict_timeplan(
             timeplan_entry: entry,
         };
 
-        if entry_offset.is_none() {
-            if let (Some(started_at), None) = (item.started_at, item.ended_at) {
-                entry_offset = Some((started_at - item.planned_start).whole_seconds());
-            }
+        if entry_offset.is_none()
+            && let (Some(started_at), None) = (item.started_at, item.ended_at)
+        {
+            entry_offset = Some((started_at - item.planned_start).whole_seconds());
         }
 
         if let Some(offset) = entry_offset {

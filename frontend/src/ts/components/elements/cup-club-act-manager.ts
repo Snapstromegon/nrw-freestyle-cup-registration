@@ -209,7 +209,7 @@ export default class CupClubActManager extends LitElement {
         ? nothing
         : html` <p>
             Änderungen können noch bis zum Musik Einsendeschluss am
-            <strong>02.03.2025</strong> vorgenommen werden.
+            <strong>06.04.2026</strong> vorgenommen werden.
           </p>`}
       <h5>Zusammenfassung</h5>
       <table id="summary">

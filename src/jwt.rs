@@ -7,7 +7,7 @@ use axum_extra::extract::{
 use jsonwebtoken::{DecodingKey, EncodingKey};
 use uuid::Uuid;
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct JWTClaims {
     sub: Uuid,
     exp: u64,
