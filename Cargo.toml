@@ -21,7 +21,7 @@ axum-extra = { version = "0.10", features = ["cookie"] }
 clap = { version = "4.5.23", features = ["derive", "env"] }
 dotenvy = "0.15.7"
 jsonwebtoken = { version = "10.0.0", features = ["rust_crypto"] }
-lettre = { version = "0.11.11", features = [
+lettre = { version = "0.11.19", features = [
   "builder",
   "hostname",
   "pool",
