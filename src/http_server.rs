@@ -2,7 +2,7 @@ use std::{path::PathBuf, sync::Arc};
 
 use axum::{Json, response::IntoResponse};
 use serde::Serialize;
-use tracing::{error, info};
+use tracing::info;
 
 use crate::{
     jwt::JWTConfig, mailer::Mailer, reloadable_sqlite::ReloadableSqlite,
