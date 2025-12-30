@@ -1,4 +1,4 @@
-import { LitElement, html, css } from "lit";
+import { LitElement, html, css, nothing } from "lit";
 import { customElement } from "lit/decorators.js";
 import { client, components } from "../../apiClient";
 import { Task } from "@lit/task";
@@ -176,45 +176,50 @@ export default class CupViewAdminStarters extends LitElement {
                 .filter((p) => !p.sonderpokal && !isU15(p.maxAge))
                 .sort((a, b) => a.maxAge.getTime() - b.maxAge.getTime())}
             ></cup-starter-table>
-            <h2>Sonderpokal</h2>
-            <h3>Einzel</h3>
-            <h4>U15</h4>
-            <cup-starter-table
-              .starters=${singles
-                .filter(
-                  (s) => s.single_sonderpokal && isU15(new Date(s.birthdate))
-                )
-                .sort(
-                  (a, b) =>
-                    new Date(a.birthdate).getTime() -
-                    new Date(b.birthdate).getTime()
-                )}
-            ></cup-starter-table>
-            <h4>15+</h4>
-            <cup-starter-table
-              .starters=${singles
-                .filter(
-                  (s) => s.single_sonderpokal && !isU15(new Date(s.birthdate))
-                )
-                .sort(
-                  (a, b) =>
-                    new Date(a.birthdate).getTime() -
-                    new Date(b.birthdate).getTime()
-                )}
-            ></cup-starter-table>
-            <h3>Paar</h3>
-            <h4>U15</h4>
-            <cup-starter-table
-              .pairs=${pairs
-                .filter((p) => p.sonderpokal && isU15(p.maxAge))
-                .sort((a, b) => a.maxAge.getTime() - b.maxAge.getTime())}
-            ></cup-starter-table>
-            <h4>15+</h4>
-            <cup-starter-table
-              .pairs=${pairs
-                .filter((p) => p.sonderpokal && !isU15(p.maxAge))
-                .sort((a, b) => a.maxAge.getTime() - b.maxAge.getTime())}
-            ></cup-starter-table>
+            ${singles.some((e) => e.single_sonderpokal) ||
+            pairs.some((e) => e.sonderpokal)
+              ? html`<h2>Sonderpokal</h2>
+                  <h3>Einzel</h3>
+                  <h4>U15</h4>
+                  <cup-starter-table
+                    .starters=${singles
+                      .filter(
+                        (s) =>
+                          s.single_sonderpokal && isU15(new Date(s.birthdate))
+                      )
+                      .sort(
+                        (a, b) =>
+                          new Date(a.birthdate).getTime() -
+                          new Date(b.birthdate).getTime()
+                      )}
+                  ></cup-starter-table>
+                  <h4>15+</h4>
+                  <cup-starter-table
+                    .starters=${singles
+                      .filter(
+                        (s) =>
+                          s.single_sonderpokal && !isU15(new Date(s.birthdate))
+                      )
+                      .sort(
+                        (a, b) =>
+                          new Date(a.birthdate).getTime() -
+                          new Date(b.birthdate).getTime()
+                      )}
+                  ></cup-starter-table>
+                  <h3>Paar</h3>
+                  <h4>U15</h4>
+                  <cup-starter-table
+                    .pairs=${pairs
+                      .filter((p) => p.sonderpokal && isU15(p.maxAge))
+                      .sort((a, b) => a.maxAge.getTime() - b.maxAge.getTime())}
+                  ></cup-starter-table>
+                  <h4>15+</h4>
+                  <cup-starter-table
+                    .pairs=${pairs
+                      .filter((p) => p.sonderpokal && !isU15(p.maxAge))
+                      .sort((a, b) => a.maxAge.getTime() - b.maxAge.getTime())}
+                  ></cup-starter-table>`
+              : nothing}
           `;
         },
       })}`;

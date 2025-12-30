@@ -261,10 +261,10 @@ export default class CupClubStarterManager extends LitElement {
             <th>Vorname</th>
             <th>Nachname</th>
             <th>Geburtstag</th>
-            <th>Einzel-Kategorie</th>
+            <th hidden>Einzel-Kategorie</th>
             <th>Einzel M</th>
             <th>Einzel W</th>
-            <th>Paar-Kategorie</th>
+            <th hidden>Paar-Kategorie</th>
             <th>Paar</th>
             <th>Partner</th>
             ${this.adminMode ? html`<th>Partner ID</th>` : nothing}
@@ -308,7 +308,7 @@ export default class CupClubStarterManager extends LitElement {
                         @input=${this.updateAddStarterBirthdate}
                     /></label>
                   </td>
-                  <td>
+                  <td hidden>
                     <label
                       ><span>Einzel-Kategorie</span
                       ><select @input=${this.updateAddStarterEinzelSonderpokal}>
@@ -345,7 +345,7 @@ export default class CupClubStarterManager extends LitElement {
                         @input=${this.updateAddStarterSingleFemale}
                     /></label>
                   </td>
-                  <td>
+                  <td hidden>
                     <label
                       ><span>Paar-Kategorie</span
                       ><select @input=${this.updateAddStarterPaarSonderpokal}>
@@ -470,7 +470,7 @@ export default class CupClubStarterManager extends LitElement {
                               this.updateEditStarterBirthdate(editStarter, e)}
                         /></label>
                       </td>
-                      <td>
+                      <td hidden>
                         <label
                           ><span>Einzel Kategorie</span
                           ><select
@@ -518,7 +518,7 @@ export default class CupClubStarterManager extends LitElement {
                               )}
                         /></label>
                       </td>
-                      <td>
+                      <td hidden>
                         <label
                           ><span>Paar Kategorie</span
                           ><select
@@ -615,7 +615,7 @@ export default class CupClubStarterManager extends LitElement {
                         <label><span>Geburtstag</span></label>
                         ${starter.birthdate.toLocaleDateString()}
                       </td>
-                      <td>
+                      <td hidden>
                         <label><span>Einzel-Kategorie</span></label>
                         ${starter.single_sonderpokal
                           ? "Sonderpokal"
@@ -629,7 +629,7 @@ export default class CupClubStarterManager extends LitElement {
                         <label><span>Einzel Weiblich</span></label>
                         ${starter.single_female ? "✔️" : "-"}
                       </td>
-                      <td>
+                      <td hidden>
                         <label><span>Paar-Kategorie</span></label>
                         ${starter.pair_sonderpokal
                           ? "Sonderpokal"

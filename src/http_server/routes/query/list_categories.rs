@@ -18,6 +18,9 @@ pub struct Category {
     is_sonderpokal: bool,
     is_single_male: bool,
     order: Option<i64>,
+    einfahrzeit_seconds: Option<i64>,
+    act_duration_seconds: Option<i64>,
+    judge_duration_seconds: Option<i64>,
 }
 
 /// Get information about a club.
@@ -40,7 +43,7 @@ pub async fn list_categories(
     let club_categories = sqlx::query_as!(
         Category,
         r#"
-        SELECT name as "name!", description, from_birthday, to_birthday, is_pair, is_sonderpokal, is_single_male, "order"
+        SELECT name as "name!", description, from_birthday, to_birthday, is_pair, is_sonderpokal, is_single_male, "order", einfahrzeit_seconds, act_duration_seconds, judge_duration_seconds
         FROM categories ORDER BY "order" ASC
         "#
     )
