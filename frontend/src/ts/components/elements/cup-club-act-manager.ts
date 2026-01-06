@@ -209,7 +209,7 @@ export default class CupClubActManager extends LitElement {
         ? nothing
         : html` <p>
             Änderungen können noch bis zum Musik Einsendeschluss am
-            <strong>06.04.2026</strong> vorgenommen werden.
+            <strong>01.04.2026</strong> vorgenommen werden.
           </p>`}
       <h5>Zusammenfassung</h5>
       <table id="summary">
@@ -260,7 +260,7 @@ export default class CupClubActManager extends LitElement {
             <th>Kürtitel</th>
             <th>Beschreibung</th>
             <th>Typ</th>
-            <th>Kategorie</th>
+            <th hidden>Kategorie</th>
             <th>Kürmusik</th>
             <th>FahrerInnen</th>
             <th></th>
@@ -305,7 +305,7 @@ ${editAct.description || ""}</textarea
                             : "Einzelkür"}</label
                         >
                       </td>
-                      <td>
+                      <td hidden>
                         <label
                           ><span>Kategorie</span> ${act.is_sonderpokal
                             ? "Sonderpokal"
@@ -366,7 +366,7 @@ ${editAct.description || ""}</textarea
                             : "Einzelkür"}</label
                         >
                       </td>
-                      <td>
+                      <td hidden>
                         <label><span>Kategorie</span></label
                         >${act.is_sonderpokal ? "Sonderpokal" : "Nachwuchscup"}
                       </td>

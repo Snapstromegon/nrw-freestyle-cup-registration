@@ -107,6 +107,7 @@ export default class CupContextUser extends LitElement {
             <h1>NRW Freestyle Cup 2026</h1>
             <h2>Vereinsanmeldung</h2>
             <p>Die Anmeldung erfolgt vereinsweise. Bitte nur einen Nutzer pro Verein anlegen.</p>
+            <p><i>Aus Datenschutzgründen wurden alle Daten aus früheren Jahren gelöscht.</i></p>
             ${this.error ? html`<p id="error">${this.error}</p>` : nothing}
             <label>
               Email

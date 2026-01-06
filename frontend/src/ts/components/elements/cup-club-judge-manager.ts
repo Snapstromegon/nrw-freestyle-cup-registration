@@ -20,10 +20,10 @@ const ALL_CATEGORIES = [
   "n_em_o15",
   "n_p_u15",
   "n_p_o15",
-  "s_e_u15",
-  "s_e_o15",
-  "s_p_u15",
-  "s_p_o15",
+  // "s_e_u15",
+  // "s_e_o15",
+  // "s_p_u15",
+  // "s_p_o15",
 ];
 
 const ALL_JUDGE_PARTS = ["p", "t", "a"];
@@ -435,7 +435,7 @@ export default class CupClubJudgeManager extends LitElement {
             <th rowspan="4">Email</th>
             <th rowspan="4">Geburtstag</th>
             <th colspan="6">Nachwuchscup</th>
-            <th colspan="4">Sonderpokal</th>
+            <th colspan="4" hidden>Sonderpokal</th>
             <th rowspan="4"></th>
           </tr>
           <tr>

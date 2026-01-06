@@ -87,6 +87,7 @@ export default class CupViewAdmin extends LitElement {
         <a href="/admin-starters">Starter Tabellen</a>
         <a href="/admin-payments">Zahlungsmanager</a>
         <a href="/admin-acts-overview">Küren Übersicht</a>
+        <a href="/admin-categories">Kategorie Verwaltung</a>
         <a href="/admin-judges">Judges Übersicht</a>
         <a href="/admin-music-control">Musik Player</a>
       </nav>
