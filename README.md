@@ -1,4 +1,3 @@
-| Spalte A | Spalte B |
-| :------- | :------- |
-| Zelle A  | Zelle B  |
-| Zelle C  | Zelle D  |
+# Freestyle Cup Registration System
+
+This project contains the registration system for the freestyle unicycling cup NRW.
