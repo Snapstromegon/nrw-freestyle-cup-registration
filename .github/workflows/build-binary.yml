@@ -1,0 +1,68 @@
+name: Build Binary
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y pkg-config libssl-dev
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+
+    - name: Build release binary
+      run: make centos-release
+
+    - name: Upload binary artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: nrw-freestyle-cup-registration-latest
+        path: target/release/nrw-freestyle-cup-registration
+        retention-days: 7
+
+    - name: Delete previous release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh release delete latest-build --yes || true
+        git tag -d latest-build || true
+        git push origin --delete latest-build || true
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: latest-build
+        release_name: Latest Build
+        draft: false
+        prerelease: true
+
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: target/release/nrw-freestyle-cup-registration
+        asset_name: nrw-freestyle-cup-registration-linux
+        asset_content_type: application/octet-stream
