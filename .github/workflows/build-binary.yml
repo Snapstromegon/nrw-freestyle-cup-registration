@@ -29,6 +29,22 @@ jobs:
       with:
         node-version: '24'
 
+    - name: Create dummy .env file
+      run: |
+        cat > .env << 'EOF'
+        BASE_URL=http://localhost:3000
+        DATABASE_URL=sqlite://./db.sqlite?mode=rwc
+        ADMIN='{ "name": "CI Admin", "password": "dummy_password", "email": "ci@example.com"}'
+        SMTP_USER=noreply@example.com
+        SMTP_PASSWORD="dummy_smtp_password"
+        SMTP_SERVER=smtp.example.com
+        JWT_SECRET=dummy_jwt_secret_for_ci_build_only
+        HTTP_ADDRESS=0.0.0.0:3000
+        START_REGISTER_DATE=2025-01-15T00:00:00.000+01:00
+        END_REGISTER_DATE=2026-03-15T00:00:00.000+01:00
+        END_MUSIC_UPLOAD_DATE=2026-03-15T00:00:00.000+01:00
+        EOF
+
     - name: Build release binary
       run: make centos-release
 
