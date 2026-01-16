@@ -1,6 +1,5 @@
 use crate::{
-    http_server::{ClientError, HttpError},
-    utils::check_password,
+    http_server::{ClientError, HttpError}, reloadable_sqlite::ReloadableSqlite, utils::check_password
 };
 use axum::{Extension, Json};
 use password_auth::generate_hash;
@@ -34,9 +33,10 @@ pub struct PasswordResetBody {
 #[instrument(skip(db))]
 #[axum::debug_handler]
 pub async fn reset_password(
-    Extension(db): Extension<sqlx::SqlitePool>,
+    Extension(db): Extension<ReloadableSqlite>,
     Json(body): Json<PasswordResetBody>,
 ) -> Result<Json<PasswordResetResponse>, HttpError> {
+    let db = db.get().await.clone();
     let user = sqlx::query!(
         r#"
         SELECT user_id as "user_id!: Uuid" FROM password_resets WHERE id = ?

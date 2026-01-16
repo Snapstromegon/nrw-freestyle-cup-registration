@@ -1,6 +1,6 @@
 use axum::{Extension, Json, http::StatusCode};
 use serde::{Deserialize, Serialize};
-use tracing::instrument;
+use tracing::{info, instrument};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -81,6 +81,7 @@ pub async fn add_club_starter(
             Some(rows[0].id)
         }
     };
+    info!("Found partner_id: {:?}", partner_id);
     if let Some(partner_id) = partner_id {
         sqlx::query!(
             r#"
@@ -90,12 +91,9 @@ pub async fn add_club_starter(
         )
         .execute(&db)
         .await?;
-
-        set_act(&db, "", &[starter_id, partner_id], None, true)
-            .await
-            .map_err(HttpError::ErrorMessages)?;
     }
 
+    info!("Inserting starter {:?}", starter_id);
     sqlx::query!(
         r#"
         INSERT INTO starter (
@@ -136,6 +134,10 @@ pub async fn add_club_starter(
     }
 
     if let Some(partner_id) = partner_id {
+        set_act(&db, "", &[starter_id, partner_id], None, true)
+            .await
+            .map_err(HttpError::ErrorMessages)?;
+        info!("Updating partner {:?} to link to starter {:?}", partner_id, starter_id);
         sqlx::query!(
             r#"
                 UPDATE starter SET partner_id = ?, partner_name = ? WHERE id = ?

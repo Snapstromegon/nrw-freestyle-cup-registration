@@ -1,9 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    http_server::{ClientError, HttpError, HttpServerOptions, extractor::auth::Auth},
-    mailer::Mailer,
-    templates::VerifyMail,
+    http_server::{ClientError, HttpError, HttpServerOptions, extractor::auth::Auth}, mailer::Mailer, reloadable_sqlite::ReloadableSqlite, templates::VerifyMail
 };
 use askama::Template;
 use axum::{Extension, Json};
@@ -37,10 +35,11 @@ pub struct ResendMailValidationBody {}
 pub async fn resend_mail_validation(
     Extension(mailer): Extension<Arc<Mailer>>,
     Extension(http_options): Extension<Arc<HttpServerOptions>>,
-    Extension(db): Extension<sqlx::SqlitePool>,
+    Extension(db): Extension<ReloadableSqlite>,
     auth: Auth,
     Json(_body): Json<ResendMailValidationBody>,
 ) -> Result<Json<ResendMailValidationResponse>, HttpError> {
+    let db = db.get().await.clone();
     // Drop the previous verification tokens
     sqlx::query!(
         r#"

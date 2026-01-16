@@ -1,9 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    http_server::{ClientError, HttpError, HttpServerOptions},
-    mailer::Mailer,
-    templates::PasswordResetMail,
+    http_server::{ClientError, HttpError, HttpServerOptions}, mailer::Mailer, reloadable_sqlite::ReloadableSqlite, templates::PasswordResetMail
 };
 use askama::Template;
 use axum::{Extension, Json};
@@ -39,9 +37,10 @@ pub struct RequestPasswordResetBody {
 pub async fn request_password_reset(
     Extension(mailer): Extension<Arc<Mailer>>,
     Extension(http_options): Extension<Arc<HttpServerOptions>>,
-    Extension(db): Extension<sqlx::SqlitePool>,
+    Extension(db): Extension<ReloadableSqlite>,
     Json(body): Json<RequestPasswordResetBody>,
 ) -> Result<Json<RequestPasswordResetResponse>, HttpError> {
+    let db = db.get().await.clone();
     let user = sqlx::query!(
         r#"
         SELECT id as "id!: Uuid", name FROM users WHERE email = ?
