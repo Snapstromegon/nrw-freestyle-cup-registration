@@ -14,7 +14,7 @@ path = "src/bin/gen_openapi.rs"
 
 [dependencies]
 anyhow = "1"
-askama = "0.15.1"
+askama = "0.15.3"
 axum = { version = "0.8", features = ["macros", "multipart"] }
 axum-embed = "0.1.0"
 axum-extra = { version = "0.12", features = ["cookie"] }
