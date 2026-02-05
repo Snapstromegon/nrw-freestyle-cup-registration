@@ -225,7 +225,7 @@ export default class CupClubStarterManager extends LitElement {
           (starter) =>
             html`<option
               value="${starter.firstname} ${starter.lastname}"
-            ></option>`
+            ></option>`,
         )}
       </datalist>
 
@@ -239,14 +239,15 @@ export default class CupClubStarterManager extends LitElement {
           <td>
             ${(this.starters.value || []).reduce(
               (acc, starter) => acc + getStarterPrice(starter),
-              0
+              0,
             )}€
           </td>
         </tr>
         <tr>
           <th>Bezahlt</th>
           <td>
-            ${this.club?.payment?.toFixed(2).toString().replace(".", ",") || 0}€${this.adminMode
+            ${this.club?.payment?.toFixed(2).toString().replace(".", ",") ||
+            0}€${this.adminMode
               ? html` <button @click=${this.pay}>Betrag aktualisieren</button>`
               : nothing}
           </td>
@@ -399,7 +400,7 @@ export default class CupClubStarterManager extends LitElement {
                   </td>
                   <td>
                     <label><span>Startgebühr</span></label> ${getStarterPrice(
-                      this.addStarter
+                      this.addStarter,
                     )}€
                   </td>
                   <td class="actionCol">
@@ -422,7 +423,7 @@ export default class CupClubStarterManager extends LitElement {
                     <button
                       id="addStarterButton"
                       class="material-icon"
-                      @click=${() => (this.addStarterMode = true)}
+                      @click=${this.enterAddStarterMode}
                     >
                       add
                     </button>
@@ -442,8 +443,11 @@ export default class CupClubStarterManager extends LitElement {
                           ><input
                             type="text"
                             .value=${editStarter.firstname}
-                            @input=${(e: InputEvent) =>
-                              this.updateEditStarterFirstname(editStarter, e)}
+                            @input=${
+                              // eslint-disable-next-line lit/no-template-arrow
+                              (e: InputEvent) =>
+                                this.updateEditStarterFirstname(editStarter, e)
+                            }
                             placeholder="Vorname"
                         /></label>
                       </td>
@@ -453,8 +457,11 @@ export default class CupClubStarterManager extends LitElement {
                           ><input
                             type="text"
                             .value=${editStarter.lastname}
-                            @input=${(e: InputEvent) =>
-                              this.updateEditStarterLastname(editStarter, e)}
+                            @input=${
+                              // eslint-disable-next-line lit/no-template-arrow
+                              (e: InputEvent) =>
+                                this.updateEditStarterLastname(editStarter, e)
+                            }
                             placeholder="Nachname"
                         /></label>
                       </td>
@@ -466,19 +473,25 @@ export default class CupClubStarterManager extends LitElement {
                             .value=${editStarter.birthdate
                               .toISOString()
                               .slice(0, 10)}
-                            @input=${(e: InputEvent) =>
-                              this.updateEditStarterBirthdate(editStarter, e)}
+                            @input=${
+                              // eslint-disable-next-line lit/no-template-arrow
+                              (e: InputEvent) =>
+                                this.updateEditStarterBirthdate(editStarter, e)
+                            }
                         /></label>
                       </td>
                       <td hidden>
                         <label
                           ><span>Einzel Kategorie</span
                           ><select
-                            @input=${(e: InputEvent) =>
-                              this.updateEditStarterEinzelSonderpokal(
-                                editStarter,
-                                e
-                              )}
+                            @input=${
+                              // eslint-disable-next-line lit/no-template-arrow
+                              (e: InputEvent) =>
+                                this.updateEditStarterEinzelSonderpokal(
+                                  editStarter,
+                                  e,
+                                )
+                            }
                           >
                             <option
                               value="sonderpokal"
@@ -501,8 +514,11 @@ export default class CupClubStarterManager extends LitElement {
                           ><input
                             type="checkbox"
                             ?checked=${editStarter.single_male}
-                            @input=${(e: InputEvent) =>
-                              this.updateEditStarterSingleMale(editStarter, e)}
+                            @input=${
+                              // eslint-disable-next-line lit/no-template-arrow
+                              (e: InputEvent) =>
+                                this.updateEditStarterSingleMale(editStarter, e)
+                            }
                         /></label>
                       </td>
                       <td>
@@ -511,22 +527,28 @@ export default class CupClubStarterManager extends LitElement {
                           ><input
                             type="checkbox"
                             ?checked=${editStarter.single_female}
-                            @input=${(e: InputEvent) =>
-                              this.updateEditStarterSingleFemale(
-                                editStarter,
-                                e
-                              )}
+                            @input=${
+                              // eslint-disable-next-line lit/no-template-arrow
+                              (e: InputEvent) =>
+                                this.updateEditStarterSingleFemale(
+                                  editStarter,
+                                  e,
+                                )
+                            }
                         /></label>
                       </td>
                       <td hidden>
                         <label
                           ><span>Paar Kategorie</span
                           ><select
-                            @input=${(e: InputEvent) =>
-                              this.updateEditStarterPaarSonderpokal(
-                                editStarter,
-                                e
-                              )}
+                            @input=${
+                              // eslint-disable-next-line lit/no-template-arrow
+                              (e: InputEvent) =>
+                                this.updateEditStarterPaarSonderpokal(
+                                  editStarter,
+                                  e,
+                                )
+                            }
                           >
                             <option
                               value="sonderpokal"
@@ -549,8 +571,11 @@ export default class CupClubStarterManager extends LitElement {
                           ><input
                             type="checkbox"
                             ?checked=${editStarter.pair}
-                            @input=${(e: InputEvent) =>
-                              this.updateEditStarterPair(editStarter, e)}
+                            @input=${
+                              // eslint-disable-next-line lit/no-template-arrow
+                              (e: InputEvent) =>
+                                this.updateEditStarterPair(editStarter, e)
+                            }
                         /></label>
                       </td>
                       <td>
@@ -558,9 +583,15 @@ export default class CupClubStarterManager extends LitElement {
                           ><span>Partner Name</span
                           ><input
                             type="text"
-                            value=${editStarter.partner_name || ""}
-                            @input=${(e: InputEvent) =>
-                              this.updateEditStarterPartnerName(editStarter, e)}
+                            .value=${editStarter.partner_name || ""}
+                            @input=${
+                              // eslint-disable-next-line lit/no-template-arrow
+                              (e: InputEvent) =>
+                                this.updateEditStarterPartnerName(
+                                  editStarter,
+                                  e,
+                                )
+                            }
                             placeholder="Partner Name"
                             list="clubStarters"
                             ?disabled=${!editStarter.pair}
@@ -572,12 +603,15 @@ export default class CupClubStarterManager extends LitElement {
                               ><span>Partner ID</span
                               ><input
                                 type="text"
-                                value=${editStarter.partner_id || ""}
-                                @input=${(e: InputEvent) =>
-                                  this.updateEditStarterPartnerId(
-                                    editStarter,
-                                    e
-                                  )}
+                                .value=${editStarter.partner_id || ""}
+                                @input=${
+                                  // eslint-disable-next-line lit/no-template-arrow
+                                  (e: InputEvent) =>
+                                    this.updateEditStarterPartnerId(
+                                      editStarter,
+                                      e,
+                                    )
+                                }
                                 placeholder="Partner ID"
                                 list="clubStarters"
                                 ?disabled=${!editStarter.pair}
@@ -591,13 +625,19 @@ export default class CupClubStarterManager extends LitElement {
                       <td class="actionCol">
                         <button
                           class="green material-icon"
-                          @click=${() => this.commitStarterEdit(editStarter)}
+                          @click=${
+                            // eslint-disable-next-line lit/no-template-arrow
+                            () => this.commitStarterEdit(editStarter)
+                          }
                         >
                           save
                         </button>
                         <button
                           class="red material-icon"
-                          @click=${() => this.disableStarterEdit(editStarter)}
+                          @click=${
+                            // eslint-disable-next-line lit/no-template-arrow
+                            () => this.disableStarterEdit(editStarter)
+                          }
                         >
                           cancel
                         </button>
@@ -664,13 +704,19 @@ export default class CupClubStarterManager extends LitElement {
                         ${this.systemStatus?.can_register_starter ||
                         this.user?.is_admin
                           ? html` <button
-                                @click=${() => this.enableStarterEdit(starter)}
+                                @click=${
+                                  // eslint-disable-next-line lit/no-template-arrow
+                                  () => this.enableStarterEdit(starter)
+                                }
                                 class="blue material-icon"
                               >
                                 edit
                               </button>
                               <button
-                                @click=${() => this.deleteStarter(starter)}
+                                @click=${
+                                  // eslint-disable-next-line lit/no-template-arrow
+                                  () => this.deleteStarter(starter)
+                                }
                                 class="red material-icon"
                               >
                                 delete
@@ -721,7 +767,7 @@ export default class CupClubStarterManager extends LitElement {
     });
     if (resp.error) {
       alert(
-        "Fehler beim Speichern: " + (resp.error as { message: string }).message
+        "Fehler beim Speichern: " + (resp.error as { message: string }).message,
       );
       return;
     }
@@ -732,7 +778,7 @@ export default class CupClubStarterManager extends LitElement {
   async deleteStarter(starter: Starter) {
     if (
       !confirm(
-        `Sicher, dass du ${starter.firstname} ${starter.lastname} löschen willst? Gib 'Ja' ein:`
+        `Sicher, dass du ${starter.firstname} ${starter.lastname} löschen willst? Gib 'Ja' ein:`,
       )
     ) {
       return;
@@ -891,11 +937,17 @@ export default class CupClubStarterManager extends LitElement {
     this.addStarterMode = false;
   }
 
+  enterAddStarterMode() {
+    this.addStarterMode = true;
+  }
+
   async pay() {
     if (!this.club) {
       return;
     }
-    const amount = parseFloat(prompt("Betrag in Euro:")?.replace(",", ".") || "0");
+    const amount = parseFloat(
+      prompt("Betrag in Euro:")?.replace(",", ".") || "0",
+    );
     if (!amount) {
       alert("Ungültiger Betrag.");
       return;
@@ -943,7 +995,7 @@ const validateStarter = (starter: MaybeNewStarter) => {
 
   if (starter.single_sonderpokal && starter.pair && !starter.pair_sonderpokal) {
     alert(
-      "Einzel-Sonderpokal ist nur in Kombination mit Paar-Sonderpokal möglich."
+      "Einzel-Sonderpokal ist nur in Kombination mit Paar-Sonderpokal möglich.",
     );
     return false;
   }

@@ -98,7 +98,7 @@ export default class CupViewHome extends LitElement {
 
   @consume({ context: userContext, subscribe: true })
   user: User | null = null;
-  @state() message: string = "Hello, World!";
+  @state() message = "Hello, World!";
 
   override render() {
     return html`<header>
@@ -124,7 +124,7 @@ export default class CupViewHome extends LitElement {
 
         ${this.user?.email_verified
           ? this.user?.club_id
-            ? html`<cup-context-club clubId=${this.user?.club_id}
+            ? html`<cup-context-club club-id=${this.user?.club_id}
                 ><cup-club-manager></cup-club-manager
               ></cup-context-club>`
             : html`<a href="/create_club">Verein Erstellen</a>`

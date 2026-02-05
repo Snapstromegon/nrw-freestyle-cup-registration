@@ -52,7 +52,7 @@ export default class CupTimeplan extends LitElement {
     args: () => [],
   });
 
-  @property({type: Boolean}) description: boolean = false;
+  @property({type: Boolean}) description = false;
 
   override render() {
     return html`<div id="wrapper">

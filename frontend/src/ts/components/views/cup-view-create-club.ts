@@ -135,7 +135,7 @@ export default class CupViewCreateClub extends LitElement {
       clubName: string;
     };
 
-    let resp = await client.POST("/api/command/create_club", {
+    const resp = await client.POST("/api/command/create_club", {
       body: {
         name: data.clubName,
       },

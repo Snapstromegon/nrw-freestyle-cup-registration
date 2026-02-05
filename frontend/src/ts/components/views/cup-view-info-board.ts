@@ -324,7 +324,7 @@ export default class CupViewInfoBoard extends LitElement {
         <cup-clock></cup-clock>
       </div>`;
     }
-    let timeplan = this.predictedTimeplan;
+    const timeplan = this.predictedTimeplan;
     const status = timeplanStatus(timeplan);
     const currentEntry = currentTimeplanEntry(timeplan);
     const currentAct = currentTimeplanAct(timeplan);
@@ -333,9 +333,9 @@ export default class CupViewInfoBoard extends LitElement {
       case TimeplanStatus.Break:
         return html`<div class="break">
           <cup-fotobox
-            src="${lastEntry
+            src=${lastEntry
               ? "http://nrw-cup-fotos:8080/random"
-              : "/assets/images/logo_with_blobs.svg"}"
+              : "/assets/images/logo_with_blobs.svg"}
             auto-reload
           ></cup-fotobox>
           <cup-clock></cup-clock>

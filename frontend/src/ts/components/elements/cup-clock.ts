@@ -20,12 +20,12 @@ export default class CupClock extends LitElement {
   #intervalId: number | null = null;
 
   override connectedCallback(): void {
-    super.connectedCallback();
+    super.connectedCallback?.();
     this.#intervalId = setInterval(() => this.requestUpdate(), 1000);
   }
 
   override disconnectedCallback(): void {
-    super.disconnectedCallback();
+    super.disconnectedCallback?.();
     if (this.#intervalId) {
       clearInterval(this.#intervalId);
     }

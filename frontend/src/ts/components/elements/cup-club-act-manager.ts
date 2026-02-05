@@ -6,6 +6,7 @@ import { Task } from "@lit/task";
 import { Club, clubContext } from "../../contexts/club";
 import { SystemStatus, systemStatusContext } from "../../contexts/systemStatus";
 import { User, userContext } from "../../contexts/user";
+import { repeat } from "lit/directives/repeat";
 
 type Act = components["schemas"]["ClubAct"];
 
@@ -183,14 +184,14 @@ export default class CupClubActManager extends LitElement {
   systemStatus: SystemStatus | null = null;
   @consume({ context: userContext, subscribe: true }) user: User | null = null;
 
-  @property({ type: Boolean }) adminMode = false;
+  @property({ type: Boolean, attribute: "admin-mode" }) adminMode = false;
 
   acts = new Task(this, {
     task: async ([clubId]) => {
       if (!clubId) {
         return [];
       }
-      let resp = await client.GET("/api/query/list_club_acts", {
+      const resp = await client.GET("/api/query/list_club_acts", {
         params: { query: { club_id: clubId } },
       });
       if (resp.error) {
@@ -201,7 +202,7 @@ export default class CupClubActManager extends LitElement {
     args: () => [this.club?.id],
   });
 
-  @state() actEdits: Map<string, Act> = new Map();
+  @state() actEdits = new Map<string, Act>();
 
   override render() {
     return html`<h4>Küren</h4>
@@ -280,8 +281,11 @@ export default class CupClubActManager extends LitElement {
                           ><input
                             type="text"
                             .value=${editAct.name}
-                            @input=${(e: InputEvent) =>
-                              this.updateEditActName(editAct, e)}
+                            @input=${
+                              // eslint-disable-next-line lit/no-template-arrow
+                              (e: InputEvent) =>
+                                this.updateEditActName(editAct, e)
+                            }
                             placeholder="Der Titel deiner Kür"
                         /></label>
                       </td>
@@ -289,8 +293,11 @@ export default class CupClubActManager extends LitElement {
                         <label
                           ><span>Beschreibung</span
                           ><textarea
-                            @input=${(e: InputEvent) =>
-                              this.updateEditActDescription(editAct, e)}
+                            @input=${
+                              // eslint-disable-next-line lit/no-template-arrow
+                              (e: InputEvent) =>
+                                this.updateEditActDescription(editAct, e)
+                            }
                             placeholder="Hilf unserer Moderation dich perfekt einzuleiten!"
                             rows="10"
                           >
@@ -315,8 +322,10 @@ ${editAct.description || ""}</textarea
                       <td>
                         Bitte lade eine MP3 Datei mit max. 10MB hoch.
                         <form
-                          @submit=${(e: SubmitEvent) =>
-                            this.uploadSong(editAct, e)}
+                          @submit=${
+                            // eslint-disable-next-line lit/no-template-arrow
+                            (e: SubmitEvent) => this.uploadSong(editAct, e)
+                          }
                         >
                           <input type="file" accept="audio/*" />
                           <button type="submit" class="blue material-icon">
@@ -327,24 +336,32 @@ ${editAct.description || ""}</textarea
                       <td>
                         <label><span>StarterInnen</span></label>
                         <ul>
-                          ${editAct.participants.map(
+                          ${repeat(
+                            editAct.participants,
+                            (s) => s.id,
                             (s) =>
                               html`<li>
                                 ${s.starter_firstname} ${s.starter_lastname}
-                              </li>`
+                              </li>`,
                           )}
                         </ul>
                       </td>
                       <td class="actionCol">
                         <button
                           class="green material-icon"
-                          @click=${() => this.commitActEdit(editAct)}
+                          @click=${
+                            // eslint-disable-next-line lit/no-template-arrow
+                            () => this.commitActEdit(editAct)
+                          }
                         >
                           save
                         </button>
                         <button
                           class="red material-icon"
-                          @click=${() => this.disableActEdit(editAct)}
+                          @click=${
+                            // eslint-disable-next-line lit/no-template-arrow
+                            () => this.disableActEdit(editAct)
+                          }
                         >
                           cancel
                         </button>
@@ -383,11 +400,13 @@ ${editAct.description || ""}</textarea
                       <td>
                         <label><span>StarterInnen</span></label>
                         <ul>
-                          ${act.participants.map(
+                          ${repeat(
+                            act.participants,
+                            (s) => s.id,
                             (s) =>
                               html`<li>
                                 ${s.starter_firstname} ${s.starter_lastname}
-                              </li>`
+                              </li>`,
                           )}
                         </ul>
                       </td>
@@ -395,7 +414,10 @@ ${editAct.description || ""}</textarea
                         ${this.systemStatus?.can_upload_music ||
                         this.user?.is_admin
                           ? html` <button
-                              @click=${() => this.enableActEdit(act)}
+                              @click=${
+                                // eslint-disable-next-line lit/no-template-arrow
+                                () => this.enableActEdit(act)
+                              }
                               class="blue material-icon"
                             >
                               edit
@@ -426,12 +448,12 @@ ${editAct.description || ""}</textarea
       alert("Der Kürname darf nicht leer sein!");
       return;
     }
-    let resp = await client.POST("/api/command/edit_club_act", {
+    const resp = await client.POST("/api/command/edit_club_act", {
       body: act,
     });
     if (resp.error) {
       alert(
-        "Fehler beim Speichern: " + (resp.error as { message: string }).message
+        "Fehler beim Speichern: " + (resp.error as { message: string }).message,
       );
       return;
     }

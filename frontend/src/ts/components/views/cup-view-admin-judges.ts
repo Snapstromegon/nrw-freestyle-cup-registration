@@ -1,12 +1,13 @@
 import { LitElement, html, css } from "lit";
 import { customElement } from "lit/decorators.js";
 import { client, components } from "../../apiClient";
+import { repeat } from "lit/directives/repeat";
 import { Task } from "@lit/task";
 import "../elements/cup-context-club.js";
 import "../elements/cup-club-manager.js";
 import "../elements/cup-starter-table.js";
 
-const CATEGORY_TO_ATTRIBUTE: { [type: string]: string } = {
+const CATEGORY_TO_ATTRIBUTE: Record<string, string> = {
   NEM: "n_em_u15",
   NEWU11: "n_ew_u15",
   NEWU13: "n_ew_u15",
@@ -115,8 +116,9 @@ export default class CupViewAdminJudges extends LitElement {
 
       const judges: {
         judge: components["schemas"]["Judge"];
-        categories: {
-          [type: string]: {
+        categories: Record<
+          string,
+          {
             technic: {
               judge: boolean;
               hospitation: boolean;
@@ -129,8 +131,8 @@ export default class CupViewAdminJudges extends LitElement {
               judge: boolean;
               hospitation: boolean;
             };
-          };
-        };
+          }
+        >;
       }[] = [];
 
       for (const dataJudge of all) {
@@ -176,16 +178,18 @@ export default class CupViewAdminJudges extends LitElement {
                   <th rowspan="2">Club</th>
                   <th rowspan="2">Name</th>
                   <th rowspan="2">Geburtstag</th>
-                  ${categories.map(
-                    (category) => html`<th colspan="3">${category.name}</th>`
+                  ${repeat(
+                    categories,
+                    (category) => html`<th colspan="3">${category.name}</th>`,
                   )}
                 </tr>
                 <tr>
-                  ${categories.map(
+                  ${repeat(
+                    categories,
                     () =>
                       html`<th>T</th>
                         <th>P</th>
-                        <th>A</th>`
+                        <th>A</th>`,
                   )}
                 </tr>`,
           })}
@@ -194,10 +198,12 @@ export default class CupViewAdminJudges extends LitElement {
           ${this.judges.render({
             loading: () => html`Loading...`,
             error: (error) => html`Error: ${error}`,
-            complete: (judges) =>
-              html`
-                ${judges.map(
-                  (judge) => html` <tr>
+            complete: (judges) => html`
+              ${repeat(
+                judges,
+                (judge) => judge.judge.id,
+                (judge) =>
+                  html` <tr>
                     <td>${judge.judge.club_name}</td>
                     <td>${judge.judge.firstname} ${judge.judge.lastname}</td>
                     <td>
@@ -205,35 +211,36 @@ export default class CupViewAdminJudges extends LitElement {
                         .toISOString()
                         .slice(0, 10)}
                     </td>
-                    ${Object.values(judge.categories).map(
-                      (category) =>
-                        html`
-                          <td>
-                            ${category.technic.judge
-                              ? "✔️"
-                              : category.technic.hospitation
+                    ${repeat(
+                      Object.values(judge.categories),
+                      (c) => c,
+                      (category) => html`
+                        <td>
+                          ${category.technic.judge
+                            ? "✔️"
+                            : category.technic.hospitation
                               ? "👀"
                               : "-"}
-                          </td>
-                          <td>
-                            ${category.performance.judge
-                              ? "✔️"
-                              : category.performance.hospitation
+                        </td>
+                        <td>
+                          ${category.performance.judge
+                            ? "✔️"
+                            : category.performance.hospitation
                               ? "👀"
                               : "-"}
-                          </td>
-                          <td>
-                            ${category.dismounts.judge
-                              ? "✔️"
-                              : category.dismounts.hospitation
+                        </td>
+                        <td>
+                          ${category.dismounts.judge
+                            ? "✔️"
+                            : category.dismounts.hospitation
                               ? "👀"
                               : "-"}
-                          </td>
-                        `
+                        </td>
+                      `,
                     )}
-                  </tr>`
-                )}
-              `,
+                  </tr>`,
+              )}
+            `,
           })}
         </tbody>
       </table> `;

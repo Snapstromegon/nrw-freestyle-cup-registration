@@ -191,7 +191,7 @@ export default class CupViewAdminCategories extends LitElement {
   }
 
   private renderCategoriesTable(
-    categories: components["schemas"]["Category"][]
+    categories: components["schemas"]["Category"][],
   ) {
     return html`
       <table>
@@ -217,7 +217,7 @@ export default class CupViewAdminCategories extends LitElement {
             (category) =>
               this.editingCategory === category.name
                 ? this.renderEditRow(category)
-                : this.renderCategoryRow(category)
+                : this.renderCategoryRow(category),
           )}
           ${this.showNewForm
             ? this.renderNewCategoryRow()
@@ -262,13 +262,19 @@ export default class CupViewAdminCategories extends LitElement {
           <div class="actions">
             <button
               class="edit-btn"
-              @click=${() => this.startEditCategory(category)}
+              @click=${
+                // eslint-disable-next-line lit/no-template-arrow
+                () => this.startEditCategory(category)
+              }
             >
               <span class="material-icon">edit</span>
             </button>
             <button
               class="delete-btn"
-              @click=${() => this.deleteCategory(category.name)}
+              @click=${
+                // eslint-disable-next-line lit/no-template-arrow
+                () => this.deleteCategory(category.name)
+              }
             >
               <span class="material-icon">delete</span>
             </button>
@@ -285,21 +291,27 @@ export default class CupViewAdminCategories extends LitElement {
           <input
             type="text"
             .value=${this.editForm.new_name || category.name}
-            @input=${(e: Event) =>
-              (this.editForm = {
-                ...this.editForm,
-                new_name: (e.target as HTMLInputElement).value,
-              })}
+            @input=${
+              // eslint-disable-next-line lit/no-template-arrow
+              (e: Event) =>
+                (this.editForm = {
+                  ...this.editForm,
+                  new_name: (e.target as HTMLInputElement).value,
+                })
+            }
           />
         </td>
         <td>
           <textarea
             .value=${this.editForm.description ?? category.description ?? ""}
-            @input=${(e: Event) =>
-              (this.editForm = {
-                ...this.editForm,
-                description: (e.target as HTMLTextAreaElement).value,
-              })}
+            @input=${
+              // eslint-disable-next-line lit/no-template-arrow
+              (e: Event) =>
+                (this.editForm = {
+                  ...this.editForm,
+                  description: (e.target as HTMLTextAreaElement).value,
+                })
+            }
           ></textarea>
         </td>
         <td>
@@ -308,11 +320,14 @@ export default class CupViewAdminCategories extends LitElement {
             .value=${this.editForm.from_birthday ||
             category.from_birthday ||
             "1970-01-01"}
-            @input=${(e: Event) =>
-              (this.editForm = {
-                ...this.editForm,
-                from_birthday: (e.target as HTMLInputElement).value,
-              })}
+            @input=${
+              // eslint-disable-next-line lit/no-template-arrow
+              (e: Event) =>
+                (this.editForm = {
+                  ...this.editForm,
+                  from_birthday: (e.target as HTMLInputElement).value,
+                })
+            }
           />
         </td>
         <td>
@@ -321,44 +336,56 @@ export default class CupViewAdminCategories extends LitElement {
             .value=${this.editForm.to_birthday ||
             category.to_birthday ||
             new Date().toISOString().split("T")[0]}
-            @input=${(e: Event) =>
-              (this.editForm = {
-                ...this.editForm,
-                to_birthday: (e.target as HTMLInputElement).value,
-              })}
+            @input=${
+              // eslint-disable-next-line lit/no-template-arrow
+              (e: Event) =>
+                (this.editForm = {
+                  ...this.editForm,
+                  to_birthday: (e.target as HTMLInputElement).value,
+                })
+            }
           />
         </td>
         <td>
           <input
             type="checkbox"
             ?checked=${this.editForm.is_pair ?? category.is_pair}
-            @change=${(e: Event) =>
-              (this.editForm = {
-                ...this.editForm,
-                is_pair: (e.target as HTMLInputElement).checked,
-              })}
+            @change=${
+              // eslint-disable-next-line lit/no-template-arrow
+              (e: Event) =>
+                (this.editForm = {
+                  ...this.editForm,
+                  is_pair: (e.target as HTMLInputElement).checked,
+                })
+            }
           />
         </td>
         <td>
           <input
             type="checkbox"
             ?checked=${this.editForm.is_sonderpokal ?? category.is_sonderpokal}
-            @change=${(e: Event) =>
-              (this.editForm = {
-                ...this.editForm,
-                is_sonderpokal: (e.target as HTMLInputElement).checked,
-              })}
+            @change=${
+              // eslint-disable-next-line lit/no-template-arrow
+              (e: Event) =>
+                (this.editForm = {
+                  ...this.editForm,
+                  is_sonderpokal: (e.target as HTMLInputElement).checked,
+                })
+            }
           />
         </td>
         <td>
           <input
             type="checkbox"
             ?checked=${this.editForm.is_single_male ?? category.is_single_male}
-            @change=${(e: Event) =>
-              (this.editForm = {
-                ...this.editForm,
-                is_single_male: (e.target as HTMLInputElement).checked,
-              })}
+            @change=${
+              // eslint-disable-next-line lit/no-template-arrow
+              (e: Event) =>
+                (this.editForm = {
+                  ...this.editForm,
+                  is_single_male: (e.target as HTMLInputElement).checked,
+                })
+            }
           />
         </td>
         <td>
@@ -370,13 +397,16 @@ export default class CupViewAdminCategories extends LitElement {
               category.einfahrzeit_seconds ??
               600
             )?.toString()}
-            @input=${(e: Event) =>
-              (this.editForm = {
-                ...this.editForm,
-                einfahrzeit_seconds: parseInt(
-                  (e.target as HTMLInputElement).value
-                ),
-              })}
+            @input=${
+              // eslint-disable-next-line lit/no-template-arrow
+              (e: Event) =>
+                (this.editForm = {
+                  ...this.editForm,
+                  einfahrzeit_seconds: parseInt(
+                    (e.target as HTMLInputElement).value,
+                  ),
+                })
+            }
           />
         </td>
         <td>
@@ -388,13 +418,16 @@ export default class CupViewAdminCategories extends LitElement {
               category.act_duration_seconds ??
               180
             )?.toString()}
-            @input=${(e: Event) =>
-              (this.editForm = {
-                ...this.editForm,
-                act_duration_seconds: parseInt(
-                  (e.target as HTMLInputElement).value
-                ),
-              })}
+            @input=${
+              // eslint-disable-next-line lit/no-template-arrow
+              (e: Event) =>
+                (this.editForm = {
+                  ...this.editForm,
+                  act_duration_seconds: parseInt(
+                    (e.target as HTMLInputElement).value,
+                  ),
+                })
+            }
           />
         </td>
         <td>
@@ -408,13 +441,16 @@ export default class CupViewAdminCategories extends LitElement {
                 category.judge_duration_seconds ??
                 120) / 2
             )?.toString()}
-            @input=${(e: Event) =>
-              (this.editForm = {
-                ...this.editForm,
-                judge_duration_seconds: parseInt(
-                  (e.target as HTMLInputElement).value
-                ),
-              })}
+            @input=${
+              // eslint-disable-next-line lit/no-template-arrow
+              (e: Event) =>
+                (this.editForm = {
+                  ...this.editForm,
+                  judge_duration_seconds: parseInt(
+                    (e.target as HTMLInputElement).value,
+                  ),
+                })
+            }
           />
         </td>
         <td>
@@ -489,77 +525,98 @@ export default class CupViewAdminCategories extends LitElement {
             type="text"
             placeholder="Name"
             .value=${this.newCategory.name || ""}
-            @input=${(e: Event) =>
-              (this.newCategory = {
-                ...this.newCategory,
-                name: (e.target as HTMLInputElement).value,
-              })}
+            @input=${
+              // eslint-disable-next-line lit/no-template-arrow
+              (e: Event) =>
+                (this.newCategory = {
+                  ...this.newCategory,
+                  name: (e.target as HTMLInputElement).value,
+                })
+            }
           />
         </td>
         <td>
           <textarea
             placeholder="Beschreibung"
             .value=${this.newCategory.description || ""}
-            @input=${(e: Event) =>
-              (this.newCategory = {
-                ...this.newCategory,
-                description: (e.target as HTMLTextAreaElement).value,
-              })}
+            @input=${
+              // eslint-disable-next-line lit/no-template-arrow
+              (e: Event) =>
+                (this.newCategory = {
+                  ...this.newCategory,
+                  description: (e.target as HTMLTextAreaElement).value,
+                })
+            }
           ></textarea>
         </td>
         <td>
           <input
             type="date"
             .value=${this.newCategory.from_birthday || ""}
-            @input=${(e: Event) =>
-              (this.newCategory = {
-                ...this.newCategory,
-                from_birthday: (e.target as HTMLInputElement).value,
-              })}
+            @input=${
+              // eslint-disable-next-line lit/no-template-arrow
+              (e: Event) =>
+                (this.newCategory = {
+                  ...this.newCategory,
+                  from_birthday: (e.target as HTMLInputElement).value,
+                })
+            }
           />
         </td>
         <td>
           <input
             type="date"
             .value=${this.newCategory.to_birthday || ""}
-            @input=${(e: Event) =>
-              (this.newCategory = {
-                ...this.newCategory,
-                to_birthday: (e.target as HTMLInputElement).value,
-              })}
+            @input=${
+              // eslint-disable-next-line lit/no-template-arrow
+              (e: Event) =>
+                (this.newCategory = {
+                  ...this.newCategory,
+                  to_birthday: (e.target as HTMLInputElement).value,
+                })
+            }
           />
         </td>
         <td>
           <input
             type="checkbox"
             ?checked=${this.newCategory.is_pair}
-            @change=${(e: Event) =>
-              (this.newCategory = {
-                ...this.newCategory,
-                is_pair: (e.target as HTMLInputElement).checked,
-              })}
+            @change=${
+              // eslint-disable-next-line lit/no-template-arrow
+              (e: Event) =>
+                (this.newCategory = {
+                  ...this.newCategory,
+                  is_pair: (e.target as HTMLInputElement).checked,
+                })
+            }
           />
         </td>
         <td>
           <input
             type="checkbox"
             ?checked=${this.newCategory.is_sonderpokal}
-            @change=${(e: Event) =>
-              (this.newCategory = {
-                ...this.newCategory,
-                is_sonderpokal: (e.target as HTMLInputElement).checked,
-              })}
+            @change=${
+              // eslint-disable-next-line lit/no-template-arrow
+              (e: Event) =>
+                (this.newCategory = {
+                  ...this.newCategory,
+                  is_sonderpokal: (e.target as HTMLInputElement).checked,
+                })
+            }
           />
         </td>
         <td>
           <input
             type="checkbox"
             ?checked=${this.newCategory.is_single_male}
-            @change=${(e: Event) =>
-              (this.newCategory = {
-                ...this.newCategory,
-                is_single_male: (e.target as HTMLInputElement).checked,
-              })}
+            @change=${
+              // eslint-disable-next-line lit/no-template-arrow
+              (e: Event) =>
+                (this.newCategory = {
+                  ...this.newCategory,
+                  is_single_male: (e.target as HTMLInputElement).checked,
+                })
+            }
           />
         </td>
         <td>
@@ -567,26 +624,32 @@ export default class CupViewAdminCategories extends LitElement {
             type="number"
             style="width: 4em;"
             .value=${this.newCategory.einfahrzeit_seconds?.toString() || "600"}
-            @input=${(e: Event) =>
-              (this.newCategory = {
-                ...this.newCategory,
-                einfahrzeit_seconds: parseInt(
-                  (e.target as HTMLInputElement).value
-                ),
-              })}
+            @input=${
+              // eslint-disable-next-line lit/no-template-arrow
+              (e: Event) =>
+                (this.newCategory = {
+                  ...this.newCategory,
+                  einfahrzeit_seconds: parseInt(
+                    (e.target as HTMLInputElement).value,
+                  ),
+                })
+            }
           />
         </td>
         <td>
           <input
             type="number"
             .value=${this.newCategory.act_duration_seconds?.toString() || "120"}
-            @input=${(e: Event) =>
-              (this.newCategory = {
-                ...this.newCategory,
-                act_duration_seconds: parseInt(
-                  (e.target as HTMLInputElement).value
-                ),
-              })}
+            @input=${
+              // eslint-disable-next-line lit/no-template-arrow
+              (e: Event) =>
+                (this.newCategory = {
+                  ...this.newCategory,
+                  act_duration_seconds: parseInt(
+                    (e.target as HTMLInputElement).value,
+                  ),
+                })
+            }
           />
         </td>
         <td>
@@ -595,13 +658,16 @@ export default class CupViewAdminCategories extends LitElement {
             style="width: 4em;"
             .value=${this.newCategory.judge_duration_seconds?.toString() ||
             "240"}
-            @input=${(e: Event) =>
-              (this.newCategory = {
-                ...this.newCategory,
-                judge_duration_seconds: parseInt(
-                  (e.target as HTMLInputElement).value
-                ),
-              })}
+            @input=${
+              // eslint-disable-next-line lit/no-template-arrow
+              (e: Event) =>
+                (this.newCategory = {
+                  ...this.newCategory,
+                  judge_duration_seconds: parseInt(
+                    (e.target as HTMLInputElement).value,
+                  ),
+                })
+            }
           />
         </td>
         <td>
@@ -625,10 +691,10 @@ export default class CupViewAdminCategories extends LitElement {
       new_name: category.name,
       description: category.description,
       from_birthday: this.formatDateForInput(
-        new Date(category.from_birthday || "")
+        new Date(category.from_birthday || ""),
       ),
       to_birthday: this.formatDateForInput(
-        new Date(category.to_birthday || "")
+        new Date(category.to_birthday || ""),
       ),
       is_pair: category.is_pair,
       is_sonderpokal: category.is_sonderpokal,
@@ -680,7 +746,7 @@ export default class CupViewAdminCategories extends LitElement {
   private async deleteCategory(categoryName: string) {
     if (
       !confirm(
-        `Sind Sie sicher, dass Sie die Kategorie "${categoryName}" löschen möchten?`
+        `Sind Sie sicher, dass Sie die Kategorie "${categoryName}" löschen möchten?`,
       )
     ) {
       return;

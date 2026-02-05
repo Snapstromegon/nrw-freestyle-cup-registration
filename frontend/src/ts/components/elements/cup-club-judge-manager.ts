@@ -230,14 +230,14 @@ export default class CupClubJudgeManager extends LitElement {
   systemStatus: SystemStatus | null = null;
   @consume({ context: userContext, subscribe: true }) user: User | null = null;
 
-  @property({ type: Boolean }) adminMode = false;
+  @property({ type: Boolean, attribute: "admin-mode" }) adminMode = false;
 
   judges = new Task(this, {
     task: async ([clubId]) => {
       if (!clubId) {
         return [];
       }
-      let resp = await client.GET("/api/query/list_club_judges", {
+      const resp = await client.GET("/api/query/list_club_judges", {
         params: { query: { club_id: clubId } },
       });
       if (resp.error) {
@@ -251,7 +251,7 @@ export default class CupClubJudgeManager extends LitElement {
     args: () => [this.club?.id],
   });
 
-  @state() judgeEdits: Map<string, Judge> = new Map();
+  @state() judgeEdits = new Map<string, Judge>();
   @state() addJudge: MaybeNewJudge = {
     firstname: "",
     lastname: "",
@@ -353,7 +353,7 @@ export default class CupClubJudgeManager extends LitElement {
         judge.s_p_u15_a ||
         judge.s_p_o15_p ||
         judge.s_p_o15_t ||
-        judge.s_p_o15_a
+        judge.s_p_o15_a,
     ).length;
   }
 
@@ -389,7 +389,7 @@ export default class CupClubJudgeManager extends LitElement {
         judge.s_p_u15_a_hosp ||
         judge.s_p_o15_p_hosp ||
         judge.s_p_o15_t_hosp ||
-        judge.s_p_o15_a_hosp
+        judge.s_p_o15_a_hosp,
     ).length;
   }
 
@@ -544,11 +544,14 @@ export default class CupClubJudgeManager extends LitElement {
                               ><span class="type-label"
                                 >${type.toUpperCase()}</span
                               ><select
-                                @input=${(e: InputEvent) =>
-                                  this.updateAddJudgeCategory(
-                                    e,
-                                    category + "_" + type
-                                  )}
+                                @input=${
+                                  // eslint-disable-next-line lit/no-template-arrow
+                                  (e: InputEvent) =>
+                                    this.updateAddJudgeCategory(
+                                      e,
+                                      category + "_" + type,
+                                    )
+                                }
                               >
                                 <option value="judge" ?selected=${isJudge}>
                                   ✔️
@@ -564,10 +567,10 @@ export default class CupClubJudgeManager extends LitElement {
                                 </option>
                               </select></label
                             >`;
-                          }
+                          },
                         )}
                       </td>`;
-                    }
+                    },
                   )}
                   <td class="actionCol">
                     <button
@@ -589,7 +592,7 @@ export default class CupClubJudgeManager extends LitElement {
                     <button
                       id="addJudgeButton"
                       class="material-icon"
-                      @click=${() => (this.addJudgeMode = true)}
+                      @click=${this.enterAddJudgeMode}
                     >
                       add
                     </button>
@@ -608,8 +611,11 @@ export default class CupClubJudgeManager extends LitElement {
                           ><input
                             type="text"
                             .value=${editJudge.firstname}
-                            @input=${(e: InputEvent) =>
-                              this.updateEditJudgeFirstname(editJudge, e)}
+                            @input=${
+                              // eslint-disable-next-line lit/no-template-arrow
+                              (e: InputEvent) =>
+                                this.updateEditJudgeFirstname(editJudge, e)
+                            }
                             placeholder="Vorname"
                         /></label>
                       </td>
@@ -619,8 +625,11 @@ export default class CupClubJudgeManager extends LitElement {
                           ><input
                             type="text"
                             .value=${editJudge.lastname}
-                            @input=${(e: InputEvent) =>
-                              this.updateEditJudgeLastname(editJudge, e)}
+                            @input=${
+                              // eslint-disable-next-line lit/no-template-arrow
+                              (e: InputEvent) =>
+                                this.updateEditJudgeLastname(editJudge, e)
+                            }
                             placeholder="Nachname"
                         /></label>
                       </td>
@@ -630,8 +639,11 @@ export default class CupClubJudgeManager extends LitElement {
                           ><input
                             type="text"
                             .value=${editJudge.mail}
-                            @input=${(e: InputEvent) =>
-                              this.updateEditJudgeMail(editJudge, e)}
+                            @input=${
+                              // eslint-disable-next-line lit/no-template-arrow
+                              (e: InputEvent) =>
+                                this.updateEditJudgeMail(editJudge, e)
+                            }
                             placeholder="hallo@example.com"
                         /></label>
                       </td>
@@ -643,8 +655,11 @@ export default class CupClubJudgeManager extends LitElement {
                             .value=${editJudge.birthdate
                               .toISOString()
                               .slice(0, 10)}
-                            @input=${(e: InputEvent) =>
-                              this.updateEditJudgeBirthdate(editJudge, e)}
+                            @input=${
+                              // eslint-disable-next-line lit/no-template-arrow
+                              (e: InputEvent) =>
+                                this.updateEditJudgeBirthdate(editJudge, e)
+                            }
                         /></label>
                       </td>
                       ${repeat(
@@ -688,12 +703,15 @@ export default class CupClubJudgeManager extends LitElement {
                                   ><span class="type-label"
                                     >${type.toUpperCase()}</span
                                   ><select
-                                    @input=${(e: InputEvent) =>
-                                      this.updateEditJudgeCategory(
-                                        editJudge,
-                                        e,
-                                        category + "_" + type
-                                      )}
+                                    @input=${
+                                      // eslint-disable-next-line lit/no-template-arrow
+                                      (e: InputEvent) =>
+                                        this.updateEditJudgeCategory(
+                                          editJudge,
+                                          e,
+                                          category + "_" + type,
+                                        )
+                                    }
                                   >
                                     <option value="judge" ?selected=${isJudge}>
                                       ✔️
@@ -709,21 +727,27 @@ export default class CupClubJudgeManager extends LitElement {
                                     </option>
                                   </select></label
                                 >`;
-                              }
+                              },
                             )}
                           </td>`;
-                        }
+                        },
                       )}
                       <td class="actionCol">
                         <button
                           class="green material-icon"
-                          @click=${() => this.commitJudgeEdit(editJudge)}
+                          @click=${
+                            // eslint-disable-next-line lit/no-template-arrow
+                            () => this.commitJudgeEdit(editJudge)
+                          }
                         >
                           save
                         </button>
                         <button
                           class="red material-icon"
-                          @click=${() => this.disableJudgeEdit(editJudge)}
+                          @click=${
+                            // eslint-disable-next-line lit/no-template-arrow
+                            () => this.disableJudgeEdit(editJudge)
+                          }
                         >
                           cancel
                         </button>
@@ -785,22 +809,28 @@ export default class CupClubJudgeManager extends LitElement {
                                     >${type.toUpperCase()}</span
                                   >${isJudge ? "✔️" : isHosp ? "👀" : "-"}
                                 </div>`;
-                              }
+                              },
                             )}
                           </td>`;
-                        }
+                        },
                       )}
                       <td class="actionCol">
                         ${this.systemStatus?.can_register_judge ||
                         this.user?.is_admin
                           ? html` <button
-                                @click=${() => this.enableJudgeEdit(judge)}
+                                @click=${
+                                  // eslint-disable-next-line lit/no-template-arrow
+                                  () => this.enableJudgeEdit(judge)
+                                }
                                 class="blue material-icon"
                               >
                                 edit
                               </button>
                               <button
-                                @click=${() => this.deleteJudge(judge)}
+                                @click=${
+                                  // eslint-disable-next-line lit/no-template-arrow
+                                  () => this.deleteJudge(judge)
+                                }
                                 class="red material-icon"
                               >
                                 delete
@@ -833,7 +863,7 @@ export default class CupClubJudgeManager extends LitElement {
 
     console.log(judge);
 
-    let resp = await client.POST("/api/command/edit_club_judge", {
+    const resp = await client.POST("/api/command/edit_club_judge", {
       body: {
         ...judge,
         judge_id: judge.id,
@@ -851,12 +881,12 @@ export default class CupClubJudgeManager extends LitElement {
   async deleteJudge(judge: Judge) {
     if (
       !confirm(
-        `Sicher, dass du ${judge.firstname} ${judge.lastname} löschen willst? Gib 'Ja' ein:`
+        `Sicher, dass du ${judge.firstname} ${judge.lastname} löschen willst? Gib 'Ja' ein:`,
       )
     ) {
       return;
     }
-    let resp = await client.POST("/api/command/delete_club_judge", {
+    const resp = await client.POST("/api/command/delete_club_judge", {
       body: { judge_id: judge.id },
     });
     if (resp.error) {
@@ -927,7 +957,7 @@ export default class CupClubJudgeManager extends LitElement {
       return;
     }
 
-    let resp = await client.POST("/api/command/add_club_judge", {
+    const resp = await client.POST("/api/command/add_club_judge", {
       body: {
         ...this.addJudge,
         club_id: this.club?.id,
@@ -1011,6 +1041,10 @@ export default class CupClubJudgeManager extends LitElement {
       s_p_o15_a_hosp: false,
     };
     this.addJudgeMode = false;
+  }
+
+  enterAddJudgeMode() {
+    this.addJudgeMode = true;
   }
 }
 
