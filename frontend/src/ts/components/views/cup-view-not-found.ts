@@ -9,7 +9,7 @@ export default class CupViewHome extends LitElement {
       padding: 1rem;
     }`;
 
-  @property() url: string = "";
+  @property() url = "";
 
   override render() {
     return html` <h1>Wie bist du hier hin gekommen?</h1>

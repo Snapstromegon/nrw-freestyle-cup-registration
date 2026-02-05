@@ -41,7 +41,7 @@ export default class CupFotobox extends LitElement {
   #intervalId: number | null = null;
 
   override connectedCallback(): void {
-    super.connectedCallback();
+    super.connectedCallback?.();
     this.#intervalId = setInterval(() => {
       this.counter = Date.now() / 1000 / 5;
       this.requestUpdate();
@@ -49,7 +49,7 @@ export default class CupFotobox extends LitElement {
   }
 
   override disconnectedCallback(): void {
-    super.disconnectedCallback();
+    super.disconnectedCallback?.();
     if (this.#intervalId) {
       clearInterval(this.#intervalId);
     }
@@ -105,7 +105,7 @@ export default class CupFotobox extends LitElement {
     this.invisible = true;
     this.loaded = false;
   }
-  
+
   loadSuccess(event: Event) {
     this.loaded = true;
     this.invisible = false;

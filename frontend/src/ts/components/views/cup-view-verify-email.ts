@@ -55,7 +55,7 @@ export default class CupViewVerifyEmail extends LitElement {
       if (!token) {
         throw new Error("No token provided.");
       }
-      let resp = await client.POST("/api/command/verify_email", {
+      const resp = await client.POST("/api/command/verify_email", {
         body: { token },
       });
       if (resp.response.status === 404) {

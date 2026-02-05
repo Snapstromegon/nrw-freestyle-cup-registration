@@ -47,14 +47,14 @@ export default class CupClubManager extends LitElement {
 
   @consume({ context: clubContext, subscribe: true }) club: Club | null = null;
 
-  @property({ type: Boolean }) adminMode = false;
+  @property({ type: Boolean, attribute: "admin-mode" }) adminMode = false;
 
   starters = new Task(this, {
     task: async ([clubId]) => {
       if (!clubId) {
         return [];
       }
-      let resp = await client.GET("/api/query/list_club_starters", {
+      const resp = await client.GET("/api/query/list_club_starters", {
         params: { query: { club_id: clubId } },
       });
       if (resp.error) {
@@ -141,7 +141,7 @@ export default class CupClubManager extends LitElement {
       ></cup-club-starter-manager>
       <hr />
       <cup-club-judge-manager
-        ?adminMode=${this.adminMode}
+        ?admin-mode=${this.adminMode}
       ></cup-club-judge-manager> `;
   }
 }

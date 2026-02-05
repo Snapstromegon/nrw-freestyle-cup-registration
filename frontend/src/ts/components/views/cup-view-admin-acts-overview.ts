@@ -67,7 +67,7 @@ export default class CupViewAdminActsOverview extends LitElement {
   clubs = new Task(this, {
     task: async () => {
       const users = (await client.GET("/api/query/list_users")).data?.filter(
-        (user) => user.club_id
+        (user) => user.club_id,
       );
       if (!users) {
         throw new Error("Unable to load users");
@@ -94,7 +94,7 @@ export default class CupViewAdminActsOverview extends LitElement {
           acts,
           actsReady: acts.reduce(
             (a, act) => a + (act.song_file && act.name ? 1 : 0),
-            0
+            0,
           ),
           actsWithSong: acts.reduce((a, act) => a + (act.song_file ? 1 : 0), 0),
           actsWithName: acts.reduce((a, act) => a + (act.name ? 1 : 0), 0),
@@ -133,8 +133,8 @@ export default class CupViewAdminActsOverview extends LitElement {
         actsByCategory.set(
           category.name,
           (acts as components["schemas"]["Act"][]).filter(
-            (act) => act.category === category.name
-          )
+            (act) => act.category === category.name,
+          ),
         );
       }
       return actsByCategory;
@@ -191,22 +191,23 @@ export default class CupViewAdminActsOverview extends LitElement {
               ${repeat(
                 clubs,
                 (c) => c.club.id,
-                (c) => html`<tr>
-                  <td>${c.club.name}</td>
-                  <td>${c.user.name}</td>
-                  <td>${c.user.email}</td>
-                  <td class="right">${c.acts.length}</td>
-                  <td class="right">${c.actsWithSong}</td>
-                  <td class="right">${c.actsWithName}</td>
-                  <td class="right">${c.actsReady}</td>
-                  <td>
-                    ${c.actsReady == c.acts.length
-                      ? "✔️"
-                      : c.actsReady
-                      ? "⌛"
-                      : "❌"}
-                  </td>
-                </tr>`
+                (c) =>
+                  html`<tr>
+                    <td>${c.club.name}</td>
+                    <td>${c.user.name}</td>
+                    <td>${c.user.email}</td>
+                    <td class="right">${c.acts.length}</td>
+                    <td class="right">${c.actsWithSong}</td>
+                    <td class="right">${c.actsWithName}</td>
+                    <td class="right">${c.actsReady}</td>
+                    <td>
+                      ${c.actsReady == c.acts.length
+                        ? "✔️"
+                        : c.actsReady
+                          ? "⌛"
+                          : "❌"}
+                    </td>
+                  </tr>`,
               )}
             </tbody>
           </table>
@@ -226,7 +227,12 @@ export default class CupViewAdminActsOverview extends LitElement {
                     return html`
                       <section class="category">
                         <h3>${category.description}</h3>
-                        <button @click=${() => this.shuffleOrder(acts)}>
+                        <button
+                          @click=${
+                            // eslint-disable-next-line lit/no-template-arrow
+                            () => this.shuffleOrder(acts)
+                          }
+                        >
                           Shuffle
                         </button>
                         <table>
@@ -239,16 +245,20 @@ export default class CupViewAdminActsOverview extends LitElement {
                                   <button
                                     ?disabled=${i == 0}
                                     class="material-icon"
-                                    @click=${() =>
-                                      this.swapActs(act, acts[i - 1])}
+                                    @click=${
+                                      // eslint-disable-next-line lit/no-template-arrow
+                                      () => this.swapActs(act, acts[i - 1])
+                                    }
                                   >
                                     arrow_upward
                                   </button>
                                   <button
                                     ?disabled=${i == acts.length - 1}
                                     class="material-icon"
-                                    @click=${() =>
-                                      this.swapActs(act, acts[i + 1])}
+                                    @click=${
+                                      // eslint-disable-next-line lit/no-template-arrow
+                                      () => this.swapActs(act, acts[i + 1])
+                                    }
                                   >
                                     arrow_downward
                                   </button>
@@ -259,7 +269,7 @@ export default class CupViewAdminActsOverview extends LitElement {
                                   ${act.participants
                                     .map(
                                       (p) =>
-                                        `${p.firstname} ${p.lastname} (${p.club_name})`
+                                        `${p.firstname} ${p.lastname} (${p.club_name})`,
                                     )
                                     .join(" & ")}
                                 </td>
@@ -277,22 +287,25 @@ export default class CupViewAdminActsOverview extends LitElement {
                                     ? html`<input
                                         type="checkbox"
                                         ?checked=${act.song_checked}
-                                        @change=${(e: Event) =>
-                                          this.setSongChecked(act, e)}
+                                        @change=${
+                                          // eslint-disable-next-line lit/no-template-arrow
+                                          (e: Event) =>
+                                            this.setSongChecked(act, e)
+                                        }
                                       />`
                                     : nothing}
                                 </td>
                               </tr>
-                            `
+                            `,
                           )}
                         </table>
                       </section>
                     `;
-                  }
+                  },
                 )}
               `,
             }),
-        })
+        }),
       )}`;
   }
 
@@ -316,7 +329,7 @@ export default class CupViewAdminActsOverview extends LitElement {
 
   async swapActs(
     act1: components["schemas"]["Act"],
-    act2: components["schemas"]["Act"]
+    act2: components["schemas"]["Act"],
   ) {
     await client.POST("/api/command/set_act_order", {
       body: { act_id: act1.id, order: act2.act_order },

@@ -92,7 +92,7 @@ export default class CupViewActs extends LitElement {
 
   @consume({ context: userContext, subscribe: true })
   user: User | null = null;
-  @state() message: string = "Hello, World!";
+  @state() message = "Hello, World!";
 
   override render() {
     return html`<header>
@@ -108,7 +108,7 @@ export default class CupViewActs extends LitElement {
         <h2>Kür Manager</h2>
         ${this.user?.club_id
           ? html`
-              <cup-context-club clubId=${this.user?.club_id}
+              <cup-context-club club-id=${this.user?.club_id}
                 ><cup-club-act-manager></cup-club-act-manager
               ></cup-context-club>
             `

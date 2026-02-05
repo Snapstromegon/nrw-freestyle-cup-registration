@@ -153,7 +153,10 @@ export default class CupViewAdminPayments extends LitElement {
                   <td>
                     <button
                       class="material-icon"
-                      @click=${() => this.updatePayment(c.club)}
+                      @click=${
+                        // eslint-disable-next-line lit/no-template-arrow
+                        () => this.updatePayment(c.club)
+                      }
                     >
                       payments
                     </button>

@@ -5,8 +5,9 @@ import { Task } from "@lit/task";
 import "../elements/cup-context-club.js";
 import "../elements/cup-club-manager.js";
 import "../elements/cup-starter-table.js";
+import { repeat } from "lit/directives/repeat.js";
 
-const CATEGORY_TO_ATTRIBUTE: { [type: string]: string } = {
+const CATEGORY_TO_ATTRIBUTE: Record<string, string> = {
   NEM: "n_em_u15",
   NEWU11: "n_ew_u15",
   NEWU13: "n_ew_u15",
@@ -103,21 +104,21 @@ export default class CupViewAdminJudges extends LitElement {
       }
       const all = data.data;
 
-      type JudgeCat = {
+      interface JudgeCat {
         judge: components["schemas"]["Judge"][];
         hospitation: components["schemas"]["Judge"][];
-      };
+      }
 
-      type CategoryJudge = {
+      interface CategoryJudge {
         category: components["schemas"]["Category"];
         technic: JudgeCat;
         dismounts: JudgeCat;
         performance: JudgeCat;
-      };
+      }
 
       console.log(all);
 
-      const judgesByCategory: { [type: string]: CategoryJudge } = {};
+      const judgesByCategory: Record<string, CategoryJudge> = {};
 
       for (const cat of categories) {
         const cat_attr = CATEGORY_TO_ATTRIBUTE[cat.name] as string;
@@ -126,19 +127,19 @@ export default class CupViewAdminJudges extends LitElement {
           technic: {
             judge: all.filter((j) => (j as any)[cat_attr + "_t"] as boolean),
             hospitation: all.filter(
-              (j) => (j as any)[cat_attr + "_t_hosp"] as boolean
+              (j) => (j as any)[cat_attr + "_t_hosp"] as boolean,
             ),
           },
           dismounts: {
             judge: all.filter((j) => (j as any)[cat_attr + "_a"] as boolean),
             hospitation: all.filter(
-              (j) => (j as any)[cat_attr + "_a_hosp"] as boolean
+              (j) => (j as any)[cat_attr + "_a_hosp"] as boolean,
             ),
           },
           performance: {
             judge: all.filter((j) => (j as any)[cat_attr + "_p"] as boolean),
             hospitation: all.filter(
-              (j) => (j as any)[cat_attr + "_p_hosp"] as boolean
+              (j) => (j as any)[cat_attr + "_p_hosp"] as boolean,
             ),
           },
         };
@@ -162,43 +163,52 @@ export default class CupViewAdminJudges extends LitElement {
             <thead>
               <tr>
                 <th></th>
-                ${Object.values(judgesByCategory || {}).map(
+                ${repeat(
+                  Object.values(judgesByCategory || {}),
+                  (category) => category.category.name,
                   (category) =>
-                    html`<th colspan="3">${category.category.name}</th>`
+                    html`<th colspan="3">${category.category.name}</th>`,
                 )}
               </tr>
               <tr>
                 <th></th>
-                ${Object.values(judgesByCategory || {}).map(
+                ${repeat(
+                  Object.values(judgesByCategory || {}),
                   () =>
                     html`<th>T</th>
                       <th>P</th>
-                      <th>A</th>`
+                      <th>A</th>`,
                 )}
               </tr>
             </thead>
             <tbody>
               <tr>
                 <th>Judge</th>
-                ${Object.values(judgesByCategory || {}).map(
+                ${repeat(
+                  Object.values(judgesByCategory || {}),
+                  (category) => category.category.name,
                   (category) =>
                     html`<td>${category.technic.judge.length}</td>
                       <td>${category.performance.judge.length}</td>
-                      <td>${category.dismounts.judge.length}</td>`
+                      <td>${category.dismounts.judge.length}</td>`,
                 )}
               </tr>
               <tr>
                 <th>Hospitation</th>
-                ${Object.values(judgesByCategory || {}).map(
+                ${repeat(
+                  Object.values(judgesByCategory || {}),
+                  (category) => category.category.name,
                   (category) =>
                     html`<td>${category.technic.hospitation.length}</td>
                       <td>${category.performance.hospitation.length}</td>
-                      <td>${category.dismounts.hospitation.length}</td>`
+                      <td>${category.dismounts.hospitation.length}</td>`,
                 )}
               </tr>
             </tbody>
           </table>
-          ${Object.values(judgesByCategory || {}).map(
+          ${repeat(
+            Object.values(judgesByCategory || {}),
+            (category) => category.category.name,
             (category) => html`
               <h2>${category.category.description}</h2>
               <section class="category">
@@ -207,23 +217,27 @@ export default class CupViewAdminJudges extends LitElement {
                     Technik
                   </caption>
                   <tbody>
-                    ${category.technic.judge.map(
+                    ${repeat(
+                      category.technic.judge,
+                      (judge) => judge.id,
                       (judge) =>
                         html`<tr>
                           <td>✔️</td>
                           <td>${judge.club_name}</td>
                           <td>${judge.firstname} ${judge.lastname}</td>
                           <td>${judge.mail}</td>
-                        </tr>`
+                        </tr>`,
                     )}
-                    ${category.technic.hospitation.map(
+                    ${repeat(
+                      category.technic.hospitation,
+                      (judge) => judge.id,
                       (judge) =>
                         html`<tr>
                           <td>👀</td>
                           <td>${judge.club_name}</td>
                           <td>${judge.firstname} ${judge.lastname}</td>
                           <td>${judge.mail}</td>
-                        </tr>`
+                        </tr>`,
                     )}
                   </tbody>
                 </table>
@@ -232,23 +246,27 @@ export default class CupViewAdminJudges extends LitElement {
                     Performance
                   </caption>
                   <tbody>
-                    ${category.performance.judge.map(
+                    ${repeat(
+                      category.performance.judge,
+                      (judge) => judge.id,
                       (judge) =>
                         html`<tr>
                           <td>✔️</td>
                           <td>${judge.club_name}</td>
                           <td>${judge.firstname} ${judge.lastname}</td>
                           <td>${judge.mail}</td>
-                        </tr>`
+                        </tr>`,
                     )}
-                    ${category.performance.hospitation.map(
+                    ${repeat(
+                      category.performance.hospitation,
+                      (judge) => judge.id,
                       (judge) =>
                         html`<tr>
                           <td>👀</td>
                           <td>${judge.club_name}</td>
                           <td>${judge.firstname} ${judge.lastname}</td>
                           <td>${judge.mail}</td>
-                        </tr>`
+                        </tr>`,
                     )}
                   </tbody>
                 </table>
@@ -257,28 +275,32 @@ export default class CupViewAdminJudges extends LitElement {
                     Abstiege
                   </caption>
                   <tbody>
-                    ${category.dismounts.judge.map(
+                    ${repeat(
+                      category.dismounts.judge,
+                      (judge) => judge.id,
                       (judge) =>
                         html`<tr>
                           <td>✔️</td>
                           <td>${judge.club_name}</td>
                           <td>${judge.firstname} ${judge.lastname}</td>
                           <td>${judge.mail}</td>
-                        </tr>`
+                        </tr>`,
                     )}
-                    ${category.dismounts.hospitation.map(
+                    ${repeat(
+                      category.dismounts.hospitation,
+                      (judge) => judge.id,
                       (judge) =>
                         html`<tr>
                           <td>👀</td>
                           <td>${judge.club_name}</td>
                           <td>${judge.firstname} ${judge.lastname}</td>
                           <td>${judge.mail}</td>
-                        </tr>`
+                        </tr>`,
                     )}
                   </tbody>
                 </table>
               </section>
-            `
+            `,
           )}
         `,
       })}`;
