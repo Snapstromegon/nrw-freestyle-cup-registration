@@ -5,7 +5,7 @@ import { Task } from "@lit/task";
 import "../elements/cup-context-club.js";
 import "../elements/cup-club-manager.js";
 import "../elements/cup-starter-table.js";
-import { repeat } from "lit/directives/repeat";
+import { repeat } from "lit/directives/repeat.js";
 
 const CATEGORY_TO_ATTRIBUTE: Record<string, string> = {
   NEM: "n_em_u15",

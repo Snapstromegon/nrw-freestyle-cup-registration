@@ -6,7 +6,7 @@ import { Task } from "@lit/task";
 import { Club, clubContext } from "../../contexts/club";
 import { SystemStatus, systemStatusContext } from "../../contexts/systemStatus";
 import { User, userContext } from "../../contexts/user";
-import { repeat } from "lit/directives/repeat";
+import { repeat } from "lit/directives/repeat.js";
 
 type Act = components["schemas"]["ClubAct"];
 
