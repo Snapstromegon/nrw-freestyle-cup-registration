@@ -44,14 +44,60 @@ pub async fn delete_club_starter(
         return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
     }
     let db = db.get().await.clone();
+    let mut transaction = db.begin().await?;
+
+    // delete all acts and act_participant entries that reference this starter
+    let act_ids = sqlx::query!(
+        r#"
+        SELECT id as "id!: Uuid" FROM acts JOIN act_participants ON acts.id = act_participants.act_id WHERE act_participants.starter_id = ?;
+        "#,
+        body.starter_id
+    )
+    .fetch_all(&mut *transaction)
+    .await?
+    .into_iter()
+    .map(|row| row.id)
+    .collect::<Vec<_>>();
+
+    for act_id in &act_ids {
+        sqlx::query!(
+            r#"
+            DELETE FROM act_participants WHERE act_id = ?;
+            "#,
+            act_id
+        )
+        .execute(&mut *transaction)
+        .await?;
+
+        sqlx::query!(
+            r#"
+            DELETE FROM acts WHERE id = ?;
+            "#,
+            act_id
+        )
+        .execute(&mut *transaction)
+        .await?;
+    }
+
+    sqlx::query!(
+        r#"
+        UPDATE starter SET partner_id = NULL WHERE partner_id = ?;
+        "#,
+        body.starter_id
+    )
+    .execute(&mut *transaction)
+    .await?;
+
     sqlx::query!(
         r#"
         DELETE FROM starter WHERE id = ?;
         "#,
         body.starter_id
     )
-    .execute(&db)
+    .execute(&mut *transaction)
     .await?;
+
+    transaction.commit().await?;
 
     Ok(Json(DeleteClubStarterResponse {}))
 }

@@ -101,8 +101,8 @@ export default class CupViewAdmin extends LitElement {
               <p>${user.email_verified ? "✔️" : "❌"}</p>
               <p>${user.is_admin ? "✔️" : "❌"}</p>
               ${user.club_id
-                ? html` <cup-context-club clubId=${user.club_id}>
-                    <cup-club-manager ?adminMode=${true}></cup-club-manager>
+                ? html` <cup-context-club club-id=${user.club_id}>
+                    <cup-club-manager ?admin-mode=${true}></cup-club-manager>
                   </cup-context-club>`
                 : html`<p>Kein Verein</p>`}
             </div>`
