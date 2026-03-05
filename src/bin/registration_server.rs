@@ -14,6 +14,7 @@ use serde::Deserialize;
 use sqlx::migrate;
 use time::{OffsetDateTime, format_description::well_known::Iso8601};
 use tokio::signal;
+use tracing::info;
 use tracing_subscriber::FmtSubscriber;
 use url::Url;
 use uuid::Uuid;
@@ -66,7 +67,7 @@ pub struct AdminArgs {
 }
 
 impl FromStr for AdminArgs {
-    type Err = anyhow::Error;
+    type Err = serde_json::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let res: AdminArgs = serde_json::from_str(s)?;
@@ -75,7 +76,8 @@ impl FromStr for AdminArgs {
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> eyre::Result<()> {
+    color_eyre::install()?;
     dotenvy::dotenv().ok();
     let args = Args::parse();
     FmtSubscriber::builder()
@@ -85,6 +87,9 @@ async fn main() -> anyhow::Result<()> {
         .with_line_number(true)
         .init();
 
+    info!("Starting registration system.");
+    info!("Build Mail client");
+
     let mailer = Mailer::new(
         &args.smtp_server,
         &args.smtp_username,
@@ -92,18 +97,24 @@ async fn main() -> anyhow::Result<()> {
         &args.smtp_username,
     );
 
+    info!("Connecting to database");
+
     let db = sqlx::sqlite::SqlitePool::connect(&args.db.to_string_lossy())
         .await
         .expect("Couldn't connect to database");
 
+    info!("Running database migrations");
     migrate!("./migrations").run(&db).await?;
 
     if let Some(admin) = &args.admin {
+        info!("Inserting admin user with email: {}", admin.email);
         insert_admin_user(&db, &admin.name, &admin.email, &admin.password).await?;
     }
 
+    info!("Initializing acts");
     utils::initialize_acts(&db).await.unwrap();
 
+    info!("Build JWT config");
     let jwt_algorithm = jsonwebtoken::Algorithm::HS512;
     let mut validator = jsonwebtoken::Validation::new(jwt_algorithm);
     validator.validate_aud = false;
@@ -115,6 +126,7 @@ async fn main() -> anyhow::Result<()> {
         args.insecure_cookies,
     );
 
+    info!("Starting HTTP server");
     HttpServer::new(
         HttpServerOptions {
             bind_address: args.http_address,
@@ -137,7 +149,7 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn admin_user_exists(db: &sqlx::SqlitePool) -> anyhow::Result<bool> {
+async fn admin_user_exists(db: &sqlx::SqlitePool) -> sqlx::Result<bool> {
     let result = sqlx::query!(
         r#"
         SELECT COUNT(*) as count FROM users WHERE is_admin = true
@@ -153,7 +165,7 @@ async fn insert_admin_user(
     name: &str,
     email: &str,
     password: &str,
-) -> anyhow::Result<()> {
+) -> sqlx::Result<()> {
     if admin_user_exists(db).await? {
         return Ok(());
     }
@@ -191,6 +203,8 @@ async fn shutdown_signal() {
 
     #[cfg(not(unix))]
     let terminate = std::future::pending::<()>();
+
+    info!("Waiting for shutdown signal (Ctrl+C or SIGTERM)");
 
     tokio::select! {
         _ = ctrl_c => {},

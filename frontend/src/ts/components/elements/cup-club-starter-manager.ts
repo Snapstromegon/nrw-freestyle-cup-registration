@@ -967,8 +967,8 @@ export default class CupClubStarterManager extends LitElement {
 }
 
 export const getStarterPrice = (starter: MaybeNewStarter) => {
-  const singlePricePerStart = starter.single_sonderpokal ? 12 : 10;
-  const pairPricePerStart = starter.pair_sonderpokal ? 12 : 10;
+  const singlePricePerStart = starter.single_sonderpokal ? 12 : 12;
+  const pairPricePerStart = starter.pair_sonderpokal ? 12 : 12;
   let price = 0;
   if (starter.single_male) {
     price += singlePricePerStart;

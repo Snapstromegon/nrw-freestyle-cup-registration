@@ -111,7 +111,7 @@ export default class CupClubManager extends LitElement {
                 <td>
                   ${(this.starters.value || []).reduce(
                     (acc, starter) => acc + getStarterPrice(starter),
-                    0
+                    0,
                   )}€
                 </td>
               </tr>
@@ -130,6 +130,14 @@ export default class CupClubManager extends LitElement {
                 ><strong>Hinweis:</strong> Zahlungen werden von uns manuell
                 bestätigt, daher kann die "Gezahlt" Angabe teils mehrere Tage
                 Verzug haben.</i
+              >
+            </p>
+            <p>
+              <i
+                ><strong>Korrektur:</strong> Aufgrund eines Fehlers wurde
+                ursprünglich der zu zahlende Betrag falsch angezeigt. Dies ist
+                nun korrigiert und passt zur Startgebühr von 12€ aus der
+                Ausschreibung.</i
               >
             </p>
           `}
