@@ -442,8 +442,8 @@ export default class CupClubJudgeManager extends LitElement {
             <th colspan="2">Einzel W</th>
             <th colspan="2">Einzel M</th>
             <th colspan="2">Paar</th>
-            <th colspan="2">Einzel</th>
-            <th colspan="2">Paar</th>
+            <th hidden colspan="2">Einzel</th>
+            <th hidden colspan="2">Paar</th>
           </tr>
           <tr>
             <th>U15</th>
@@ -452,10 +452,10 @@ export default class CupClubJudgeManager extends LitElement {
             <th>15+</th>
             <th>U15</th>
             <th>15+</th>
-            <th>U15</th>
-            <th>15+</th>
-            <th>U15</th>
-            <th>15+</th>
+            <th hidden>U15</th>
+            <th hidden>15+</th>
+            <th hidden>U15</th>
+            <th hidden>15+</th>
           </tr>
         </thead>
         <tbody>
