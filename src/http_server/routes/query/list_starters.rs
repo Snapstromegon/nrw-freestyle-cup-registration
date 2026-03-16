@@ -25,6 +25,7 @@ pub struct Starter {
     partner_name: Option<String>,
     resolved_partner_name: Option<String>,
     resolved_partner_club: Option<String>,
+    age_on_competition: f64,
 }
 
 /// Get information about a club.
@@ -69,7 +70,8 @@ pub async fn list_starters(
             starter.partner_id as "partner_id: Uuid",
             starter.partner_name,
             NULLIF(concat_ws(" ", partner.firstname, partner.lastname), '') as "resolved_partner_name: String",
-            partner_club.name as resolved_partner_club
+            partner_club.name as resolved_partner_club,
+            starter.age_on_competition
         FROM starter
           LEFT JOIN clubs as club ON club.id = starter.club_id
           LEFT JOIN starter as partner ON partner.id = starter.partner_id

@@ -25,6 +25,7 @@ export default class CupStarterTable extends LitElement {
           <th>Vorname</th>
           <th>Nachname</th>
           <th>Geburtstag</th>
+          <th>Alter</th>
           ${this.pairs.length
             ? html`
                 <th>ID</th>
@@ -32,6 +33,7 @@ export default class CupStarterTable extends LitElement {
                 <th>Vorname</th>
                 <th>Nachname</th>
                 <th>Geburtstag</th>
+                <th>Alter</th>
               `
             : nothing}
         </tr>
@@ -49,6 +51,7 @@ export default class CupStarterTable extends LitElement {
                   <td>${starter.firstname}</td>
                   <td>${starter.lastname}</td>
                   <td>${new Date(starter.birthdate).toLocaleDateString()}</td>
+                  <td>${starter.age_on_competition.toFixed(2)}</td>
                   <td>${partner ? partner.id : nothing}</td>
                   <td>${partner ? partner.club_name : nothing}</td>
                   <td>${partner ? partner.firstname : starter.partner_name}</td>
@@ -57,6 +60,9 @@ export default class CupStarterTable extends LitElement {
                     ${partner
                       ? new Date(partner.birthdate).toLocaleDateString()
                       : nothing}
+                  </td>
+                  <td>
+                    ${partner ? partner.age_on_competition.toFixed(2) : nothing}
                   </td>
                 </tr>
               `;
@@ -70,6 +76,7 @@ export default class CupStarterTable extends LitElement {
                   <td>${starter.firstname}</td>
                   <td>${starter.lastname}</td>
                   <td>${new Date(starter.birthdate).toLocaleDateString()}</td>
+                  <td>${starter.age_on_competition}</td>
                 </tr>
               `
             )}

@@ -273,6 +273,7 @@ export default class CupViewAdminActsOverview extends LitElement {
                                     )
                                     .join(" & ")}
                                 </td>
+                                <td>${act.max_age}</td>
                                 <td>
                                   ${act.song_file
                                     ? html` <audio

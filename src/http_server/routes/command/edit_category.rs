@@ -55,6 +55,8 @@ pub async fn edit_category(
     // Start a transaction to ensure atomicity
     let mut tx = db.begin().await?;
 
+    sqlx::query!("PRAGMA defer_foreign_keys = ON").execute(&mut *tx).await?;
+
     // Update timeplan table first to maintain foreign key constraint
     if body.new_name != body.name {
         sqlx::query!(
