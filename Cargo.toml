@@ -17,7 +17,7 @@ askama = "0.15.6"
 axum = { version = "0.8", features = ["macros", "multipart"] }
 axum-embed = "0.1.0"
 axum-extra = { version = "0.12", features = ["cookie"] }
-clap = { version = "4.5.60", features = ["derive", "env"] }
+clap = { version = "4.6.0", features = ["derive", "env"] }
 color-eyre = "0.6.5"
 dotenvy = "0.15.7"
 eyre = "0.6.12"
