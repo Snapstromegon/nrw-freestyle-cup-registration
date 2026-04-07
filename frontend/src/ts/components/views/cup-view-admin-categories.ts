@@ -129,6 +129,17 @@ export default class CupViewAdminCategories extends LitElement {
       color: white;
       border: none;
     }
+
+    .move-btn {
+      background-color: #17a2b8;
+      color: white;
+      border: none;
+      padding: 0.25rem 0.5rem;
+    }
+
+    .move-btn:disabled {
+      background-color: #ccc;
+    }
   `;
 
   @state()
@@ -178,6 +189,7 @@ export default class CupViewAdminCategories extends LitElement {
       <nav>
         <a href="/admin">Anmeldeübersicht</a>
         <a href="/admin-acts-overview">Küren Übersicht</a>
+        <a href="/admin-timeplan">Zeitplan Verwaltung</a>
       </nav>
 
       <h1>Kategorie Verwaltung</h1>
@@ -260,6 +272,26 @@ export default class CupViewAdminCategories extends LitElement {
         </td>
         <td>
           <div class="actions">
+            <button
+              class="move-btn"
+              @click=${
+                // eslint-disable-next-line lit/no-template-arrow
+                () => this.moveCategoryUp(category.name)
+              }
+              title="Nach oben"
+            >
+              <span class="material-icon">arrow_upward</span>
+            </button>
+            <button
+              class="move-btn"
+              @click=${
+                // eslint-disable-next-line lit/no-template-arrow
+                () => this.moveCategoryDown(category.name)
+              }
+              title="Nach unten"
+            >
+              <span class="material-icon">arrow_downward</span>
+            </button>
             <button
               class="edit-btn"
               @click=${
@@ -759,6 +791,28 @@ export default class CupViewAdminCategories extends LitElement {
       this.categories.run();
     } catch (error) {
       alert("Fehler beim Löschen der Kategorie: " + error);
+    }
+  }
+
+  private async moveCategoryUp(categoryName: string) {
+    try {
+      await client.POST("/api/command/move_category_up", {
+        body: { name: categoryName },
+      });
+      this.categories.run();
+    } catch (error) {
+      // Silently fail if can't move up (already at top)
+    }
+  }
+
+  private async moveCategoryDown(categoryName: string) {
+    try {
+      await client.POST("/api/command/move_category_down", {
+        body: { name: categoryName },
+      });
+      this.categories.run();
+    } catch (error) {
+      // Silently fail if can't move down (already at bottom)
     }
   }
 }

@@ -4,16 +4,23 @@ use utoipa_axum::{router::OpenApiRouter, routes};
 mod add_category;
 mod add_club_judge;
 mod add_club_starter;
+mod add_timeplan_entry;
 mod create_club;
 mod delete_category;
 mod delete_club_judge;
 mod delete_club_starter;
+mod delete_timeplan_entry;
 mod edit_category;
 mod edit_club_act;
 mod edit_club_judge;
 mod edit_club_starter;
+mod edit_timeplan_entry;
 mod login;
 mod logout;
+mod move_category_down;
+mod move_category_up;
+mod move_timeplan_down;
+mod move_timeplan_up;
 mod register;
 mod reload_db;
 mod rename_club;
@@ -40,6 +47,11 @@ pub fn get_command_router() -> OpenApiRouter {
         .routes(routes!(add_category::add_category))
         .routes(routes!(edit_category::edit_category))
         .routes(routes!(delete_category::delete_category))
+        .routes(routes!(move_category_up::move_category_up))
+        .routes(routes!(move_category_down::move_category_down))
+        .routes(routes!(add_timeplan_entry::add_timeplan_entry))
+        .routes(routes!(edit_timeplan_entry::edit_timeplan_entry))
+        .routes(routes!(delete_timeplan_entry::delete_timeplan_entry))
         .routes(routes!(create_club::create_club))
         .routes(routes!(rename_club::rename_club))
         .routes(routes!(add_club_starter::add_club_starter))
@@ -55,6 +67,8 @@ pub fn get_command_router() -> OpenApiRouter {
         .routes(routes!(set_act_order::set_act_order))
         .routes(routes!(timeplan_forward::timeplan_forward))
         .routes(routes!(timeplan_backward::timeplan_backward))
+        .routes(routes!(move_timeplan_up::move_timeplan_up))
+        .routes(routes!(move_timeplan_down::move_timeplan_down))
         .routes(routes!(reload_db::reload_db))
         .layer(DefaultBodyLimit::max(1024 * 1024 * 10))
 }

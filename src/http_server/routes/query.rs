@@ -11,6 +11,7 @@ mod list_club_judges;
 mod list_club_starters;
 mod list_judges;
 mod list_starters;
+mod list_timeplan;
 mod list_users;
 mod predict_timeplan;
 mod startlist;
@@ -30,6 +31,7 @@ pub fn get_query_router() -> OpenApiRouter {
         .routes(routes!(list_acts::list_acts))
         .routes(routes!(list_judges::list_judges))
         .routes(routes!(list_categories::list_categories))
+        .routes(routes!(list_timeplan::list_timeplan))
         .routes(routes!(startlist::startlist))
         .routes(routes!(get_startlist_csv::get_startlist_csv))
         .routes(routes!(predict_timeplan::predict_timeplan))
