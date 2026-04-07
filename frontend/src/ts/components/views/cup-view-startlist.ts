@@ -201,7 +201,7 @@ export default class CupViewStartlist extends LitElement {
     return html`<header>
         <img src="/assets/images/nrw-freestyle-cup.svg" />
         <h1>Startliste NRW Freestyle Cup</h1>
-        <span class="date">15.03. - 16.03.2026</span>
+        <span class="date">19.04.2026</span>
         <span class="location">SSV Nümbrecht</span>
       </header>
       <main>
