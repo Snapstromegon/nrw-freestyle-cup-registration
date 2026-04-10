@@ -21,6 +21,7 @@ export default class CupFotobox extends LitElement {
       min-height: 0;
       min-width: 0;
       place-items: center;
+      isolation: isolate;
     }
 
     img {
@@ -35,6 +36,7 @@ export default class CupFotobox extends LitElement {
 
     .visible {
       opacity: 1;
+      mix-blend-mode: plus-lighter;
     }
   `;
 
