@@ -215,6 +215,8 @@ export default class CupViewStartlist extends LitElement {
           >Alle Zeitangaben sind vorläufig und können sich am Wettkampftag nach
           vorne UND hinten verschieben.</i
         >
+        <strong>Einfahrzeiten werden alle zwei Gruppen für beide Gruppen gemeinsam eingelegt.</strong>
+        <p>Einfahrzeiten: EM & EWU10; EWU10,5 & EWU11; EWU15 & EW15+; PU10 & PU11; PU12 & PU12,5; PU13,5 & PU14; PU15 & P15+</p>
         ${cache(
           this.categories.render({
             complete: (categories) =>

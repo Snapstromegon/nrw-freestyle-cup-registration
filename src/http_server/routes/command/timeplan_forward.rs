@@ -34,6 +34,8 @@ pub async fn timeplan_forward(
     if !auth.is_admin() {
         return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
     }
+
+    info!("Forwarding timeplan");
     let db = db.get().await.clone();
 
     let running_timeplan_entry = sqlx::query!(
@@ -91,11 +93,41 @@ pub async fn timeplan_forward(
             .await?;
         }
         None => {
-            sqlx::query!(
-                "UPDATE timeplan SET started_at = datetime('now') WHERE id = (SELECT id FROM timeplan WHERE started_at IS NULL ORDER BY id LIMIT 1)"
-            ).execute(&db).await?;
+            info!("Starting Next timeplan entry");
+            start_next_timeplan_entry(&db).await?;
         }
     }
 
     Ok(Json(SetTimeplanForwardResponse {}))
+}
+
+async fn start_next_timeplan_entry(db: &sqlx::SqlitePool) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "UPDATE timeplan SET started_at = datetime('now') WHERE id = (SELECT id FROM timeplan WHERE started_at IS NULL ORDER BY id LIMIT 1)"
+    ).execute(db).await?;
+
+    let category =
+        sqlx::query!("SELECT id, category FROM timeplan WHERE started_at IS NOT NULL AND ended_at IS NULL ORDER BY id LIMIT 1")
+            .fetch_optional(db)
+            .await?
+            .map(|row| row.category);
+
+    if let Some(category) = category {
+        let einfahrzeit_seconds = sqlx::query!(
+            "SELECT einfahrzeit_seconds FROM categories WHERE name = ?",
+            category
+        )
+        .fetch_one(db)
+        .await?
+        .einfahrzeit_seconds;
+
+        if einfahrzeit_seconds == 0 {
+            sqlx::query!(
+                "UPDATE acts SET started_at = datetime('now') WHERE id = (SELECT id FROM view_act WHERE category = ? AND started_at IS NULL ORDER BY `order` LIMIT 1)",
+                category
+            ).execute(db).await?;
+        }
+    }
+
+    Ok(())
 }

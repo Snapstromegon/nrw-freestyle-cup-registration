@@ -11,6 +11,7 @@ import {
   currentTimeplanEntry,
   lastTimeplanAct,
   lastTimeplanEntry,
+  nextTimeplanEntry,
   TimeplanStatus,
   timeplanStatus,
 } from "../../utils.js";
@@ -329,6 +330,7 @@ export default class CupViewInfoBoard extends LitElement {
     const currentEntry = currentTimeplanEntry(timeplan);
     const currentAct = currentTimeplanAct(timeplan);
     const lastEntry = lastTimeplanEntry(timeplan);
+    const nextEntry = nextTimeplanEntry(timeplan);
     switch (status) {
       case TimeplanStatus.Break:
         return html`<div class="break">
@@ -348,13 +350,18 @@ export default class CupViewInfoBoard extends LitElement {
               ? currentEntry.timeplan_entry.Category.description
               : "Invalid State"}
           </h2>
+          ${nextEntry &&
+          "Category" in nextEntry.timeplan_entry &&
+          nextEntry.timeplan_entry.Category.einfahrzeit_seconds == 0
+            ? html`<h2>${nextEntry.timeplan_entry.Category.description}</h2>`
+            : nothing}
           <cup-countdown
             .time=${new Date(
               new Date(currentEntry?.predicted_start || "").getTime() +
                 (currentEntry && "Category" in currentEntry.timeplan_entry
                   ? currentEntry.timeplan_entry.Category.einfahrzeit_seconds *
                     1000
-                  : 0)
+                  : 0),
             )}
           ></cup-countdown>
         </div>`;

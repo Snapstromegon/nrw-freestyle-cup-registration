@@ -9,7 +9,7 @@ export enum TimeplanStatus {
 }
 
 export const timeplanStatus = (
-  timeplan: components["schemas"]["Timeplan"]
+  timeplan: components["schemas"]["Timeplan"],
 ): TimeplanStatus => {
   const entry = currentTimeplanEntry(timeplan);
   if (!entry) {
@@ -20,54 +20,53 @@ export const timeplanStatus = (
     if (currentAct) {
       return TimeplanStatus.Act;
     }
-    if(entry.timeplan_entry.Category.acts[0].status === "Planned") {
+    if (
+      entry.timeplan_entry.Category.acts[0].status === "Planned" &&
+      entry.timeplan_entry.Category.einfahrzeit_seconds > 0
+    ) {
       return TimeplanStatus.Warmup;
     }
     return TimeplanStatus.Judging;
   }
   return TimeplanStatus.Award;
-}
+};
 
 export const currentTimeplanEntry = (
-  timeplan: components["schemas"]["Timeplan"]
+  timeplan: components["schemas"]["Timeplan"],
 ) => {
   return timeplan?.items.find((item) => item.status === "Started");
 };
 
 export const nextTimeplanEntry = (
-  timeplan: components["schemas"]["Timeplan"]
+  timeplan: components["schemas"]["Timeplan"],
 ) => {
-  return timeplan?.items.find(
-    (item) => item.status === "Planned"
-  );
+  return timeplan?.items.find((item) => item.status === "Planned");
 };
 export const lastTimeplanEntry = (
-  timeplan: components["schemas"]["Timeplan"]
+  timeplan: components["schemas"]["Timeplan"],
 ) => {
-  return timeplan?.items.findLast(
-    (item) => item.status === "Ended"
-  );
+  return timeplan?.items.findLast((item) => item.status === "Ended");
 };
 
 export const currentTimeplanAct = (
-  timeplan: components["schemas"]["Timeplan"]
+  timeplan: components["schemas"]["Timeplan"],
 ) => {
   const entry = currentTimeplanEntry(timeplan);
   if (!entry || !("Category" in entry.timeplan_entry)) {
     return undefined;
   }
   return entry.timeplan_entry.Category.acts.find(
-    (act) => act.status == "Started"
+    (act) => act.status == "Started",
   );
 };
 
 export const nextTimeplanAct = (
-  timeplan: components["schemas"]["Timeplan"]
+  timeplan: components["schemas"]["Timeplan"],
 ) => {
   const currentEntry = currentTimeplanEntry(timeplan);
   if (currentEntry && "Category" in currentEntry.timeplan_entry) {
     const act = currentEntry.timeplan_entry.Category.acts.find(
-      (act) => act.status == "Planned"
+      (act) => act.status == "Planned",
     );
     if (act) {
       return act;
@@ -79,18 +78,17 @@ export const nextTimeplanAct = (
     return undefined;
   }
   return nextEntry.timeplan_entry.Category.acts.find(
-    (act) => act.status == "Planned"
+    (act) => act.status == "Planned",
   );
-}
+};
 
 export const lastTimeplanAct = (
-  timeplan: components["schemas"]["Timeplan"]
+  timeplan: components["schemas"]["Timeplan"],
 ) => {
-
   const currentEntry = currentTimeplanEntry(timeplan);
-  if (currentEntry && ("Category" in currentEntry.timeplan_entry)) {
+  if (currentEntry && "Category" in currentEntry.timeplan_entry) {
     const act = currentEntry.timeplan_entry.Category.acts.findLast(
-      (act) => act.status == "Ended"
+      (act) => act.status == "Ended",
     );
     if (act) {
       return act;
@@ -102,6 +100,6 @@ export const lastTimeplanAct = (
     return undefined;
   }
   return lastEntry.timeplan_entry.Category.acts.findLast(
-    (act) => act.status == "Ended"
+    (act) => act.status == "Ended",
   );
 };
