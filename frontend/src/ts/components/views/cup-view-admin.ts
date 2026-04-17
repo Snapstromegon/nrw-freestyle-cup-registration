@@ -90,6 +90,7 @@ export default class CupViewAdmin extends LitElement {
         <a href="/admin-categories">Kategorie Verwaltung</a>
         <a href="/admin-judges">Judges Übersicht</a>
         <a href="/admin-music-control">Musik Player</a>
+        <a href="/admin-medals">Medaillen Generator</a>
       </nav>
       <h2>Users</h2>
       ${this.users.render({

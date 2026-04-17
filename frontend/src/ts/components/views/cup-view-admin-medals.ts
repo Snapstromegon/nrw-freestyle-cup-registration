@@ -144,7 +144,7 @@ export default class CupViewAdminMedals extends LitElement {
   override render() {
     return html`<nav>
         <a href="/admin">Anmeldeübersicht</a>
-        <h1>Medailliendrucker</h1>
+        <h1>Medaillendrucker</h1>
       </nav>
       <div id="medals">
         ${this.chunkedMedals.render({
