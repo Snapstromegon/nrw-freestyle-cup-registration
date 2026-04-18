@@ -73,9 +73,11 @@ export default class CupViewInfoBoard extends LitElement {
     }
 
     aside {
-      display: flex;
-      flex-direction: column;
-      gap: 3dvh;
+      display: grid;
+      grid-template-columns: 3fr 2fr;
+      grid-template-rows: auto auto 1fr;
+      grid-template-areas: "title title" "logo qrcode" "timeplan timeplan";
+      gap: 3dvh 0;
       padding-top: 3dvh;
       background: #002d56;
       color: #fff;
@@ -88,12 +90,16 @@ export default class CupViewInfoBoard extends LitElement {
         font-size: 5dvh;
         text-align: center;
         font-family: "Andy", sans-serif;
+        grid-area: title;
+        text-wrap: balance;
       }
 
       cup-timeplan {
         overflow: hidden;
         flex-shrink: 1;
         width: 100%;
+        height: 100%;
+        grid-area: timeplan;
       }
 
       &::after {
@@ -120,7 +126,8 @@ export default class CupViewInfoBoard extends LitElement {
         --m: 2;
         --R: calc(var(--size) * sqrt(var(--m) * var(--m) + 1));
 
-        mask: radial-gradient(
+        mask:
+          radial-gradient(
               var(--R) at calc(-1 * var(--size) * var(--m)) 50%,
               #000 99.8%,
               #0000 100.2%
@@ -133,10 +140,24 @@ export default class CupViewInfoBoard extends LitElement {
             )
             0 50% / 50% calc(4 * var(--size)) repeat-y;
       }
+
+      #qrcode {
+        grid-area: qrcode;
+        place-self: center;
+        img {
+          height: 15dvh;
+        }
+        h2 {
+          text-align: center;
+          margin-bottom: 1vh;
+        }
+      }
     }
 
     #logo {
+      grid-area: logo;
       height: 20dvh;
+      place-self: center;
     }
 
     main {
@@ -377,7 +398,7 @@ export default class CupViewInfoBoard extends LitElement {
                     <h2>${p.firstname} ${p.lastname}</h2>
                     <h3>${p.club_name}</h3>
                   </div>
-                `
+                `,
               )}
           </div>
           <h3>
@@ -388,7 +409,11 @@ export default class CupViewInfoBoard extends LitElement {
         </div>`;
       case TimeplanStatus.Judging:
         return html`<div class="judging">
-          <cup-fotobox src="http://nrw-cup-fotos:8080/newest?date=${Math.floor(new Date().getTime()/1000/60)}"></cup-fotobox>
+          <cup-fotobox
+            src="http://nrw-cup-fotos:8080/newest?date=${Math.floor(
+              new Date().getTime() / 1000 / 60,
+            )}"
+          ></cup-fotobox>
           <section>
             <h3>Das war...</h3>
             <h1>${lastTimeplanAct(timeplan)?.name}</h1>
@@ -401,7 +426,7 @@ export default class CupViewInfoBoard extends LitElement {
                       <h2>${p.firstname} ${p.lastname}</h2>
                       <h3>${p.club_name}</h3>
                     </div>
-                  `
+                  `,
                 )}
             </div>
             <h3>
@@ -436,6 +461,13 @@ export default class CupViewInfoBoard extends LitElement {
             src="/assets/images/nrw-freestyle-cup.svg"
             alt="NRW Freestyle Cup 2026"
           />
+          <div id="qrcode">
+            <h2>Fotos</h2>
+            <img
+              src="/assets/images/qrcode-fotos.svg"
+              alt="NRW Freestyle Cup 2026 Fotos QR Code"
+            />
+          </div>
           <cup-timeplan .timeplan=${this.predictedTimeplan}></cup-timeplan>
         </aside>
         <main>${this.renderMain()}</main>
