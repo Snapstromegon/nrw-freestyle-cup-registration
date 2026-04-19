@@ -43,8 +43,8 @@ export default class CupTimeplan extends LitElement {
     | components["schemas"]["Timeplan"]
     | null = null;
   @property({ attribute: "include-past", type: Boolean }) includePast = false;
-  @property({ attribute: "include-active-act", type: Boolean })
-  includeActiveAct = false;
+  @property({ attribute: "include-active-act", type: Boolean }) includeActiveAct = false;
+  @property({ attribute: "include-original-time", type: Boolean }) includeOriginalTime = false;
   @property({ attribute: "is-admin", type: Boolean }) isAdmin = false;
 
   allActs = new Task(this, {
@@ -64,7 +64,7 @@ export default class CupTimeplan extends LitElement {
             (this.includePast
               ? this.timeplan?.items
               : this.timeplan?.items.filter(
-                  (item) => item.status != "Ended"
+                  (item) => item.status != "Ended",
                 )) || [],
             (item) =>
               "Category" in item.timeplan_entry
@@ -75,7 +75,7 @@ export default class CupTimeplan extends LitElement {
                 ? item.timeplan_entry.Category.acts.filter(
                     (a) =>
                       (this.includePast || a.status != "Ended") &&
-                      (this.includeActiveAct || a.status != "Started")
+                      (this.includeActiveAct || a.status != "Started"),
                   ).length
                   ? html`<section class="category-header">
                         <h3 class="title">
@@ -84,7 +84,10 @@ export default class CupTimeplan extends LitElement {
                         ${item.started_at
                           ? nothing
                           : html`<p class="time">
-                              ${niceTime(item.predicted_start)}
+                              ${niceTime(item.predicted_start)}${this
+                                .includeOriginalTime
+                                ? html` (${niceTime(item.planned_start)})`
+                                : nothing}
                             </p>`}
                         ${this.isAdmin
                           ? html`<input
@@ -94,7 +97,7 @@ export default class CupTimeplan extends LitElement {
                                   (completeAct) =>
                                     "Category" in item.timeplan_entry &&
                                     completeAct.category ==
-                                      item.timeplan_entry.Category.name
+                                      item.timeplan_entry.Category.name,
                                 )
                                 ?.every((a) => a.song_checked)}
                               disabled
@@ -105,7 +108,7 @@ export default class CupTimeplan extends LitElement {
                         item.timeplan_entry.Category.acts.filter(
                           (a) =>
                             (this.includePast || a.status != "Ended") &&
-                            (this.includeActiveAct || a.status != "Started")
+                            (this.includeActiveAct || a.status != "Started"),
                         ),
                         (act) => act.id,
                         (act) => html`
@@ -113,39 +116,51 @@ export default class CupTimeplan extends LitElement {
                             <h3>
                               ${repeat(
                                 acts?.find(
-                                  (completeAct) => completeAct.id == act.id
+                                  (completeAct) => completeAct.id == act.id,
                                 )?.participants || [],
                                 (p) =>
                                   html`${p.firstname} ${p.lastname}
-                                    (${p.club_name})<br />`
+                                    (${p.club_name})<br />`,
                               )}
                             </h3>
                             <h4>${act.name}</h4>
-                            <p class="time">${niceTime(act.predicted_start)}</p>
+                            <p class="time">
+                              ${niceTime(act.predicted_start)}${this
+                                .includeOriginalTime
+                                ? html` (${niceTime(item.planned_start)})`
+                                : nothing}
+                            </p>
                             <p>
-                              ${this.description?acts?.find(
-                                (completeAct) => completeAct.id == act.id
-                              )?.description:nothing}
+                              ${this.description
+                                ? acts?.find(
+                                    (completeAct) => completeAct.id == act.id,
+                                  )?.description
+                                : nothing}
                             </p>
                             ${this.isAdmin
                               ? html`<input
                                   type="checkbox"
                                   ?checked=${acts?.find(
-                                    (completeAct) => completeAct.id == act.id
+                                    (completeAct) => completeAct.id == act.id,
                                   )?.song_checked}
                                   disabled
                                 />`
                               : nothing}
                           </section>
-                        `
+                        `,
                       )}`
                   : nothing
                 : html`
                     <section class="event">
                       <h3 class="title">${item.timeplan_entry.Custom.label}</h3>
-                      <p class="time">${niceTime(item.predicted_start)}</p>
+                      <p class="time">
+                        ${niceTime(item.predicted_start)}${this
+                          .includeOriginalTime
+                          ? html` (${niceTime(item.planned_start)})`
+                          : nothing}
+                      </p>
                     </section>
-                  `
+                  `,
           ),
       })}
     </div>`;
