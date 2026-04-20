@@ -1,4 +1,4 @@
-import { LitElement, html, css, nothing } from "lit";
+import { css, html, LitElement, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { client } from "../../apiClient";
 import "../elements/cup-centered-icon-box.js";
@@ -125,7 +125,7 @@ export default class CupViewRequestPasswordReset extends LitElement {
     const resp = await client.POST("/api/command/request_password_reset", {
       body: {
         email: data.email,
-      }
+      },
     });
 
     if (resp.response.status === 404) {
@@ -140,6 +140,5 @@ export default class CupViewRequestPasswordReset extends LitElement {
 
     alert("Mail wurde versendet.");
     window.location.href = "/";
-
   }
 }

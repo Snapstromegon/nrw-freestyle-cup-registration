@@ -1,7 +1,7 @@
-import { LitElement, html, css, nothing } from "lit";
-import { customElement } from "lit/decorators.js";
-import { client, components } from "../../apiClient";
 import { Task } from "@lit/task";
+import { css, html, LitElement, nothing } from "lit";
+import { customElement } from "lit/decorators.js";
+import { client, type components } from "../../apiClient";
 import "../elements/cup-context-club.js";
 import "../elements/cup-club-manager.js";
 import "../elements/cup-starter-table.js";
@@ -50,7 +50,7 @@ export default class CupViewAdminStarters extends LitElement {
       const pairs: {
         partners: [
           components["schemas"]["Starter"],
-          components["schemas"]["Starter"]?
+          components["schemas"]["Starter"]?,
         ];
         maxAge: Date;
         sonderpokal: boolean;
@@ -73,8 +73,8 @@ export default class CupViewAdminStarters extends LitElement {
               maxAge = new Date(
                 Math.min(
                   new Date(starter.birthdate).getTime(),
-                  new Date(partner.birthdate).getTime()
-                )
+                  new Date(partner.birthdate).getTime(),
+                ),
               );
               sonderpokal ||= partner.pair_sonderpokal;
               pairStartersById.delete(starter.partner_id);
@@ -109,12 +109,12 @@ export default class CupViewAdminStarters extends LitElement {
                   (s) =>
                     !s.single_sonderpokal &&
                     s.single_male &&
-                    isU15(new Date(s.birthdate))
+                    isU15(new Date(s.birthdate)),
                 )
                 .sort(
                   (a, b) =>
                     new Date(a.birthdate).getTime() -
-                    new Date(b.birthdate).getTime()
+                    new Date(b.birthdate).getTime(),
                 )}
             ></cup-starter-table>
             <h4>15+</h4>
@@ -124,12 +124,12 @@ export default class CupViewAdminStarters extends LitElement {
                   (s) =>
                     !s.single_sonderpokal &&
                     s.single_male &&
-                    !isU15(new Date(s.birthdate))
+                    !isU15(new Date(s.birthdate)),
                 )
                 .sort(
                   (a, b) =>
                     new Date(a.birthdate).getTime() -
-                    new Date(b.birthdate).getTime()
+                    new Date(b.birthdate).getTime(),
                 )}
             ></cup-starter-table>
             <h3>Einzel Weiblich</h3>
@@ -140,12 +140,12 @@ export default class CupViewAdminStarters extends LitElement {
                   (s) =>
                     !s.single_sonderpokal &&
                     s.single_female &&
-                    isU15(new Date(s.birthdate))
+                    isU15(new Date(s.birthdate)),
                 )
                 .sort(
                   (a, b) =>
                     new Date(a.birthdate).getTime() -
-                    new Date(b.birthdate).getTime()
+                    new Date(b.birthdate).getTime(),
                 )}
             ></cup-starter-table>
             <h4>15+</h4>
@@ -155,12 +155,12 @@ export default class CupViewAdminStarters extends LitElement {
                   (s) =>
                     !s.single_sonderpokal &&
                     s.single_female &&
-                    !isU15(new Date(s.birthdate))
+                    !isU15(new Date(s.birthdate)),
                 )
                 .sort(
                   (a, b) =>
                     new Date(a.birthdate).getTime() -
-                    new Date(b.birthdate).getTime()
+                    new Date(b.birthdate).getTime(),
                 )}
             ></cup-starter-table>
             <h3>Paar</h3>
@@ -176,21 +176,22 @@ export default class CupViewAdminStarters extends LitElement {
                 .filter((p) => !p.sonderpokal && !isU15(p.maxAge))
                 .sort((a, b) => a.maxAge.getTime() - b.maxAge.getTime())}
             ></cup-starter-table>
-            ${singles.some((e) => e.single_sonderpokal) ||
-            pairs.some((e) => e.sonderpokal)
-              ? html`<h2>Sonderpokal</h2>
+            ${
+              singles.some((e) => e.single_sonderpokal) ||
+              pairs.some((e) => e.sonderpokal)
+                ? html`<h2>Sonderpokal</h2>
                   <h3>Einzel</h3>
                   <h4>U15</h4>
                   <cup-starter-table
                     .starters=${singles
                       .filter(
                         (s) =>
-                          s.single_sonderpokal && isU15(new Date(s.birthdate))
+                          s.single_sonderpokal && isU15(new Date(s.birthdate)),
                       )
                       .sort(
                         (a, b) =>
                           new Date(a.birthdate).getTime() -
-                          new Date(b.birthdate).getTime()
+                          new Date(b.birthdate).getTime(),
                       )}
                   ></cup-starter-table>
                   <h4>15+</h4>
@@ -198,12 +199,12 @@ export default class CupViewAdminStarters extends LitElement {
                     .starters=${singles
                       .filter(
                         (s) =>
-                          s.single_sonderpokal && !isU15(new Date(s.birthdate))
+                          s.single_sonderpokal && !isU15(new Date(s.birthdate)),
                       )
                       .sort(
                         (a, b) =>
                           new Date(a.birthdate).getTime() -
-                          new Date(b.birthdate).getTime()
+                          new Date(b.birthdate).getTime(),
                       )}
                   ></cup-starter-table>
                   <h3>Paar</h3>
@@ -219,7 +220,8 @@ export default class CupViewAdminStarters extends LitElement {
                       .filter((p) => p.sonderpokal && !isU15(p.maxAge))
                       .sort((a, b) => a.maxAge.getTime() - b.maxAge.getTime())}
                   ></cup-starter-table>`
-              : nothing}
+                : nothing
+            }
           `;
         },
       })}`;

@@ -1,8 +1,8 @@
-import { LitElement, html, css } from "lit";
-import { customElement } from "lit/decorators.js";
-import { client } from "../../apiClient";
 import { Task } from "@lit/task";
+import { css, html, LitElement } from "lit";
+import { customElement } from "lit/decorators.js";
 import { classMap } from "lit/directives/class-map.js";
+import { client } from "../../apiClient";
 import "../elements/cup-context-club.js";
 import "../elements/cup-club-manager.js";
 import "../elements/cup-starter-table.js";
@@ -137,7 +137,7 @@ export default class CupViewAdminMusicControl extends LitElement {
   currentOrNextTimeplanEntry = new Task(this, {
     task: async ([predictedTimeplan]) =>
       predictedTimeplan?.items.find(
-        (item) => item.status === "Started" || item.status === "Planned"
+        (item) => item.status === "Started" || item.status === "Planned",
       ),
     args: () => [this.predictedTimeplan.value],
   });
@@ -145,7 +145,7 @@ export default class CupViewAdminMusicControl extends LitElement {
   upcomingTimeplan = new Task(this, {
     task: async ([predictedTimeplan]) =>
       predictedTimeplan?.items.filter(
-        (item) => item.status === "Planned" || item.status === "Started"
+        (item) => item.status === "Planned" || item.status === "Started",
       ),
     args: () => [this.predictedTimeplan.value],
   });
@@ -153,14 +153,14 @@ export default class CupViewAdminMusicControl extends LitElement {
   currentStarter = new Task(this, {
     task: async ([predictTimeplan]) => {
       const entry = predictTimeplan?.items.find(
-        (item) => item.status === "Started"
+        (item) => item.status === "Started",
       );
       if (!entry) {
         return undefined;
       }
       if ("Category" in entry.timeplan_entry) {
         const act = entry.timeplan_entry.Category.acts.find(
-          (act) => act.status == "Started"
+          (act) => act.status == "Started",
         );
         const completeAct = act
           ? (
@@ -224,11 +224,13 @@ export default class CupViewAdminMusicControl extends LitElement {
           error: (error) => html`Error: ${error}`,
           complete: (currentTimeplanEntry) => html`
             <h2>
-              ${currentTimeplanEntry
-                ? "Category" in currentTimeplanEntry.timeplan_entry
-                  ? currentTimeplanEntry.timeplan_entry.Category.description
-                  : currentTimeplanEntry.timeplan_entry.Custom.label
-                : "Inaktiv"}
+              ${
+                currentTimeplanEntry
+                  ? "Category" in currentTimeplanEntry.timeplan_entry
+                    ? currentTimeplanEntry.timeplan_entry.Category.description
+                    : currentTimeplanEntry.timeplan_entry.Custom.label
+                  : "Inaktiv"
+              }
             </h2>
           `,
         })}
@@ -236,14 +238,18 @@ export default class CupViewAdminMusicControl extends LitElement {
           loading: () => html`Loading...`,
           error: (error) => html`Error: ${error}`,
           complete: (currentStarter) => html`
-            ${currentStarter
-              ? "Category" in (currentStarter?.entry.timeplan_entry || {})
-                ? currentStarter.act
-                  ? html`
+            ${
+              currentStarter
+                ? "Category" in (currentStarter?.entry.timeplan_entry || {})
+                  ? currentStarter.act
+                    ? html`
                       <section>
                         <h3>
                           ${currentStarter.completeAct?.participants
-                            .map((p) => `${p.firstname} ${p.lastname} (${p.club_name})`)
+                            .map(
+                              (p) =>
+                                `${p.firstname} ${p.lastname} (${p.club_name})`,
+                            )
                             .join(" & ")}
                         </h3>
                         <h4>${currentStarter.completeAct?.name}</h4>
@@ -251,25 +257,29 @@ export default class CupViewAdminMusicControl extends LitElement {
                       </section>
                       <audio
                         controls
-                        src="/songs/${currentStarter.completeAct?.song_file ||
-                        ""}"
+                        src="/songs/${
+                          currentStarter.completeAct?.song_file || ""
+                        }"
                         preload="auto"
                       ></audio>
                     `
-                  : "Category" in currentStarter.entry.timeplan_entry &&
-                    currentStarter.entry.timeplan_entry.Category.acts[0]
-                      .status != "Planned"
-                  ? html`<h3>Judging</h3>`
-                  : html` <h3>Einfahrzeit</h3>`
-                : html`
+                    : "Category" in currentStarter.entry.timeplan_entry &&
+                        currentStarter.entry.timeplan_entry.Category.acts[0]
+                          .status != "Planned"
+                      ? html`<h3>Judging</h3>`
+                      : html` <h3>Einfahrzeit</h3>`
+                  : html`
                     <h3>
-                      ${currentStarter &&
-                      "Custom" in currentStarter.entry.timeplan_entry
-                        ? currentStarter?.entry.timeplan_entry.Custom?.label
-                        : ""}
+                      ${
+                        currentStarter &&
+                        "Custom" in currentStarter.entry.timeplan_entry
+                          ? currentStarter?.entry.timeplan_entry.Custom?.label
+                          : ""
+                      }
                     </h3>
                   `
-              : html`<h3>No current starter</h3>`}
+                : html`<h3>No current starter</h3>`
+            }
           `,
         })}
         <button

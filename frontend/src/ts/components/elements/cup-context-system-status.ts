@@ -1,14 +1,18 @@
-import { LitElement, html } from "lit";
-import { customElement } from "lit/decorators.js";
-import { SystemStatus, systemStatusContext } from "../../contexts/systemStatus.js";
 import { provide } from "@lit/context";
+import { html, LitElement } from "lit";
+import { customElement } from "lit/decorators.js";
 import { client } from "../../apiClient.js";
+import {
+  type SystemStatus,
+  systemStatusContext,
+} from "../../contexts/systemStatus.js";
 import "./cup-centered-icon-box.js";
 import { Task } from "@lit/task";
 
 @customElement("cup-context-system-status")
 export default class CupContextSystemStatus extends LitElement {
-  @provide({ context: systemStatusContext }) systemStatus: SystemStatus | null = null;
+  @provide({ context: systemStatusContext }) systemStatus: SystemStatus | null =
+    null;
 
   SystemStatusTask = new Task(this, {
     task: async () => {

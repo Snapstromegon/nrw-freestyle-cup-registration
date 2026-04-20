@@ -1,6 +1,6 @@
-import { configs as wcConfigs } from "eslint-plugin-wc";
-import { configs as litConfigs } from "eslint-plugin-lit";
 import eslint from "@eslint/js";
+import { configs as litConfigs } from "eslint-plugin-lit";
+import { configs as wcConfigs } from "eslint-plugin-wc";
 import tseslint from "typescript-eslint";
 
 export default [

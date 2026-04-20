@@ -1,7 +1,7 @@
-import { LitElement, html, css, nothing } from "lit";
-import { customElement, property } from "lit/decorators.js";
 import { consume } from "@lit/context";
-import { Club, clubContext } from "../../contexts/club";
+import { css, html, LitElement, nothing } from "lit";
+import { customElement, property } from "lit/decorators.js";
+import { type Club, clubContext } from "../../contexts/club";
 import "./cup-club-starter-manager.js";
 import "./cup-club-judge-manager.js";
 import "./cup-club-act-manager.js";
@@ -70,9 +70,10 @@ export default class CupClubManager extends LitElement {
 
   override render() {
     return html`<h3>${this.club?.name}</h3>
-      ${this.adminMode
-        ? nothing
-        : html`
+      ${
+        this.adminMode
+          ? nothing
+          : html`
             <p>
               Der anmeldende Trainer ist dafür verantwortlich, dass alle Starter
               den Bedingungen aus der Ausschreibung wie zum Beispiel der
@@ -118,10 +119,12 @@ export default class CupClubManager extends LitElement {
               <tr>
                 <th>Bezahlt</th>
                 <td>
-                  ${this.club?.payment
-                    ?.toFixed(2)
-                    .toString()
-                    .replace(".", ",") || "0"}€
+                  ${
+                    this.club?.payment
+                      ?.toFixed(2)
+                      .toString()
+                      .replace(".", ",") || "0"
+                  }€
                 </td>
               </tr>
             </table>
@@ -140,7 +143,8 @@ export default class CupClubManager extends LitElement {
                 Ausschreibung.</i
               >
             </p>
-          `}
+          `
+      }
 
       <cup-club-act-manager></cup-club-act-manager>
       <hr />

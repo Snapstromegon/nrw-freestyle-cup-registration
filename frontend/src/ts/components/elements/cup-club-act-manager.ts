@@ -1,12 +1,15 @@
-import { LitElement, html, css, nothing } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
-import { client, components } from "../../apiClient";
 import { consume } from "@lit/context";
 import { Task } from "@lit/task";
-import { Club, clubContext } from "../../contexts/club";
-import { SystemStatus, systemStatusContext } from "../../contexts/systemStatus";
-import { User, userContext } from "../../contexts/user";
+import { css, html, LitElement, nothing } from "lit";
+import { customElement, property, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
+import { client, type components } from "../../apiClient";
+import { type Club, clubContext } from "../../contexts/club";
+import {
+  type SystemStatus,
+  systemStatusContext,
+} from "../../contexts/systemStatus";
+import { type User, userContext } from "../../contexts/user";
 
 type Act = components["schemas"]["ClubAct"];
 
@@ -206,12 +209,14 @@ export default class CupClubActManager extends LitElement {
 
   override render() {
     return html`<h4>Küren</h4>
-      ${this.adminMode
-        ? nothing
-        : html` <p>
+      ${
+        this.adminMode
+          ? nothing
+          : html` <p>
             Änderungen können noch bis zum Musik Einsendeschluss am
             <strong>01.04.2026</strong> vorgenommen werden.
-          </p>`}
+          </p>`
+      }
       <h5>Zusammenfassung</h5>
       <table id="summary">
         <tr>
@@ -221,34 +226,43 @@ export default class CupClubActManager extends LitElement {
         <tr>
           <th>Namen vorhanden</th>
           <td>
-            ${this.acts.value?.filter((act) => act.name).length}/${this.acts
-              .value?.length}
-            ${this.acts.value?.filter((act) => act.name).length ==
-            this.acts.value?.length
-              ? "✔️"
-              : "⌛"}
+            ${this.acts.value?.filter((act) => act.name).length}/${
+              this.acts.value?.length
+            }
+            ${
+              this.acts.value?.filter((act) => act.name).length ==
+              this.acts.value?.length
+                ? "✔️"
+                : "⌛"
+            }
           </td>
         </tr>
         <tr>
           <th>Beschreibung vorhanden</th>
           <td>
-            ${this.acts.value?.filter((act) => act.description).length}/${this
-              .acts.value?.length}
-            ${this.acts.value?.filter((act) => act.description).length ==
-            this.acts.value?.length
-              ? "✔️"
-              : "⌛"}
+            ${this.acts.value?.filter((act) => act.description).length}/${
+              this.acts.value?.length
+            }
+            ${
+              this.acts.value?.filter((act) => act.description).length ==
+              this.acts.value?.length
+                ? "✔️"
+                : "⌛"
+            }
           </td>
         </tr>
         <tr>
           <th>Musik vorhanden</th>
           <td>
-            ${this.acts.value?.filter((act) => act.song_file).length}/${this
-              .acts.value?.length}
-            ${this.acts.value?.filter((act) => act.song_file).length ==
-            this.acts.value?.length
-              ? "✔️"
-              : "⌛"}
+            ${this.acts.value?.filter((act) => act.song_file).length}/${
+              this.acts.value?.length
+            }
+            ${
+              this.acts.value?.filter((act) => act.song_file).length ==
+              this.acts.value?.length
+                ? "✔️"
+                : "⌛"
+            }
           </td>
         </tr>
       </table>
@@ -307,16 +321,16 @@ ${editAct.description || ""}</textarea
                       </td>
                       <td>
                         <label
-                          ><span>Typ</span> ${act.is_pair
-                            ? "Paarkür"
-                            : "Einzelkür"}</label
+                          ><span>Typ</span> ${
+                            act.is_pair ? "Paarkür" : "Einzelkür"
+                          }</label
                         >
                       </td>
                       <td hidden>
                         <label
-                          ><span>Kategorie</span> ${act.is_sonderpokal
-                            ? "Sonderpokal"
-                            : "Nachwuchscup"}</label
+                          ><span>Kategorie</span> ${
+                            act.is_sonderpokal ? "Sonderpokal" : "Nachwuchscup"
+                          }</label
                         >
                       </td>
                       <td>
@@ -378,9 +392,9 @@ ${editAct.description || ""}</textarea
                       </td>
                       <td>
                         <label
-                          ><span>Typ</span> ${act.is_pair
-                            ? "Paarkür"
-                            : "Einzelkür"}</label
+                          ><span>Typ</span> ${
+                            act.is_pair ? "Paarkür" : "Einzelkür"
+                          }</label
                         >
                       </td>
                       <td hidden>
@@ -389,13 +403,15 @@ ${editAct.description || ""}</textarea
                       </td>
                       <td>
                         <label><span>Musik</span></label>
-                        ${act.song_file
-                          ? html`${act.song_file_name}<br /><audio
+                        ${
+                          act.song_file
+                            ? html`${act.song_file_name}<br /><audio
                                 preload="none"
                                 controls
                                 src="/songs/${act.song_file}"
                               ></audio>`
-                          : "❌"}
+                            : "❌"
+                        }
                       </td>
                       <td>
                         <label><span>StarterInnen</span></label>
@@ -411,9 +427,10 @@ ${editAct.description || ""}</textarea
                         </ul>
                       </td>
                       <td class="actionCol">
-                        ${this.systemStatus?.can_upload_music ||
-                        this.user?.is_admin
-                          ? html` <button
+                        ${
+                          this.systemStatus?.can_upload_music ||
+                          this.user?.is_admin
+                            ? html` <button
                               @click=${
                                 // eslint-disable-next-line lit/no-template-arrow
                                 () => this.enableActEdit(act)
@@ -422,7 +439,8 @@ ${editAct.description || ""}</textarea
                             >
                               edit
                             </button>`
-                          : nothing}
+                            : nothing
+                        }
                       </td>
                     </tr>`;
               }),

@@ -1,7 +1,7 @@
 import { consume } from "@lit/context";
-import { LitElement, html, css } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, state } from "lit/decorators.js";
-import { User, userContext } from "../../contexts/user";
+import { type User, userContext } from "../../contexts/user";
 
 @customElement("cup-centered-icon-box")
 export default class CupCenteredIconBox extends LitElement {

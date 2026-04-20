@@ -1,10 +1,10 @@
-import { LitElement, html, TemplateResult, nothing } from "lit";
-import { customElement, state } from "lit/decorators.js";
 import { Task } from "@lit/task";
+import { html, LitElement, nothing, type TemplateResult } from "lit";
+import { customElement, state } from "lit/decorators.js";
 import "./views/cup-view-not-found.js";
 import "./elements/cup-context-user.js";
 import "./elements/cup-context-system-status.js";
-// @ts-ignore: Property 'UrlPattern' does not exist
+// @ts-expect-error: Property 'UrlPattern' does not exist
 if (!globalThis.URLPattern) {
   await import("urlpattern-polyfill");
 }
@@ -38,7 +38,7 @@ export default class CupApp extends LitElement {
       load: () => import("./views/cup-view-admin-music-control.js"),
       render: () =>
         authed(
-          html`<cup-view-admin-music-control></cup-view-admin-music-control>`
+          html`<cup-view-admin-music-control></cup-view-admin-music-control>`,
         ),
     },
     {
@@ -81,24 +81,20 @@ export default class CupApp extends LitElement {
       load: () => import("./views/cup-view-admin-acts-overview.js"),
       render: () =>
         authed(
-          html`<cup-view-admin-acts-overview></cup-view-admin-acts-overview>`
+          html`<cup-view-admin-acts-overview></cup-view-admin-acts-overview>`,
         ),
     },
     {
       path: new URLPattern({ pathname: "/admin-categories" }),
       load: () => import("./views/cup-view-admin-categories.js"),
       render: () =>
-        authed(
-          html`<cup-view-admin-categories></cup-view-admin-categories>`
-        ),
+        authed(html`<cup-view-admin-categories></cup-view-admin-categories>`),
     },
     {
       path: new URLPattern({ pathname: "/admin-timeplan" }),
       load: () => import("./views/cup-view-admin-timeplan.js"),
       render: () =>
-        authed(
-          html`<cup-view-admin-timeplan></cup-view-admin-timeplan>`
-        ),
+        authed(html`<cup-view-admin-timeplan></cup-view-admin-timeplan>`),
     },
     {
       path: new URLPattern({ pathname: "/register" }),
@@ -139,13 +135,14 @@ export default class CupApp extends LitElement {
     {
       path: new URLPattern({ pathname: "/admin-moderation" }),
       load: () => import("./views/cup-view-admin-moderation.js"),
-      render: () => html`<cup-view-admin-moderation></cup-view-admin-moderation>`,
+      render: () =>
+        html`<cup-view-admin-moderation></cup-view-admin-moderation>`,
     },
   ];
 
   get currentRoute() {
     return this.routes.find((route) =>
-      route.path.test(this.location, location.origin)
+      route.path.test(this.location, location.origin),
     );
   }
 
@@ -160,7 +157,7 @@ export default class CupApp extends LitElement {
         route: this.currentRoute,
         urlPatternExec: this.currentRoute.path.exec(
           this.location,
-          location.origin
+          location.origin,
         ),
       };
     },
@@ -174,9 +171,9 @@ export default class CupApp extends LitElement {
         html`<cup-view-not-found .url=${this.location}></cup-view-not-found>`,
       complete: ({ route, urlPatternExec }) =>
         html`<cup-context-system-status
-          >${route
-            ? route.render(urlPatternExec)
-            : nothing}</cup-context-system-status
+          >${
+            route ? route.render(urlPatternExec) : nothing
+          }</cup-context-system-status
         >`,
     });
   }

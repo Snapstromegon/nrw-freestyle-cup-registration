@@ -1,9 +1,12 @@
 import { consume } from "@lit/context";
-import { LitElement, html, css, nothing } from "lit";
+import { css, html, LitElement, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { client } from "../../apiClient";
 import "../elements/cup-centered-icon-box.js";
-import { SystemStatus, systemStatusContext } from "../../contexts/systemStatus";
+import {
+  type SystemStatus,
+  systemStatusContext,
+} from "../../contexts/systemStatus";
 
 @customElement("cup-view-register")
 export default class CupViewRegister extends LitElement {
@@ -101,8 +104,9 @@ export default class CupViewRegister extends LitElement {
         <h1>NRW Freestyle Cup 2026</h1>
         <h2>Registrierung</h2>
         ${this.error ? html`<p id="error">${this.error}</p>` : nothing}
-        ${this.systemStatus?.can_register
-          ? html`
+        ${
+          this.systemStatus?.can_register
+            ? html`
               <label>
                 Name
                 <input type="text" name="name" placeholder="Name" required />
@@ -138,14 +142,15 @@ export default class CupViewRegister extends LitElement {
                 </a>
               </div>
             `
-          : html`
+            : html`
               <p>Die Registrierung ist geschlossen!</p>
               <div id="action-buttons">
                 <a href="/" id="login">
                   <i class="material-icon">login</i> Zurück zum Login
                 </a>
               </div>
-            `}
+            `
+        }
       </form>
     </cup-centered-icon-box>`;
   }

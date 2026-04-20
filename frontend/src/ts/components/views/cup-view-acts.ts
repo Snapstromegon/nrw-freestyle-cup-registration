@@ -1,7 +1,7 @@
 import { consume } from "@lit/context";
-import { LitElement, html, css, nothing } from "lit";
+import { css, html, LitElement, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
-import { User, userContext } from "../../contexts/user";
+import { type User, userContext } from "../../contexts/user";
 import "../elements/cup-context-club.js";
 import "../elements/cup-club-act-manager.js";
 
@@ -106,13 +106,15 @@ export default class CupViewActs extends LitElement {
           ><i class="material-icon">arrow_back</i> Zurück</a
         >
         <h2>Kür Manager</h2>
-        ${this.user?.club_id
-          ? html`
+        ${
+          this.user?.club_id
+            ? html`
               <cup-context-club club-id=${this.user?.club_id}
                 ><cup-club-act-manager></cup-club-act-manager
               ></cup-context-club>
             `
-          : nothing}
+            : nothing
+        }
       </main>`;
   }
 }

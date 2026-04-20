@@ -1,4 +1,4 @@
-import { components } from "./bindings";
+import type { components } from "./bindings";
 
 export enum TimeplanStatus {
   Break = "Break",

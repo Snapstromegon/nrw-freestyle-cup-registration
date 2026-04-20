@@ -1,9 +1,12 @@
-import { LitElement, html, css, nothing } from "lit";
+import { css, html, LitElement, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { client } from "../../apiClient";
 import "../elements/cup-centered-icon-box.js";
-import { SystemStatus, systemStatusContext } from "../../contexts/systemStatus";
 import { consume } from "@lit/context";
+import {
+  type SystemStatus,
+  systemStatusContext,
+} from "../../contexts/systemStatus";
 
 @customElement("cup-view-create-club")
 export default class CupViewCreateClub extends LitElement {
@@ -100,8 +103,9 @@ export default class CupViewCreateClub extends LitElement {
       <form @submit=${this.createClub}>
         <h1>NRW Freestyle Cup 2026</h1>
         <h2>Verein erstellen</h2>
-        ${this.systemStatus?.can_create_club
-          ? html`
+        ${
+          this.systemStatus?.can_create_club
+            ? html`
               <p>
                 Erstelle hier ale Trainer einen neuen Verein. Jeder Verein kann
                 nur einmal existieren.
@@ -122,7 +126,8 @@ export default class CupViewCreateClub extends LitElement {
                 </button>
               </div>
             `
-          : html` <p>Die Registrierung ist geschlossen!</p> `}
+            : html` <p>Die Registrierung ist geschlossen!</p> `
+        }
       </form>
     </cup-centered-icon-box>`;
   }

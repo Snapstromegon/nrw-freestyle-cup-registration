@@ -1,12 +1,12 @@
-import { LitElement, html, css } from "lit";
-import { customElement } from "lit/decorators.js";
-import { client, components } from "../../apiClient";
 import { Task } from "@lit/task";
+import { css, html, LitElement } from "lit";
+import { customElement } from "lit/decorators.js";
+import { client, type components } from "../../apiClient";
 import "../elements/cup-context-club.js";
 import "../elements/cup-club-manager.js";
 import "../elements/cup-starter-table.js";
-import { getStarterPrice } from "../elements/cup-club-starter-manager";
 import { repeat } from "lit/directives/repeat.js";
+import { getStarterPrice } from "../elements/cup-club-starter-manager";
 
 @customElement("cup-view-admin-payments")
 export default class CupViewAdminPayments extends LitElement {
@@ -63,7 +63,7 @@ export default class CupViewAdminPayments extends LitElement {
   clubs = new Task(this, {
     task: async () => {
       const users = (await client.GET("/api/query/list_users")).data?.filter(
-        (user) => user.club_id
+        (user) => user.club_id,
       );
       if (!users) {
         throw new Error("Unable to load users");
@@ -123,7 +123,7 @@ export default class CupViewAdminPayments extends LitElement {
                 <td class="right">
                   ${clubs.reduce(
                     (a, c) => a + (c.owed || 0) - (c.club.payment || 0),
-                    0
+                    0,
                   )}€
                 </td>
               </tr>
@@ -161,7 +161,7 @@ export default class CupViewAdminPayments extends LitElement {
                       payments
                     </button>
                   </td>
-                </tr>`
+                </tr>`,
               )}
             </tbody>
           </table>
@@ -171,7 +171,7 @@ export default class CupViewAdminPayments extends LitElement {
 
   async updatePayment(club: components["schemas"]["Club"]) {
     const amount = parseFloat(
-      prompt("Betrag in Euro:")?.replace(",", ".") || ""
+      prompt("Betrag in Euro:")?.replace(",", ".") || "",
     );
     if (!amount && amount !== 0) {
       alert("Ungültiger Betrag.");

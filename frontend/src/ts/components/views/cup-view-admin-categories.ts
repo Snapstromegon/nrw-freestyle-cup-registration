@@ -1,8 +1,8 @@
-import { LitElement, html, css } from "lit";
-import { customElement, state } from "lit/decorators.js";
-import { client, components } from "../../apiClient";
 import { Task } from "@lit/task";
+import { css, html, LitElement } from "lit";
+import { customElement, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
+import { client, type components } from "../../apiClient";
 
 @customElement("cup-view-admin-categories")
 export default class CupViewAdminCategories extends LitElement {
@@ -231,9 +231,10 @@ export default class CupViewAdminCategories extends LitElement {
                 ? this.renderEditRow(category)
                 : this.renderCategoryRow(category),
           )}
-          ${this.showNewForm
-            ? this.renderNewCategoryRow()
-            : html`<tr>
+          ${
+            this.showNewForm
+              ? this.renderNewCategoryRow()
+              : html`<tr>
                 <td colspan="11" style="text-align: center; padding: 0;">
                   <button
                     @click=${this.showAddForm}
@@ -245,7 +246,8 @@ export default class CupViewAdminCategories extends LitElement {
                     Neue Kategorie
                   </button>
                 </td>
-              </tr>`}
+              </tr>`
+          }
         </tbody>
       </table>
     `;
@@ -349,9 +351,11 @@ export default class CupViewAdminCategories extends LitElement {
         <td>
           <input
             type="date"
-            .value=${this.editForm.from_birthday ||
-            category.from_birthday ||
-            "1970-01-01"}
+            .value=${
+              this.editForm.from_birthday ||
+              category.from_birthday ||
+              "1970-01-01"
+            }
             @input=${
               // eslint-disable-next-line lit/no-template-arrow
               (e: Event) =>
@@ -365,9 +369,11 @@ export default class CupViewAdminCategories extends LitElement {
         <td>
           <input
             type="date"
-            .value=${this.editForm.to_birthday ||
-            category.to_birthday ||
-            new Date().toISOString().split("T")[0]}
+            .value=${
+              this.editForm.to_birthday ||
+              category.to_birthday ||
+              new Date().toISOString().split("T")[0]
+            }
             @input=${
               // eslint-disable-next-line lit/no-template-arrow
               (e: Event) =>
@@ -426,8 +432,8 @@ export default class CupViewAdminCategories extends LitElement {
             style="width: 4em;"
             .value=${(
               this.editForm.einfahrzeit_seconds ??
-              category.einfahrzeit_seconds ??
-              600
+                category.einfahrzeit_seconds ??
+                600
             )?.toString()}
             @input=${
               // eslint-disable-next-line lit/no-template-arrow
@@ -447,8 +453,8 @@ export default class CupViewAdminCategories extends LitElement {
             style="width: 4em;"
             .value=${(
               this.editForm.act_duration_seconds ??
-              category.act_duration_seconds ??
-              180
+                category.act_duration_seconds ??
+                180
             )?.toString()}
             @input=${
               // eslint-disable-next-line lit/no-template-arrow
@@ -468,10 +474,10 @@ export default class CupViewAdminCategories extends LitElement {
             style="width: 4em;"
             .value=${(
               this.editForm.judge_duration_seconds ??
-              category.judge_duration_seconds ??
-              (this.editForm.judge_duration_seconds ??
                 category.judge_duration_seconds ??
-                120) / 2
+                (this.editForm.judge_duration_seconds ??
+                  category.judge_duration_seconds ??
+                  120) / 2
             )?.toString()}
             @input=${
               // eslint-disable-next-line lit/no-template-arrow
@@ -688,8 +694,9 @@ export default class CupViewAdminCategories extends LitElement {
           <input
             type="number"
             style="width: 4em;"
-            .value=${this.newCategory.judge_duration_seconds?.toString() ||
-            "240"}
+            .value=${
+              this.newCategory.judge_duration_seconds?.toString() || "240"
+            }
             @input=${
               // eslint-disable-next-line lit/no-template-arrow
               (e: Event) =>

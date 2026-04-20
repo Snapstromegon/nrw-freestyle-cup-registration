@@ -37,7 +37,7 @@ run-release: release
 
 lint:
 	cargo clippy
-	cd frontend && npm run lint
+	cd frontend && npm run check && npm run lint
 
 clean-frontend:
 	rm -rf static

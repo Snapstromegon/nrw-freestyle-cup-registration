@@ -1,8 +1,8 @@
-import { LitElement, html, css } from "lit";
-import { customElement } from "lit/decorators.js";
-import { User } from "../../contexts/user";
-import { client, components } from "../../apiClient";
 import { Task } from "@lit/task";
+import { css, html, LitElement } from "lit";
+import { customElement } from "lit/decorators.js";
+import { client, type components } from "../../apiClient";
+import type { User } from "../../contexts/user";
 import "../elements/cup-context-club.js";
 import "../elements/cup-club-manager.js";
 
@@ -101,12 +101,14 @@ export default class CupViewAdmin extends LitElement {
               <p>${user.email}</p>
               <p>${user.email_verified ? "✔️" : "❌"}</p>
               <p>${user.is_admin ? "✔️" : "❌"}</p>
-              ${user.club_id
-                ? html` <cup-context-club club-id=${user.club_id}>
+              ${
+                user.club_id
+                  ? html` <cup-context-club club-id=${user.club_id}>
                     <cup-club-manager ?admin-mode=${true}></cup-club-manager>
                   </cup-context-club>`
-                : html`<p>Kein Verein</p>`}
-            </div>`
+                  : html`<p>Kein Verein</p>`
+              }
+            </div>`,
           )}`,
         error: (error) => html`<li>${error}</li>`,
         pending: () => html`<li>Loading...</li>`,

@@ -1,6 +1,6 @@
-import { LitElement, html, nothing } from "lit";
+import { html, LitElement, nothing } from "lit";
 import { customElement, property } from "lit/decorators.js";
-import { components } from "../../bindings";
+import type { components } from "../../bindings";
 
 @customElement("cup-starter-table")
 export default class CupStarterTable extends LitElement {
@@ -8,7 +8,7 @@ export default class CupStarterTable extends LitElement {
   @property({ type: Array }) pairs: {
     partners: [
       components["schemas"]["Starter"],
-      components["schemas"]["Starter"]?
+      components["schemas"]["Starter"]?,
     ];
     maxAge: Date;
     sonderpokal: boolean;
@@ -19,15 +19,16 @@ export default class CupStarterTable extends LitElement {
       <thead>
         <tr>
           <th>NR</th>
-          ${this.pairs.length? html`<th>Max Alter</th>`:nothing}
+          ${this.pairs.length ? html`<th>Max Alter</th>` : nothing}
           <th>ID</th>
           <th>Club Name</th>
           <th>Vorname</th>
           <th>Nachname</th>
           <th>Geburtstag</th>
           <th>Alter</th>
-          ${this.pairs.length
-            ? html`
+          ${
+            this.pairs.length
+              ? html`
                 <th>ID</th>
                 <th>Club Name</th>
                 <th>Vorname</th>
@@ -35,14 +36,16 @@ export default class CupStarterTable extends LitElement {
                 <th>Geburtstag</th>
                 <th>Alter</th>
               `
-            : nothing}
+              : nothing
+          }
         </tr>
       </thead>
       <tbody>
-        ${this.pairs.length
-          ? this.pairs.map((pair, i) => {
-              const [starter, partner] = pair.partners;
-              return html`
+        ${
+          this.pairs.length
+            ? this.pairs.map((pair, i) => {
+                const [starter, partner] = pair.partners;
+                return html`
                 <tr>
                   <td>${i + 1}</td>
                   <td>${pair.maxAge.toLocaleDateString()}</td>
@@ -57,18 +60,20 @@ export default class CupStarterTable extends LitElement {
                   <td>${partner ? partner.firstname : starter.partner_name}</td>
                   <td>${partner ? partner.lastname : nothing}</td>
                   <td>
-                    ${partner
-                      ? new Date(partner.birthdate).toLocaleDateString()
-                      : nothing}
+                    ${
+                      partner
+                        ? new Date(partner.birthdate).toLocaleDateString()
+                        : nothing
+                    }
                   </td>
                   <td>
                     ${partner ? partner.age_on_competition.toFixed(2) : nothing}
                   </td>
                 </tr>
               `;
-            })
-          : this.starters.map(
-              (starter, i) => html`
+              })
+            : this.starters.map(
+                (starter, i) => html`
                 <tr>
                   <td>${i + 1}</td>
                   <td>${starter.id}</td>
@@ -78,8 +83,9 @@ export default class CupStarterTable extends LitElement {
                   <td>${new Date(starter.birthdate).toLocaleDateString()}</td>
                   <td>${starter.age_on_competition}</td>
                 </tr>
-              `
-            )}
+              `,
+              )
+        }
       </tbody>
     </table>`;
   }

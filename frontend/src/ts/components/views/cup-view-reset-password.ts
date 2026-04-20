@@ -1,8 +1,8 @@
 import { consume } from "@lit/context";
-import { LitElement, html, css, nothing } from "lit";
+import { css, html, LitElement, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
-import { User, userContext } from "../../contexts/user";
 import { client } from "../../apiClient";
+import { type User, userContext } from "../../contexts/user";
 import "../elements/cup-centered-icon-box.js";
 
 @customElement("cup-view-reset-password")

@@ -1,8 +1,8 @@
-import { LitElement, html } from "lit";
-import { customElement, property } from "lit/decorators.js";
-import { Club, clubContext } from "../../contexts/club.js";
 import { provide } from "@lit/context";
+import { html, LitElement } from "lit";
+import { customElement, property } from "lit/decorators.js";
 import { client } from "../../apiClient.js";
+import { type Club, clubContext } from "../../contexts/club.js";
 import "./cup-centered-icon-box.js";
 import { Task } from "@lit/task";
 

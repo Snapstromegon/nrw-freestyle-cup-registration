@@ -1,12 +1,12 @@
-import { LitElement, html, css, nothing } from "lit";
-import { customElement } from "lit/decorators.js";
-import { client, components } from "../../apiClient";
 import { Task } from "@lit/task";
+import { css, html, LitElement, nothing } from "lit";
+import { customElement } from "lit/decorators.js";
+import { client, type components } from "../../apiClient";
 import "../elements/cup-context-club.js";
 import "../elements/cup-club-manager.js";
 import "../elements/cup-starter-table.js";
-import { repeat } from "lit/directives/repeat.js";
 import { cache } from "lit/directives/cache.js";
+import { repeat } from "lit/directives/repeat.js";
 
 @customElement("cup-view-admin-acts-overview")
 export default class CupViewAdminActsOverview extends LitElement {
@@ -201,11 +201,13 @@ export default class CupViewAdminActsOverview extends LitElement {
                     <td class="right">${c.actsWithName}</td>
                     <td class="right">${c.actsReady}</td>
                     <td>
-                      ${c.actsReady == c.acts.length
-                        ? "✔️"
-                        : c.actsReady
-                          ? "⌛"
-                          : "❌"}
+                      ${
+                        c.actsReady == c.acts.length
+                          ? "✔️"
+                          : c.actsReady
+                            ? "⌛"
+                            : "❌"
+                      }
                     </td>
                   </tr>`,
               )}
@@ -275,17 +277,20 @@ export default class CupViewAdminActsOverview extends LitElement {
                                 </td>
                                 <td>${act.max_age}</td>
                                 <td>
-                                  ${act.song_file
-                                    ? html` <audio
+                                  ${
+                                    act.song_file
+                                      ? html` <audio
                                         preload="none"
                                         controls
                                         src="/songs/${act.song_file}"
                                       ></audio>`
-                                    : "❌"}
+                                      : "❌"
+                                  }
                                 </td>
                                 <td>
-                                  ${act.song_file
-                                    ? html`<input
+                                  ${
+                                    act.song_file
+                                      ? html`<input
                                         type="checkbox"
                                         ?checked=${act.song_checked}
                                         @change=${
@@ -294,7 +299,8 @@ export default class CupViewAdminActsOverview extends LitElement {
                                             this.setSongChecked(act, e)
                                         }
                                       />`
-                                    : nothing}
+                                      : nothing
+                                  }
                                 </td>
                               </tr>
                             `,

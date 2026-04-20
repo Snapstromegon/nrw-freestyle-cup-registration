@@ -1,9 +1,9 @@
 import { consume } from "@lit/context";
-import { LitElement, html, css } from "lit";
-import { customElement } from "lit/decorators.js";
-import { User, userContext } from "../../contexts/user";
-import { client } from "../../apiClient";
 import { Task } from "@lit/task";
+import { css, html, LitElement } from "lit";
+import { customElement } from "lit/decorators.js";
+import { client } from "../../apiClient";
+import { type User, userContext } from "../../contexts/user";
 import "../elements/cup-centered-icon-box.js";
 
 @customElement("cup-view-verify-email")

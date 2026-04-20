@@ -1,9 +1,9 @@
-import { LitElement, html, css, nothing } from "lit";
-import { customElement, property } from "lit/decorators.js";
-import { components } from "../../bindings";
-import { repeat } from "lit/directives/repeat.js";
 import { Task } from "@lit/task";
+import { css, html, LitElement, nothing } from "lit";
+import { customElement, property } from "lit/decorators.js";
+import { repeat } from "lit/directives/repeat.js";
 import { client } from "../../apiClient";
+import type { components } from "../../bindings";
 
 @customElement("cup-timeplan")
 export default class CupTimeplan extends LitElement {
@@ -43,8 +43,10 @@ export default class CupTimeplan extends LitElement {
     | components["schemas"]["Timeplan"]
     | null = null;
   @property({ attribute: "include-past", type: Boolean }) includePast = false;
-  @property({ attribute: "include-active-act", type: Boolean }) includeActiveAct = false;
-  @property({ attribute: "include-original-time", type: Boolean }) includeOriginalTime = false;
+  @property({ attribute: "include-active-act", type: Boolean })
+  includeActiveAct = false;
+  @property({ attribute: "include-original-time", type: Boolean })
+  includeOriginalTime = false;
   @property({ attribute: "is-admin", type: Boolean }) isAdmin = false;
 
   allActs = new Task(this, {
@@ -52,7 +54,7 @@ export default class CupTimeplan extends LitElement {
     args: () => [],
   });
 
-  @property({type: Boolean}) description = false;
+  @property({ type: Boolean }) description = false;
 
   override render() {
     return html`<div id="wrapper">
@@ -81,16 +83,20 @@ export default class CupTimeplan extends LitElement {
                         <h3 class="title">
                           ${item.timeplan_entry.Category.description}
                         </h3>
-                        ${item.started_at
-                          ? nothing
-                          : html`<p class="time">
-                              ${niceTime(item.predicted_start)}${this
-                                .includeOriginalTime
-                                ? html` (${niceTime(item.planned_start)})`
-                                : nothing}
-                            </p>`}
-                        ${this.isAdmin
-                          ? html`<input
+                        ${
+                          item.started_at
+                            ? nothing
+                            : html`<p class="time">
+                              ${niceTime(item.predicted_start)}${
+                                this.includeOriginalTime
+                                  ? html` (${niceTime(item.planned_start)})`
+                                  : nothing
+                              }
+                            </p>`
+                        }
+                        ${
+                          this.isAdmin
+                            ? html`<input
                               type="checkbox"
                               ?checked=${acts
                                 ?.filter(
@@ -102,7 +108,8 @@ export default class CupTimeplan extends LitElement {
                                 ?.every((a) => a.song_checked)}
                               disabled
                             />`
-                          : nothing}
+                            : nothing
+                        }
                       </section>
                       ${repeat(
                         item.timeplan_entry.Category.acts.filter(
@@ -125,27 +132,34 @@ export default class CupTimeplan extends LitElement {
                             </h3>
                             <h4>${act.name}</h4>
                             <p class="time">
-                              ${niceTime(act.predicted_start)}${this
-                                .includeOriginalTime
-                                ? html` (${niceTime(item.planned_start)})`
-                                : nothing}
+                              ${niceTime(act.predicted_start)}${
+                                this.includeOriginalTime
+                                  ? html` (${niceTime(item.planned_start)})`
+                                  : nothing
+                              }
                             </p>
                             <p>
-                              ${this.description
-                                ? acts?.find(
-                                    (completeAct) => completeAct.id == act.id,
-                                  )?.description
-                                : nothing}
+                              ${
+                                this.description
+                                  ? acts?.find(
+                                      (completeAct) => completeAct.id == act.id,
+                                    )?.description
+                                  : nothing
+                              }
                             </p>
-                            ${this.isAdmin
-                              ? html`<input
+                            ${
+                              this.isAdmin
+                                ? html`<input
                                   type="checkbox"
-                                  ?checked=${acts?.find(
-                                    (completeAct) => completeAct.id == act.id,
-                                  )?.song_checked}
+                                  ?checked=${
+                                    acts?.find(
+                                      (completeAct) => completeAct.id == act.id,
+                                    )?.song_checked
+                                  }
                                   disabled
                                 />`
-                              : nothing}
+                                : nothing
+                            }
                           </section>
                         `,
                       )}`
@@ -154,10 +168,11 @@ export default class CupTimeplan extends LitElement {
                     <section class="event">
                       <h3 class="title">${item.timeplan_entry.Custom.label}</h3>
                       <p class="time">
-                        ${niceTime(item.predicted_start)}${this
-                          .includeOriginalTime
-                          ? html` (${niceTime(item.planned_start)})`
-                          : nothing}
+                        ${niceTime(item.predicted_start)}${
+                          this.includeOriginalTime
+                            ? html` (${niceTime(item.planned_start)})`
+                            : nothing
+                        }
                       </p>
                     </section>
                   `,

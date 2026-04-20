@@ -1,7 +1,7 @@
-import { LitElement, html, css } from "lit";
+import { Task } from "@lit/task";
+import { css, html, LitElement } from "lit";
 import { customElement } from "lit/decorators.js";
 import { client } from "../../apiClient";
-import { Task } from "@lit/task";
 import "../elements/cup-context-club.js";
 import "../elements/cup-club-manager.js";
 import "../elements/cup-starter-table.js";

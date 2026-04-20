@@ -1,12 +1,15 @@
-import { LitElement, html, css, nothing } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
-import { repeat } from "lit/directives/repeat.js";
-import { client, components } from "../../apiClient";
 import { consume } from "@lit/context";
 import { Task } from "@lit/task";
-import { Club, clubContext } from "../../contexts/club";
-import { SystemStatus, systemStatusContext } from "../../contexts/systemStatus";
-import { User, userContext } from "../../contexts/user";
+import { css, html, LitElement, nothing } from "lit";
+import { customElement, property, state } from "lit/decorators.js";
+import { repeat } from "lit/directives/repeat.js";
+import { client, type components } from "../../apiClient";
+import { type Club, clubContext } from "../../contexts/club";
+import {
+  type SystemStatus,
+  systemStatusContext,
+} from "../../contexts/systemStatus";
+import { type User, userContext } from "../../contexts/user";
 
 type Judge = { birthdate: Date } & Omit<
   components["schemas"]["ClubJudge"],
@@ -395,9 +398,10 @@ export default class CupClubJudgeManager extends LitElement {
 
   override render() {
     return html`<h4>Jury</h4>
-      ${this.adminMode
-        ? nothing
-        : html`
+      ${
+        this.adminMode
+          ? nothing
+          : html`
             <p>
               Die Altersgruppen sind nur in U15 und 15+ geteilt. Eine genauere
               Einteilung wird nach Meldeschluss vorgenommen. Wir achten darauf,
@@ -408,7 +412,8 @@ export default class CupClubJudgeManager extends LitElement {
               Hospitation). Gewertet wird in "P" (Performance), "T" (Technik)
               und "A" (Abstiege).
             </p>
-          `}
+          `
+      }
       <h5>Zusammenfassung</h5>
 
       <table id="summary">
@@ -459,9 +464,10 @@ export default class CupClubJudgeManager extends LitElement {
           </tr>
         </thead>
         <tbody>
-          ${this.systemStatus?.can_register_judge || this.user?.is_admin
-            ? this.addJudgeMode
-              ? html`<tr id="addJudgeRow">
+          ${
+            this.systemStatus?.can_register_judge || this.user?.is_admin
+              ? this.addJudgeMode
+                ? html`<tr id="addJudgeRow">
                   <td>
                     <label
                       ><span>Vorname</span
@@ -587,7 +593,7 @@ export default class CupClubJudgeManager extends LitElement {
                     </button>
                   </td>
                 </tr>`
-              : html`<tr id="addJudgeRow">
+                : html`<tr id="addJudgeRow">
                   <td colspan="64">
                     <button
                       id="addJudgeButton"
@@ -598,7 +604,8 @@ export default class CupClubJudgeManager extends LitElement {
                     </button>
                   </td>
                 </tr>`
-            : nothing}
+              : nothing
+          }
           ${this.judges.render({
             complete: (judges) =>
               judges.map((judge) => {
@@ -815,9 +822,10 @@ export default class CupClubJudgeManager extends LitElement {
                         },
                       )}
                       <td class="actionCol">
-                        ${this.systemStatus?.can_register_judge ||
-                        this.user?.is_admin
-                          ? html` <button
+                        ${
+                          this.systemStatus?.can_register_judge ||
+                          this.user?.is_admin
+                            ? html` <button
                                 @click=${
                                   // eslint-disable-next-line lit/no-template-arrow
                                   () => this.enableJudgeEdit(judge)
@@ -835,7 +843,8 @@ export default class CupClubJudgeManager extends LitElement {
                               >
                                 delete
                               </button>`
-                          : nothing}
+                            : nothing
+                        }
                       </td>
                     </tr>`;
               }),

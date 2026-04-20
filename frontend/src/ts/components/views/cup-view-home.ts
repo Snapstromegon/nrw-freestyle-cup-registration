@@ -1,8 +1,8 @@
 import { consume } from "@lit/context";
-import { LitElement, html, nothing, css } from "lit";
+import { css, html, LitElement, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
-import { User, userContext } from "../../contexts/user";
 import { client } from "../../apiClient";
+import { type User, userContext } from "../../contexts/user";
 import "../elements/cup-context-club.js";
 import "../elements/cup-club-manager.js";
 
@@ -109,9 +109,11 @@ export default class CupViewHome extends LitElement {
       </header>
       <main>
         <h2>Hi ${this.user?.name}</h2>
-        ${this.user?.is_admin
-          ? html`<p>Du bist Admin! <a href="/admin">Admininterface</a></p>`
-          : nothing}
+        ${
+          this.user?.is_admin
+            ? html`<p>Du bist Admin! <a href="/admin">Admininterface</a></p>`
+            : nothing
+        }
         <p>
           Deine Email ist ${this.user?.email}. Verifiziert:
           ${this.user?.email_verified ? "✔️" : "❌"}
@@ -122,20 +124,22 @@ export default class CupViewHome extends LitElement {
 
         <h2>Verein</h2>
 
-        ${this.user?.email_verified
-          ? this.user?.club_id
-            ? html`<cup-context-club club-id=${this.user?.club_id}
+        ${
+          this.user?.email_verified
+            ? this.user?.club_id
+              ? html`<cup-context-club club-id=${this.user?.club_id}
                 ><cup-club-manager></cup-club-manager
               ></cup-context-club>`
-            : html`<a href="/create_club">Verein Erstellen</a>`
-          : html`<p>
+              : html`<a href="/create_club">Verein Erstellen</a>`
+            : html`<p>
               Du musst deine EMail verifizieren, um einen Verein zu erstellen.
               Falls du keine Verifizierungsmail bekommen hast, kannst du hier
               eine neue versenden:
               <button @click=${this.reverifyMail}>
                 Neue Verifizierungsmail schicken
               </button>
-            </p>`}
+            </p>`
+        }
       </main>`;
   }
 

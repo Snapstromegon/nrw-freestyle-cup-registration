@@ -1,8 +1,8 @@
-import { LitElement, html, css } from "lit";
-import { customElement } from "lit/decorators.js";
-import { client, components } from "../../apiClient";
-import { repeat } from "lit/directives/repeat.js";
 import { Task } from "@lit/task";
+import { css, html, LitElement } from "lit";
+import { customElement } from "lit/decorators.js";
+import { repeat } from "lit/directives/repeat.js";
+import { client, type components } from "../../apiClient";
 import "../elements/cup-context-club.js";
 import "../elements/cup-club-manager.js";
 import "../elements/cup-starter-table.js";
@@ -216,25 +216,31 @@ export default class CupViewAdminJudges extends LitElement {
                       (c) => c,
                       (category) => html`
                         <td>
-                          ${category.technic.judge
-                            ? "✔️"
-                            : category.technic.hospitation
-                              ? "👀"
-                              : "-"}
+                          ${
+                            category.technic.judge
+                              ? "✔️"
+                              : category.technic.hospitation
+                                ? "👀"
+                                : "-"
+                          }
                         </td>
                         <td>
-                          ${category.performance.judge
-                            ? "✔️"
-                            : category.performance.hospitation
-                              ? "👀"
-                              : "-"}
+                          ${
+                            category.performance.judge
+                              ? "✔️"
+                              : category.performance.hospitation
+                                ? "👀"
+                                : "-"
+                          }
                         </td>
                         <td>
-                          ${category.dismounts.judge
-                            ? "✔️"
-                            : category.dismounts.hospitation
-                              ? "👀"
-                              : "-"}
+                          ${
+                            category.dismounts.judge
+                              ? "✔️"
+                              : category.dismounts.hospitation
+                                ? "👀"
+                                : "-"
+                          }
                         </td>
                       `,
                     )}

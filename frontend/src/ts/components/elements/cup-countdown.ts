@@ -1,4 +1,4 @@
-import { LitElement, html, css } from "lit";
+import { css, html, LitElement } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
 @customElement("cup-countdown")
@@ -36,7 +36,7 @@ export default class CupCountdown extends LitElement {
   get secondsRemaining() {
     return Math.max(
       0,
-      Math.floor(((this.time?.getTime() || 0) - Date.now()) / 1000)
+      Math.floor(((this.time?.getTime() || 0) - Date.now()) / 1000),
     );
   }
 

@@ -1,8 +1,8 @@
-import { LitElement, html, nothing, css } from "lit";
-import { customElement, state } from "lit/decorators.js";
-import { User, userContext } from "../../contexts/user.js";
 import { provide } from "@lit/context";
+import { css, html, LitElement, nothing } from "lit";
+import { customElement, state } from "lit/decorators.js";
 import { client } from "../../apiClient.js";
+import { type User, userContext } from "../../contexts/user.js";
 import "./cup-centered-icon-box.js";
 
 @customElement("cup-context-user")

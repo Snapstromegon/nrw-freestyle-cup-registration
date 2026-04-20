@@ -1,8 +1,8 @@
-import { LitElement, html, css } from "lit";
-import { customElement, state } from "lit/decorators.js";
-import { client, components } from "../../apiClient";
 import { Task } from "@lit/task";
+import { css, html, LitElement } from "lit";
+import { customElement, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
+import { client, type components } from "../../apiClient";
 
 @customElement("cup-view-admin-timeplan")
 export default class CupViewAdminTimeplan extends LitElement {
@@ -265,9 +265,10 @@ export default class CupViewAdminTimeplan extends LitElement {
                 ? this.renderEditRow(entry)
                 : this.renderEntryRow(entry),
           )}
-          ${this.showNewForm
-            ? this.renderNewEntryRow()
-            : html`<tr>
+          ${
+            this.showNewForm
+              ? this.renderNewEntryRow()
+              : html`<tr>
                 <td colspan="8" style="text-align: center; padding: 0;">
                   <button
                     @click=${this.showAddForm}
@@ -279,7 +280,8 @@ export default class CupViewAdminTimeplan extends LitElement {
                     Neuer Eintrag
                   </button>
                 </td>
-              </tr>`}
+              </tr>`
+          }
         </tbody>
       </table>
     `;
@@ -295,12 +297,8 @@ export default class CupViewAdminTimeplan extends LitElement {
         <td>${this.formatSecondsAsTime(entry.duration_seconds)}</td>
         <td>${entry.label || "-"}</td>
         <td>${entry.category || "-"}</td>
-        <td>
-          ${this.formatDateTimeForDisplay(entry.started_at || null)}
-        </td>
-        <td>
-          ${this.formatDateTimeForDisplay(entry.ended_at || null)}
-        </td>
+        <td>${this.formatDateTimeForDisplay(entry.started_at || null)}</td>
+        <td>${this.formatDateTimeForDisplay(entry.ended_at || null)}</td>
         <td>
           <div class="actions">
             <button
@@ -355,7 +353,9 @@ export default class CupViewAdminTimeplan extends LitElement {
           <input
             type="datetime-local"
             .value=${this.formatDateTimeForInput(
-              this.editForm.earliest_start_time || entry.earliest_start_time || null,
+              this.editForm.earliest_start_time ||
+                entry.earliest_start_time ||
+                null,
             )}
             @input=${
               // eslint-disable-next-line lit/no-template-arrow
@@ -374,9 +374,7 @@ export default class CupViewAdminTimeplan extends LitElement {
             type="number"
             style="width: 5em;"
             .value=${(
-              this.editForm.duration_seconds ??
-              entry.duration_seconds ??
-              ""
+              this.editForm.duration_seconds ?? entry.duration_seconds ?? ""
             ).toString()}
             @input=${
               // eslint-disable-next-line lit/no-template-arrow
@@ -411,7 +409,8 @@ export default class CupViewAdminTimeplan extends LitElement {
             pending: () => html`<span>Laden...</span>`,
             error: () => html`<span>Fehler</span>`,
             complete: (categories) => {
-              const selectedCategory = this.editForm.category ?? entry.category ?? "";
+              const selectedCategory =
+                this.editForm.category ?? entry.category ?? "";
               const availableCategories = this.getAvailableCategories(
                 categories,
                 entry.category,
@@ -430,10 +429,18 @@ export default class CupViewAdminTimeplan extends LitElement {
                     }
                   }
                 >
-                  <option value="" ?selected=${selectedCategory === ""}>-</option>
-                  ${availableCategories.map(
+                  <option value="" ?selected=${selectedCategory === ""}>
+                    -
+                  </option>
+                  ${repeat(
+                    availableCategories,
                     (cat) =>
-                      html`<option value=${cat.name} ?selected=${selectedCategory === cat.name}>${cat.name}</option>`,
+                      html`<option
+                        value=${cat.name}
+                        ?selected=${selectedCategory === cat.name}
+                      >
+                        ${cat.name}
+                      </option>`,
                   )}
                 </select>
               `;
@@ -441,7 +448,9 @@ export default class CupViewAdminTimeplan extends LitElement {
           })}
         </td>
         <td colspan="2">
-          <small>Start/Ende werden durch timeplan_forward/backward gesetzt</small>
+          <small
+            >Start/Ende werden durch timeplan_forward/backward gesetzt</small
+          >
         </td>
         <td>
           <div class="actions">
@@ -567,10 +576,18 @@ export default class CupViewAdminTimeplan extends LitElement {
                     }
                   }
                 >
-                  <option value="" ?selected=${selectedCategory === ""}>-</option>
-                  ${availableCategories.map(
+                  <option value="" ?selected=${selectedCategory === ""}>
+                    -
+                  </option>
+                  ${repeat(
+                    availableCategories,
                     (cat) =>
-                      html`<option value=${cat.name} ?selected=${selectedCategory === cat.name}>${cat.name}</option>`,
+                      html`<option
+                        value=${cat.name}
+                        ?selected=${selectedCategory === cat.name}
+                      >
+                        ${cat.name}
+                      </option>`,
                   )}
                 </select>
               `;

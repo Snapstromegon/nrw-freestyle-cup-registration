@@ -1,11 +1,14 @@
-import { LitElement, html, css, nothing } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
-import { client, components } from "../../apiClient";
 import { consume } from "@lit/context";
 import { Task } from "@lit/task";
-import { Club, clubContext } from "../../contexts/club";
-import { SystemStatus, systemStatusContext } from "../../contexts/systemStatus";
-import { User, userContext } from "../../contexts/user";
+import { css, html, LitElement, nothing } from "lit";
+import { customElement, property, state } from "lit/decorators.js";
+import { client, type components } from "../../apiClient";
+import { type Club, clubContext } from "../../contexts/club";
+import {
+  type SystemStatus,
+  systemStatusContext,
+} from "../../contexts/systemStatus";
+import { type User, userContext } from "../../contexts/user";
 
 type Starter = { birthdate: Date } & Omit<
   components["schemas"]["ClubStarter"],
@@ -246,10 +249,13 @@ export default class CupClubStarterManager extends LitElement {
         <tr>
           <th>Bezahlt</th>
           <td>
-            ${this.club?.payment?.toFixed(2).toString().replace(".", ",") ||
-            0}€${this.adminMode
-              ? html` <button @click=${this.pay}>Betrag aktualisieren</button>`
-              : nothing}
+            ${
+              this.club?.payment?.toFixed(2).toString().replace(".", ",") || 0
+            }€${
+              this.adminMode
+                ? html` <button @click=${this.pay}>Betrag aktualisieren</button>`
+                : nothing
+            }
           </td>
         </tr>
       </table>
@@ -274,9 +280,10 @@ export default class CupClubStarterManager extends LitElement {
           </tr>
         </thead>
         <tbody>
-          ${this.systemStatus?.can_register_starter || this.user?.is_admin
-            ? this.addStarterMode
-              ? html`<tr id="addStarterRow">
+          ${
+            this.systemStatus?.can_register_starter || this.user?.is_admin
+              ? this.addStarterMode
+                ? html`<tr id="addStarterRow">
                   ${this.adminMode ? html`<td></td>` : nothing}
                   <td>
                     <label
@@ -418,7 +425,7 @@ export default class CupClubStarterManager extends LitElement {
                     </button>
                   </td>
                 </tr>`
-              : html`<tr id="addStarterRow">
+                : html`<tr id="addStarterRow">
                   <td colspan=${this.adminMode ? 13 : 11}>
                     <button
                       id="addStarterButton"
@@ -429,7 +436,8 @@ export default class CupClubStarterManager extends LitElement {
                     </button>
                   </td>
                 </tr>`
-            : nothing}
+              : nothing
+          }
           ${this.starters.render({
             complete: (starters) =>
               starters.map((starter) => {
@@ -597,8 +605,9 @@ export default class CupClubStarterManager extends LitElement {
                             ?disabled=${!editStarter.pair}
                         /></label>
                       </td>
-                      ${this.adminMode
-                        ? html`<td>
+                      ${
+                        this.adminMode
+                          ? html`<td>
                             <label
                               ><span>Partner ID</span
                               ><input
@@ -617,7 +626,8 @@ export default class CupClubStarterManager extends LitElement {
                                 ?disabled=${!editStarter.pair}
                             /></label>
                           </td>`
-                        : nothing}
+                          : nothing
+                      }
                       <td>
                         <label><span>Startgebühr</span></label>
                         ${getStarterPrice(editStarter)}€
@@ -657,9 +667,11 @@ export default class CupClubStarterManager extends LitElement {
                       </td>
                       <td hidden>
                         <label><span>Einzel-Kategorie</span></label>
-                        ${starter.single_sonderpokal
-                          ? "Sonderpokal"
-                          : "Nachwuchscup"}
+                        ${
+                          starter.single_sonderpokal
+                            ? "Sonderpokal"
+                            : "Nachwuchscup"
+                        }
                       </td>
                       <td>
                         <label><span>Einzel Männlich</span></label>
@@ -671,39 +683,47 @@ export default class CupClubStarterManager extends LitElement {
                       </td>
                       <td hidden>
                         <label><span>Paar-Kategorie</span></label>
-                        ${starter.pair_sonderpokal
-                          ? "Sonderpokal"
-                          : "Nachwuchscup"}
+                        ${
+                          starter.pair_sonderpokal
+                            ? "Sonderpokal"
+                            : "Nachwuchscup"
+                        }
                       </td>
                       <td>
-                        <label><span>Paar</span></label> ${starter.pair
-                          ? "✔️"
-                          : "-"}
+                        <label><span>Paar</span></label> ${
+                          starter.pair ? "✔️" : "-"
+                        }
                       </td>
                       <td>
-                        <label><span>Partner</span></label> ${starter.pair &&
-                        starter.partner_name
-                          ? starter.resolved_partner_name
-                            ? `✔️ ${starter.resolved_partner_name} (${starter.resolved_partner_club})`
-                            : `⌛ ${starter.partner_name}`
-                          : nothing}
+                        <label><span>Partner</span></label> ${
+                          starter.pair && starter.partner_name
+                            ? starter.resolved_partner_name
+                              ? `✔️ ${starter.resolved_partner_name} (${starter.resolved_partner_club})`
+                              : `⌛ ${starter.partner_name}`
+                            : nothing
+                        }
                       </td>
-                      ${this.adminMode
-                        ? html`<td>
+                      ${
+                        this.adminMode
+                          ? html`<td>
                             <label><span>Partner ID</span></label>
-                            ${starter.pair && starter.partner_id
-                              ? starter.partner_id
-                              : nothing}
+                            ${
+                              starter.pair && starter.partner_id
+                                ? starter.partner_id
+                                : nothing
+                            }
                           </td>`
-                        : nothing}
+                          : nothing
+                      }
                       <td>
                         <label><span>Startgebühr</span></label>
                         ${getStarterPrice(starter)}€
                       </td>
                       <td class="actionCol">
-                        ${this.systemStatus?.can_register_starter ||
-                        this.user?.is_admin
-                          ? html` <button
+                        ${
+                          this.systemStatus?.can_register_starter ||
+                          this.user?.is_admin
+                            ? html` <button
                                 @click=${
                                   // eslint-disable-next-line lit/no-template-arrow
                                   () => this.enableStarterEdit(starter)
@@ -721,7 +741,8 @@ export default class CupClubStarterManager extends LitElement {
                               >
                                 delete
                               </button>`
-                          : nothing}
+                            : nothing
+                        }
                       </td>
                     </tr>`;
               }),
@@ -730,16 +751,18 @@ export default class CupClubStarterManager extends LitElement {
           })}
         </tbody>
       </table>
-      ${this.adminMode
-        ? nothing
-        : html`<p>
+      ${
+        this.adminMode
+          ? nothing
+          : html`<p>
             <em
               >Paarkürpartner innerhalb eines Vereins werden automatisch
               verbunden. Vereinsübergreifende Paare werden vom Veranstalter
               verifiziert. Bis dies geschehen ist, wird der Partner mit einem ⌛
               markiert.</em
             >
-          </p>`}`;
+          </p>`
+      }`;
   }
 
   enableStarterEdit(starter: Starter) {

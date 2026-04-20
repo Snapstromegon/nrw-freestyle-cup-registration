@@ -1,12 +1,12 @@
-import { LitElement, html, css } from "lit";
-import { customElement } from "lit/decorators.js";
-import { client, components } from "../../apiClient";
 import { Task } from "@lit/task";
+import { css, html, LitElement } from "lit";
+import { customElement } from "lit/decorators.js";
+import { client, type components } from "../../apiClient";
 import "../elements/cup-context-club.js";
 import "../elements/cup-club-manager.js";
 import "../elements/cup-starter-table.js";
-import { repeat } from "lit/directives/repeat.js";
 import { cache } from "lit/directives/cache.js";
+import { repeat } from "lit/directives/repeat.js";
 
 @customElement("cup-view-startlist")
 export default class CupViewStartlist extends LitElement {
@@ -161,7 +161,7 @@ export default class CupViewStartlist extends LitElement {
               const tpEntry = predictTimeplan?.items.find((item) =>
                 item.timeplan_entry && "Category" in item.timeplan_entry
                   ? item.timeplan_entry?.Category?.name == category.name
-                  : undefined
+                  : undefined,
               )?.timeplan_entry;
               const tpAct =
                 tpEntry && "Category" in tpEntry
@@ -171,7 +171,7 @@ export default class CupViewStartlist extends LitElement {
                 act,
                 tpAct,
               };
-            })
+            }),
         );
       }
       console.log(actsByCategory);
@@ -185,7 +185,7 @@ export default class CupViewStartlist extends LitElement {
       ] as [
         components["schemas"]["Category"][],
         components["schemas"]["StartlistAct"][],
-        components["schemas"]["Timeplan"]
+        components["schemas"]["Timeplan"],
       ],
   });
 
@@ -242,29 +242,29 @@ export default class CupViewStartlist extends LitElement {
                                     ${act.act.participants
                                       .map(
                                         (p) =>
-                                          `${p.firstname} ${p.lastname} (${p.club_name})`
+                                          `${p.firstname} ${p.lastname} (${p.club_name})`,
                                       )
                                       .join(" & ")}
                                   </td>
                                   <td>
                                     ${new Date(
-                                      act.tpAct.predicted_start
+                                      act.tpAct.predicted_start,
                                     ).toLocaleTimeString(undefined, {
                                       minute: "2-digit",
                                       hour: "2-digit",
                                     })}
                                   </td>
                                 </tr>
-                              `
+                              `,
                             )}
                           </table>
                         </section>
                       `;
-                    }
+                    },
                   )}
                 `,
               }),
-          })
+          }),
         )}
       </main>`;
   }

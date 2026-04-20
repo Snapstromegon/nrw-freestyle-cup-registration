@@ -1,8 +1,8 @@
-import { rollupPluginHTML as html } from "@web/rollup-plugin-html";
-import typescript from "@rollup/plugin-typescript";
 import commonjs from "@rollup/plugin-commonjs";
 import resolve from "@rollup/plugin-node-resolve";
+import typescript from "@rollup/plugin-typescript";
 import { copy } from "@web/rollup-plugin-copy";
+import { rollupPluginHTML as html } from "@web/rollup-plugin-html";
 import { writeFile } from "fs/promises";
 import openapiTS, { astToString } from "openapi-typescript";
 import { URL } from "url";
