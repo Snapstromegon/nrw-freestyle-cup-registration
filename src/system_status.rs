@@ -22,6 +22,27 @@ pub struct StatusOptions {
 }
 
 impl StatusOptions {
+    /// Computes which actions are currently allowed based on the configured dates.
+    ///
+    /// Registration (users, clubs, starters, judges) is possible between
+    /// `start_register_date` and `end_register_date` (both inclusive); music
+    /// uploads are possible until `end_music_upload_date`.
+    ///
+    /// ```
+    /// use nrw_freestyle_cup_registration::system_status::StatusOptions;
+    /// use time::{Duration, OffsetDateTime};
+    ///
+    /// let now = OffsetDateTime::now_utc();
+    /// let options = StatusOptions {
+    ///     start_register_date: now - Duration::days(1),
+    ///     end_register_date: now + Duration::days(1),
+    ///     end_music_upload_date: now - Duration::days(1),
+    /// };
+    ///
+    /// let capabilities = options.get_system_status();
+    /// assert!(capabilities.can_register);
+    /// assert!(!capabilities.can_upload_music);
+    /// ```
     pub fn get_system_status(&self) -> Capabilities {
         let now = OffsetDateTime::now_utc();
 
@@ -56,5 +77,55 @@ where
         }
         let status_options = parts.extensions.get::<Arc<StatusOptions>>().unwrap();
         Ok(status_options.get_system_status())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use time::Duration;
+
+    fn options(start: i64, end: i64, music_end: i64) -> StatusOptions {
+        let now = OffsetDateTime::now_utc();
+        StatusOptions {
+            start_register_date: now + Duration::days(start),
+            end_register_date: now + Duration::days(end),
+            end_music_upload_date: now + Duration::days(music_end),
+        }
+    }
+
+    fn assert_registration(capabilities: Capabilities, open: bool) {
+        assert_eq!(capabilities.can_register, open);
+        assert_eq!(capabilities.can_create_club, open);
+        assert_eq!(capabilities.can_register_starter, open);
+        assert_eq!(capabilities.can_register_judge, open);
+    }
+
+    #[test]
+    fn registration_is_closed_before_start() {
+        let capabilities = options(1, 10, 10).get_system_status();
+        assert_registration(capabilities, false);
+        assert!(capabilities.can_upload_music);
+    }
+
+    #[test]
+    fn registration_is_open_within_period() {
+        let capabilities = options(-1, 1, 1).get_system_status();
+        assert_registration(capabilities, true);
+        assert!(capabilities.can_upload_music);
+    }
+
+    #[test]
+    fn registration_is_closed_after_end() {
+        let capabilities = options(-10, -1, 5).get_system_status();
+        assert_registration(capabilities, false);
+        assert!(capabilities.can_upload_music);
+    }
+
+    #[test]
+    fn music_upload_is_closed_after_deadline() {
+        let capabilities = options(-10, -5, -1).get_system_status();
+        assert_registration(capabilities, false);
+        assert!(!capabilities.can_upload_music);
     }
 }

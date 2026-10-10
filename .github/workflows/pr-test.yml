@@ -64,5 +64,8 @@ jobs:
     - name: Test build
       run: make all
 
+    - name: Run tests
+      run: make test
+
     - name: Run linting
       run: make lint

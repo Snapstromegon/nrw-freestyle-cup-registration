@@ -21,6 +21,31 @@ impl Mailer {
         }
     }
 
+    /// Creates a mailer from an SMTP connection URL.
+    ///
+    /// Supports the URL formats of [`AsyncSmtpTransport::from_url`], e.g.
+    /// `smtp://localhost:1025` for an unencrypted local server like Mailpit or
+    /// `smtps://user:password@mail.example.com` for implicit TLS. No connection
+    /// is opened until the first mail is sent, but it must be called within a
+    /// Tokio runtime.
+    ///
+    /// ```
+    /// # #[tokio::main(flavor = "current_thread")]
+    /// # async fn main() {
+    /// use nrw_freestyle_cup_registration::mailer::Mailer;
+    ///
+    /// let mailer = Mailer::from_url("smtp://localhost:1025", "noreply@example.com");
+    /// assert!(mailer.is_ok());
+    /// assert!(Mailer::from_url("not a url", "noreply@example.com").is_err());
+    /// # }
+    /// ```
+    pub fn from_url(url: &str, from_address: &str) -> Result<Self, lettre::transport::smtp::Error> {
+        Ok(Self {
+            transport: AsyncSmtpTransport::<Tokio1Executor>::from_url(url)?.build(),
+            from_address: from_address.to_owned(),
+        })
+    }
+
     pub async fn send_text(
         &self,
         to: &str,

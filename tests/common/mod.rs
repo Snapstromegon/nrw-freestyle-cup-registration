@@ -1,0 +1,357 @@
+//! Shared harness for integration tests.
+//!
+//! Every test gets a fresh, migrated SQLite database from `#[sqlx::test]` and
+//! drives the real API router in-process, without binding a socket. Tests that
+//! send mails additionally get their own Mailpit container.
+#![allow(dead_code)]
+
+pub mod mailpit;
+
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
+
+use axum::{
+    Router,
+    body::Body,
+    http::{HeaderMap, Method, Request, StatusCode, header},
+};
+use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Validation};
+use nrw_freestyle_cup_registration::{
+    http_server::{HttpServerOptions, routes::get_api_router},
+    jwt::JWTConfig,
+    mailer::Mailer,
+    reloadable_sqlite::ReloadableSqlite,
+    system_status::StatusOptions,
+};
+use password_auth::generate_hash;
+use serde_json::{Value, json};
+use sqlx::SqlitePool;
+use time::{Duration, OffsetDateTime};
+use tower::ServiceExt;
+use uuid::Uuid;
+
+use mailpit::{FROM_ADDRESS, Mail, Mailpit};
+
+pub const BASE_URL: &str = "http://cup.test";
+pub const RELOAD_DB_TOKEN: &str = "test-reload-token";
+pub const PASSWORD: &str = "Sicheres-Passwort1";
+
+pub struct TestApp {
+    pub db: SqlitePool,
+    pub jwt: Arc<JWTConfig>,
+    mailpit: Option<Mailpit>,
+    data_dir: TempDir,
+    router: Router,
+}
+
+/// Directory removed again when dropped.
+struct TempDir(PathBuf);
+
+impl TempDir {
+    fn new() -> Self {
+        let path = std::env::temp_dir().join(format!("cup-test-data-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&path).unwrap();
+        Self(path)
+    }
+}
+
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+pub struct TestResponse {
+    pub status: StatusCode,
+    pub headers: HeaderMap,
+    pub body: Value,
+}
+
+impl TestResponse {
+    /// Returns the `name=value` pair of the `jwt` cookie set by this response.
+    pub fn jwt_cookie(&self) -> Option<String> {
+        self.headers
+            .get_all(header::SET_COOKIE)
+            .iter()
+            .filter_map(|v| v.to_str().ok())
+            .find(|v| v.starts_with("jwt="))
+            .map(|v| v.split(';').next().unwrap().to_string())
+    }
+}
+
+/// Registration window that is currently open.
+pub fn open_registration() -> StatusOptions {
+    let now = OffsetDateTime::now_utc();
+    StatusOptions {
+        start_register_date: now - Duration::days(1),
+        end_register_date: now + Duration::days(1),
+        end_music_upload_date: now + Duration::days(1),
+    }
+}
+
+/// Registration window that has already ended.
+pub fn closed_registration() -> StatusOptions {
+    let now = OffsetDateTime::now_utc();
+    StatusOptions {
+        start_register_date: now - Duration::days(10),
+        end_register_date: now - Duration::days(1),
+        end_music_upload_date: now - Duration::days(1),
+    }
+}
+
+impl TestApp {
+    /// App without a mail server; sending a mail makes the request fail.
+    pub fn new(db: SqlitePool) -> Self {
+        Self::with_status(db, open_registration())
+    }
+
+    pub fn with_status(db: SqlitePool, status: StatusOptions) -> Self {
+        // Nothing listens on port 1, so any attempt to send a mail fails.
+        let mailer = Mailer::from_url("smtp://127.0.0.1:1", FROM_ADDRESS).unwrap();
+        Self::build(db, status, mailer, None)
+    }
+
+    /// App sending mails to a dedicated Mailpit container.
+    pub async fn with_mailpit(db: SqlitePool) -> Self {
+        let mailpit = Mailpit::start().await;
+        let mailer = mailpit.mailer();
+        Self::build(db, open_registration(), mailer, Some(mailpit))
+    }
+
+    fn build(
+        db: SqlitePool,
+        status: StatusOptions,
+        mailer: Mailer,
+        mailpit: Option<Mailpit>,
+    ) -> Self {
+        let mut validation = Validation::new(Algorithm::HS512);
+        validation.validate_aud = false;
+        let jwt = Arc::new(JWTConfig::new(
+            EncodingKey::from_secret(b"integration-test-secret"),
+            DecodingKey::from_secret(b"integration-test-secret"),
+            Algorithm::HS512,
+            validation,
+            true,
+        ));
+        let data_dir = TempDir::new();
+        let options = HttpServerOptions {
+            bind_address: "127.0.0.1:0".into(),
+            base_url: BASE_URL.into(),
+            data_path: data_dir.0.clone(),
+            reload_db_token: RELOAD_DB_TOKEN.into(),
+        };
+        let router = get_api_router(
+            Arc::new(options),
+            ReloadableSqlite::new(db.clone(), String::new()),
+            Arc::new(mailer),
+            jwt.clone(),
+            Arc::new(status),
+        );
+        Self {
+            db,
+            jwt,
+            mailpit,
+            data_dir,
+            router,
+        }
+    }
+
+    /// Directory uploaded songs are stored in.
+    pub fn data_path(&self) -> &Path {
+        &self.data_dir.0
+    }
+
+    pub async fn request(
+        &self,
+        method: Method,
+        uri: &str,
+        body: Option<Value>,
+        cookie: Option<&str>,
+    ) -> TestResponse {
+        match body {
+            Some(body) => {
+                self.send(
+                    method,
+                    uri,
+                    Some("application/json"),
+                    body.to_string().into_bytes(),
+                    cookie,
+                )
+                .await
+            }
+            None => self.send(method, uri, None, Vec::new(), cookie).await,
+        }
+    }
+
+    /// Uploads `contents` as a single multipart file field.
+    pub async fn post_file(
+        &self,
+        uri: &str,
+        file_name: &str,
+        contents: &[u8],
+        cookie: Option<&str>,
+    ) -> TestResponse {
+        let boundary = "cup-test-boundary";
+        let mut body = format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{file_name}\"\r\nContent-Type: application/octet-stream\r\n\r\n"
+        )
+        .into_bytes();
+        body.extend_from_slice(contents);
+        body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+        let content_type = format!("multipart/form-data; boundary={boundary}");
+        self.send(Method::POST, uri, Some(&content_type), body, cookie)
+            .await
+    }
+
+    async fn send(
+        &self,
+        method: Method,
+        uri: &str,
+        content_type: Option<&str>,
+        body: Vec<u8>,
+        cookie: Option<&str>,
+    ) -> TestResponse {
+        let mut builder = Request::builder().method(method).uri(uri);
+        if let Some(cookie) = cookie {
+            builder = builder.header(header::COOKIE, cookie);
+        }
+        if let Some(content_type) = content_type {
+            builder = builder.header(header::CONTENT_TYPE, content_type);
+        }
+        let request = builder.body(Body::from(body)).unwrap();
+
+        let response = self.router.clone().oneshot(request).await.unwrap();
+        let status = response.status();
+        let headers = response.headers().clone();
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body = serde_json::from_slice(&bytes)
+            .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&bytes).into_owned()));
+        TestResponse {
+            status,
+            headers,
+            body,
+        }
+    }
+
+    pub async fn get(&self, uri: &str, cookie: Option<&str>) -> TestResponse {
+        self.request(Method::GET, uri, None, cookie).await
+    }
+
+    pub async fn post(&self, uri: &str, body: Value, cookie: Option<&str>) -> TestResponse {
+        self.request(Method::POST, uri, Some(body), cookie).await
+    }
+
+    /// Inserts a verified user directly into the database.
+    pub async fn create_user(&self, name: &str, is_admin: bool) -> Uuid {
+        let id = Uuid::now_v7();
+        sqlx::query(
+            "INSERT INTO users (id, email, email_verified, name, password, is_admin) VALUES (?, ?, true, ?, ?, ?)",
+        )
+        .bind(id)
+        .bind(email_for(name))
+        .bind(name)
+        .bind(generate_hash(PASSWORD))
+        .bind(is_admin)
+        .execute(&self.db)
+        .await
+        .unwrap();
+        id
+    }
+
+    /// Returns a `Cookie` header value authenticating as `user_id`.
+    pub fn cookie_for(&self, user_id: Uuid) -> String {
+        format!("jwt={}", self.jwt.create_user_token(user_id).unwrap())
+    }
+
+    pub async fn create_admin(&self) -> String {
+        let id = self.create_user("Admin", true).await;
+        self.cookie_for(id)
+    }
+
+    /// Creates a user owning a freshly created club. Returns `(cookie, club_id)`.
+    pub async fn create_club_owner(&self, name: &str, club_name: &str) -> (String, Uuid) {
+        let cookie = self.cookie_for(self.create_user(name, false).await);
+        let response = self
+            .post(
+                "/api/command/create_club",
+                serde_json::json!({ "name": club_name }),
+                Some(&cookie),
+            )
+            .await;
+        assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+        let club_id = response.body["club_id"].as_str().unwrap().parse().unwrap();
+        (cookie, club_id)
+    }
+
+    /// Adds a starter via the API and returns its id.
+    pub async fn add_starter(&self, cookie: &str, body: Value) -> Uuid {
+        let response = self
+            .post("/api/command/add_club_starter", body, Some(cookie))
+            .await;
+        assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+        response.body["starter_id"]
+            .as_str()
+            .unwrap()
+            .parse()
+            .unwrap()
+    }
+
+    /// Adds a single starter and returns the id of their generated act.
+    pub async fn add_single_act(&self, cookie: &str, club_id: Uuid, firstname: &str) -> Uuid {
+        let starter_id = self
+            .add_starter(cookie, starter_body(club_id, firstname, true, false))
+            .await;
+        self.act_of(starter_id).await
+    }
+
+    /// Returns the id of the (single) act the starter participates in.
+    pub async fn act_of(&self, starter_id: Uuid) -> Uuid {
+        sqlx::query_scalar("SELECT act_id FROM act_participants WHERE starter_id = ?")
+            .bind(starter_id)
+            .fetch_one(&self.db)
+            .await
+            .unwrap()
+    }
+
+    /// Returns all mails received by Mailpit, oldest first.
+    pub async fn mails(&self) -> Vec<Mail> {
+        self.mailpit
+            .as_ref()
+            .expect("create the app with TestApp::with_mailpit to inspect mails")
+            .mails()
+            .await
+    }
+
+    /// Returns the single mail received so far.
+    pub async fn single_mail(&self) -> Mail {
+        let mut mails = self.mails().await;
+        assert_eq!(mails.len(), 1, "{mails:#?}");
+        mails.pop().unwrap()
+    }
+}
+
+pub fn email_for(name: &str) -> String {
+    format!("{}@cup.test", name.to_lowercase().replace(' ', "."))
+}
+
+/// Body for `add_club_starter`. The birthdate places single female starters in
+/// the seeded `NEWU13` category.
+pub fn starter_body(club_id: Uuid, firstname: &str, single: bool, pair: bool) -> Value {
+    json!({
+        "club_id": club_id,
+        "firstname": firstname,
+        "lastname": "Muster",
+        "birthdate": "2012-05-01T00:00:00.000Z",
+        "single_sonderpokal": false,
+        "single_male": false,
+        "single_female": single,
+        "pair_sonderpokal": false,
+        "pair": pair,
+        "partner_id": null,
+        "partner_name": null,
+    })
+}

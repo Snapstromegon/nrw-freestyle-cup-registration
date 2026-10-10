@@ -113,3 +113,23 @@ impl IntoResponse for Error {
         (status, self.to_string()).into_response()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn auth_errors_map_to_expected_status_codes() {
+        let cases = [
+            (Error::AdminRequired, StatusCode::FORBIDDEN),
+            (Error::CookiesMissing, StatusCode::UNAUTHORIZED),
+            (Error::JwtMissing, StatusCode::UNAUTHORIZED),
+            (Error::JwtInvalid, StatusCode::UNAUTHORIZED),
+            (Error::UserNotFound, StatusCode::INTERNAL_SERVER_ERROR),
+        ];
+        for (error, expected) in cases {
+            let message = error.to_string();
+            assert_eq!(error.into_response().status(), expected, "{message}");
+        }
+    }
+}

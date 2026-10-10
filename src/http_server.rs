@@ -140,3 +140,76 @@ impl HttpServer {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::StatusCode;
+
+    async fn response_parts(error: HttpError) -> (StatusCode, serde_json::Value) {
+        let response = error.into_response();
+        let status = response.status();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        (status, serde_json::from_slice(&body).unwrap())
+    }
+
+    #[tokio::test]
+    async fn not_found_maps_to_404() {
+        let (status, body) = response_parts(HttpError::NotFound).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(body, serde_json::json!({ "type": "NotFound" }));
+    }
+
+    #[tokio::test]
+    async fn invalid_credentials_maps_to_401() {
+        let (status, body) = response_parts(HttpError::InvalidCredentials).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_eq!(body, serde_json::json!({ "type": "InvalidCredentials" }));
+    }
+
+    #[tokio::test]
+    async fn internal_server_error_maps_to_500() {
+        let (status, body) = response_parts(HttpError::InternalServerError).await;
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(body, serde_json::json!({ "type": "InternalServerError" }));
+    }
+
+    #[tokio::test]
+    async fn status_code_is_passed_through() {
+        let (status, body) = response_parts(HttpError::StatusCode(StatusCode::FORBIDDEN)).await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(
+            body,
+            serde_json::json!({ "type": "StatusCode", "message": 403 })
+        );
+    }
+
+    #[tokio::test]
+    async fn error_messages_become_generic_500_with_message() {
+        let (status, body) =
+            response_parts(HttpError::ErrorMessages("Etwas ging schief".into())).await;
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(body["type"], "Generic");
+        assert!(
+            body["message"]
+                .as_str()
+                .unwrap()
+                .contains("Etwas ging schief")
+        );
+    }
+
+    #[tokio::test]
+    async fn database_errors_become_generic_500() {
+        let (status, body) = response_parts(HttpError::DBError(sqlx::Error::RowNotFound)).await;
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(body["type"], "Generic");
+        assert!(
+            body["message"]
+                .as_str()
+                .unwrap()
+                .starts_with("Database error:")
+        );
+    }
+}

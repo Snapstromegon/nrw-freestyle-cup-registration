@@ -1,4 +1,5 @@
 use axum::Extension;
+use time::format_description::StaticFormatDescription;
 use tracing::{info, instrument};
 use uuid::Uuid;
 
@@ -6,6 +7,9 @@ use crate::{
     http_server::{ClientError, HttpError, routes::http_types::ActParticipant},
     reloadable_sqlite::ReloadableSqlite,
 };
+
+static TIME_FORMAT: StaticFormatDescription =
+    time::macros::format_description!("[year]-[month]-[day] [hour]:[minute]");
 
 #[derive(Debug, serde::Serialize)]
 pub struct TimeplanAct {
@@ -345,12 +349,7 @@ pub async fn get_startlist_csv(
                     entry
                         .predicted_start
                         .to_offset(time::UtcOffset::from_hms(1, 0, 0).expect("Invalid Offset"))
-                        .format(
-                            &time::format_description::parse(
-                                "[year]-[month]-[day] [hour]:[minute]"
-                            )
-                            .unwrap()
-                        )
+                        .format(&TIME_FORMAT)
                         .unwrap(),
                     description
                 ));
@@ -381,12 +380,7 @@ pub async fn get_startlist_csv(
                         clubs,
                         act.predicted_start
                             .to_offset(time::UtcOffset::from_hms(1, 0, 0).expect("Invalid Offset"))
-                            .format(
-                                &time::format_description::parse(
-                                    "[year]-[month]-[day] [hour]:[minute]"
-                                )
-                                .unwrap()
-                            )
+                            .format(&TIME_FORMAT)
                             .unwrap()
                     ));
                     counter += 1;
@@ -398,12 +392,7 @@ pub async fn get_startlist_csv(
                     entry
                         .predicted_start
                         .to_offset(time::UtcOffset::from_hms(1, 0, 0).expect("Invalid Offset"))
-                        .format(
-                            &time::format_description::parse(
-                                "[year]-[month]-[day] [hour]:[minute]"
-                            )
-                            .unwrap()
-                        )
+                        .format(&TIME_FORMAT)
                         .unwrap(),
                     label
                 ));

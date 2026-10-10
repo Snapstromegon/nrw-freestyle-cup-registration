@@ -1,0 +1,142 @@
+//! Guards the OpenAPI document the frontend client is generated from.
+
+use nrw_freestyle_cup_registration::http_server::routes::get_api_openapi;
+use utoipa::openapi::HttpMethod;
+
+const COMMANDS: &[&str] = &[
+    "add_category",
+    "add_club_judge",
+    "add_club_starter",
+    "add_timeplan_entry",
+    "create_club",
+    "delete_category",
+    "delete_club_judge",
+    "delete_club_starter",
+    "delete_timeplan_entry",
+    "edit_category",
+    "edit_club_act",
+    "edit_club_judge",
+    "edit_club_starter",
+    "edit_timeplan_entry",
+    "login",
+    "logout",
+    "move_category_down",
+    "move_category_up",
+    "move_timeplan_down",
+    "move_timeplan_up",
+    "register",
+    "reload_db",
+    "rename_club",
+    "request_password_reset",
+    "resend_mail_validation",
+    "reset_password",
+    "save_act_song",
+    "set_act_order",
+    "set_payment",
+    "set_song_checked",
+    "timeplan_backward",
+    "timeplan_forward",
+    "verify_email",
+];
+
+const QUERIES: &[&str] = &[
+    "get_act",
+    "get_club",
+    "get_startlist_csv",
+    "get_system_status",
+    "list_acts",
+    "list_categories",
+    "list_club_acts",
+    "list_club_judges",
+    "list_club_starters",
+    "list_judges",
+    "list_starters",
+    "list_timeplan",
+    "list_users",
+    "predict_timeplan",
+    "startlist",
+    "whoami",
+];
+
+#[test]
+fn every_command_is_documented_as_post() {
+    let openapi = get_api_openapi();
+    for name in COMMANDS {
+        let path = format!("/api/command/{name}");
+        let item = openapi
+            .paths
+            .paths
+            .get(&path)
+            .unwrap_or_else(|| panic!("{path} missing from OpenAPI"));
+        assert!(item.post.is_some(), "{path} is not a POST endpoint");
+    }
+}
+
+#[test]
+fn every_query_is_documented_as_get() {
+    let openapi = get_api_openapi();
+    for name in QUERIES {
+        let path = format!("/api/query/{name}");
+        let item = openapi
+            .paths
+            .paths
+            .get(&path)
+            .unwrap_or_else(|| panic!("{path} missing from OpenAPI"));
+        assert!(item.get.is_some(), "{path} is not a GET endpoint");
+    }
+}
+
+#[test]
+fn openapi_contains_no_unexpected_paths() {
+    let openapi = get_api_openapi();
+    assert_eq!(openapi.paths.paths.len(), COMMANDS.len() + QUERIES.len());
+}
+
+#[test]
+fn every_operation_has_tags_and_responses() {
+    let openapi = get_api_openapi();
+    for (path, item) in &openapi.paths.paths {
+        for method in [HttpMethod::Get, HttpMethod::Post] {
+            let operation = match method {
+                HttpMethod::Get => item.get.as_ref(),
+                _ => item.post.as_ref(),
+            };
+            if let Some(operation) = operation {
+                assert!(
+                    operation.tags.as_ref().is_some_and(|t| !t.is_empty()),
+                    "{path} has no tags"
+                );
+                assert!(
+                    !operation.responses.responses.is_empty(),
+                    "{path} has no responses"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn every_route_is_called_by_an_integration_test() {
+    let tests_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
+    let sources: Vec<String> = std::fs::read_dir(&tests_dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| {
+            path.extension().is_some_and(|ext| ext == "rs") && !path.ends_with("openapi.rs")
+        })
+        .map(|path| std::fs::read_to_string(path).unwrap())
+        .collect();
+
+    let untested: Vec<_> = get_api_openapi()
+        .paths
+        .paths
+        .into_keys()
+        .filter(|path| {
+            // Match the path exactly, followed by a query string or closing quote.
+            !sources.iter().any(|source| {
+                source.contains(&format!("{path}\"")) || source.contains(&format!("{path}?"))
+            })
+        })
+        .collect();
+    assert!(untested.is_empty(), "routes without tests: {untested:#?}");
+}

@@ -35,6 +35,19 @@ centos-release: clean-frontend openapi frontend-release migrate-db
 run-release: release
 	cargo run --release
 
+# Integration tests start Mailpit via testcontainers. Fall back to the rootless
+# Podman socket when Docker isn't available.
+PODMAN_SOCKET := /run/user/$(shell id -u)/podman/podman.sock
+ifeq ($(DOCKER_HOST)$(wildcard /var/run/docker.sock),)
+ifneq ($(wildcard $(PODMAN_SOCKET)),)
+export DOCKER_HOST := unix://$(PODMAN_SOCKET)
+endif
+endif
+
+test: migrate-db
+	cargo test
+	cd frontend && npm test
+
 lint:
 	cargo clippy
 	cd frontend && npm run check && npm run lint

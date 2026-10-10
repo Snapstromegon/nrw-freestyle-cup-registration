@@ -10,7 +10,8 @@
     "build:watch": "rollup -c --watch",
     "lint": "eslint .",
     "format": "biome format --write",
-    "check": "biome format"
+    "check": "biome format",
+    "test": "node --import ./test/register-ts.js --test \"test/**/*.test.js\""
   },
   "keywords": [],
   "type": "module",
