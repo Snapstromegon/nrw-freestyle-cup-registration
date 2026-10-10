@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
-use axum::{extract::Query, http::StatusCode, Extension, Json};
+use axum::{Extension, Json, extract::Query, http::StatusCode};
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 use utoipa::ToSchema;
 
 use crate::{
-    http_server::{extractor::auth::Auth, ClientError, HttpError, HttpServerOptions},
+    http_server::{ClientError, HttpError, HttpServerOptions, extractor::auth::Auth},
     reloadable_sqlite::ReloadableSqlite,
 };
 

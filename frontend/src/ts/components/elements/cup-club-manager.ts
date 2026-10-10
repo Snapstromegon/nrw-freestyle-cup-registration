@@ -3,11 +3,14 @@ import { css, html, LitElement, nothing } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import { type Club, clubContext } from "../../contexts/club";
 import "./cup-club-starter-manager.js";
-import "./cup-club-judge-manager.js";
 import "./cup-club-act-manager.js";
 import { Task } from "@lit/task";
 import { client } from "../../apiClient";
-import { getStarterPrice } from "./cup-club-starter-manager.js";
+import {
+  type SystemStatus,
+  systemStatusContext,
+} from "../../contexts/systemStatus";
+import { formatDate, getStarterPrice } from "../../utils";
 
 @customElement("cup-club-manager")
 export default class CupClubManager extends LitElement {
@@ -47,6 +50,9 @@ export default class CupClubManager extends LitElement {
 
   @consume({ context: clubContext, subscribe: true }) club: Club | null = null;
 
+  @consume({ context: systemStatusContext, subscribe: true })
+  systemStatus: SystemStatus | null = null;
+
   @property({ type: Boolean, attribute: "admin-mode" }) adminMode = false;
 
   starters = new Task(this, {
@@ -69,6 +75,9 @@ export default class CupClubManager extends LitElement {
   });
 
   override render() {
+    const competition = this.systemStatus?.competition;
+    const payment = (label: string, value: string | null | undefined) =>
+      value ? html`<tr><th>${label}</th><td>${value}</td></tr>` : nothing;
     return html`<h3>${this.club?.name}</h3>
       ${
         this.adminMode
@@ -80,38 +89,38 @@ export default class CupClubManager extends LitElement {
               Veröffentlichung von Namen und Bildern zustimmen.
             </p>
 
-            <p>
-              Änderungen können noch bis zum Anmeldeschluss am
-              <strong>15.03.2026</strong> vorgenommen werden.
-            </p>
+            ${
+              competition
+                ? html`<p>
+                  Änderungen können noch bis zum Anmeldeschluss am
+                  <strong>${formatDate(competition.registration_end)}</strong>
+                  vorgenommen werden.
+                </p>`
+                : nothing
+            }
 
             <h4>Zahlungsinformationen</h4>
             <table class="zahlungsinformationen">
-              <tr>
-                <th>Zahlungsfrist</th>
-                <td>05.04.2026</td>
-              </tr>
-              <tr>
-                <th>Kontoinhaber</th>
-                <td>Peter Kaufmann</td>
-              </tr>
-              <tr>
-                <th>IBAN</th>
-                <td>DE65 1203 0000 1060 4054 85</td>
-              </tr>
-              <tr>
-                <th>BIC</th>
-                <td>BYLADEM1001</td>
-              </tr>
-              <tr>
-                <th>Verwendungszweck</th>
-                <td>Startgeld: ${this.club?.name}</td>
-              </tr>
+              ${payment(
+                "Zahlungsfrist",
+                competition?.payment_deadline &&
+                  formatDate(competition.payment_deadline),
+              )}
+              ${payment("Kontoinhaber", competition?.payment_account_holder)}
+              ${payment("IBAN", competition?.payment_iban)}
+              ${payment("BIC", competition?.payment_bic)}
+              ${payment(
+                "Verwendungszweck",
+                competition?.payment_reference
+                  ? `${competition.payment_reference}: ${this.club?.name}`
+                  : this.club?.name,
+              )}
               <tr>
                 <th>Betrag</th>
                 <td>
                   ${(this.starters.value || []).reduce(
-                    (acc, starter) => acc + getStarterPrice(starter),
+                    (acc, starter) =>
+                      acc + getStarterPrice(starter, competition),
                     0,
                   )}€
                 </td>
@@ -135,14 +144,6 @@ export default class CupClubManager extends LitElement {
                 Verzug haben.</i
               >
             </p>
-            <p>
-              <i
-                ><strong>Korrektur:</strong> Aufgrund eines Fehlers wurde
-                ursprünglich der zu zahlende Betrag falsch angezeigt. Dies ist
-                nun korrigiert und passt zur Startgebühr von 12€ aus der
-                Ausschreibung.</i
-              >
-            </p>
           `
       }
 
@@ -150,10 +151,6 @@ export default class CupClubManager extends LitElement {
       <hr />
       <cup-club-starter-manager
         ?admin-mode=${this.adminMode}
-      ></cup-club-starter-manager>
-      <hr />
-      <cup-club-judge-manager
-        ?admin-mode=${this.adminMode}
-      ></cup-club-judge-manager> `;
+      ></cup-club-starter-manager> `;
   }
 }

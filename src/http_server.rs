@@ -4,10 +4,7 @@ use axum::{Json, response::IntoResponse};
 use serde::Serialize;
 use tracing::info;
 
-use crate::{
-    jwt::JWTConfig, mailer::Mailer, reloadable_sqlite::ReloadableSqlite,
-    system_status::StatusOptions,
-};
+use crate::{jwt::JWTConfig, mailer::Mailer, reloadable_sqlite::ReloadableSqlite};
 
 pub mod extractor;
 pub mod routes;
@@ -97,7 +94,6 @@ pub struct HttpServer {
     mailer: Arc<Mailer>,
     jwt: Arc<JWTConfig>,
     options: Arc<HttpServerOptions>,
-    status_options: Arc<StatusOptions>,
 }
 
 impl HttpServer {
@@ -106,14 +102,12 @@ impl HttpServer {
         db: ReloadableSqlite,
         jwt: Arc<JWTConfig>,
         mailer: Arc<Mailer>,
-        status_options: Arc<StatusOptions>,
     ) -> Self {
         Self {
             db,
             mailer,
             options: Arc::new(options),
             jwt,
-            status_options,
         }
     }
 
@@ -126,7 +120,6 @@ impl HttpServer {
             self.db.clone(),
             self.mailer.clone(),
             self.jwt.clone(),
-            self.status_options.clone(),
         );
         let address = self.options.bind_address.clone();
 

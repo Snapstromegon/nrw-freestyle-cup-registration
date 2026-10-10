@@ -1,0 +1,849 @@
+# Demo data for development: fills every table so all of the UI can be tried
+# out. Load it with
+#
+#     cargo run --bin seed_demo
+#
+# which DELETES the configured database, recreates it and applies this file
+# (see src/demo.rs). Tests use it as well.
+#
+# Every user's password is their first name, e.g. "Maria". Logins:
+# - admin@example.org             admin
+# - maria.wagner@example.org      SSV Nümbrecht, paid in full, live timeplan acts
+# - jonas.becker@example.org      RSC Köln, paid partially
+# - lena.schmitz@example.org      RV Bonn, not paid
+# - sabine.koch@example.org       club without starters, overpaid, password reset pending
+# - tim.neumann@example.org       verified, no club yet
+# - paul.hoffmann@example.org     email not verified
+#
+# Links with the fixed tokens below:
+# - /verify_email?token=00000000-0000-4000-8000-000000000001
+# - /reset_password?token=00000000-0000-4000-8000-000000000002
+
+# Same format as in config.toml. The registration window is open until the
+# end of April 2027; move it into the past to try the closed registration.
+[competition]
+id = "nrw-freestyle-cup-2027-demo"
+name = "NRW Freestyle Cup 2027 (Demo)"
+location = "SSV Nümbrecht"
+start_date = 2027-06-05
+end_date = 2027-06-05
+determining_day = 2027-06-01
+registration_start = 2026-01-01T00:00:00+01:00
+registration_end = 2027-04-30T23:59:59+02:00
+music_upload_end = 2027-05-15T23:59:59+02:00
+fee_per_start = 15
+max_fee_per_starter = 45
+
+[competition.payment]
+deadline = 2027-05-15
+account_holder = "Demo Kassenwart"
+iban = "DE02 1203 0000 0000 2020 51"
+bic = "BYLADEM1001"
+reference = "Startgeld"
+
+# Users. Optional: admin (false), email_verified (true), verification_token,
+# password_reset_token. Passwords are inserted as they are, without the
+# password policy of the registration.
+
+[[users]]
+name = "Admin"
+email = "admin@example.org"
+password = "Admin"
+admin = true
+
+[[users]]
+name = "Maria Wagner"
+email = "maria.wagner@example.org"
+password = "Maria"
+
+[[users]]
+name = "Jonas Becker"
+email = "jonas.becker@example.org"
+password = "Jonas"
+
+[[users]]
+name = "Lena Schmitz"
+email = "lena.schmitz@example.org"
+password = "Lena"
+
+[[users]]
+name = "Sabine Koch"
+email = "sabine.koch@example.org"
+password = "Sabine"
+password_reset_token = "00000000-0000-4000-8000-000000000002"
+
+[[users]]
+name = "Tim Neumann"
+email = "tim.neumann@example.org"
+password = "Tim"
+
+[[users]]
+name = "Paul Hoffmann"
+email = "paul.hoffmann@example.org"
+password = "Paul"
+email_verified = false
+verification_token = "00000000-0000-4000-8000-000000000001"
+
+# Clubs with their starters. owner is a user name, payment the amount in € the
+# club has paid. Ages count against the determining day 2027-06-01.
+#
+# Starters: single is "male" or "female" (or missing). A pair starter either
+# names a registered partner (any club, linked both ways), names an
+# unregistered partner with partner_name, or has no partner yet.
+
+# 13 starts, 195 € due: paid in full.
+[[clubs]]
+name = "SSV Nümbrecht"
+owner = "Maria Wagner"
+payment = 195
+
+[[clubs.starters]]
+firstname = "Ben"
+lastname = "Fischer"
+birthdate = 2017-08-20
+single = "male"
+
+[[clubs.starters]]
+firstname = "Noah"
+lastname = "Fischer"
+birthdate = 2016-11-02
+single = "male"
+
+[[clubs.starters]]
+firstname = "Luca"
+lastname = "Weber"
+birthdate = 2015-02-10
+single = "male"
+
+[[clubs.starters]]
+firstname = "Elias"
+lastname = "Weber"
+birthdate = 2014-09-30
+single = "male"
+
+# Single and pair (with a partner from the same club).
+[[clubs.starters]]
+firstname = "Mia"
+lastname = "Schneider"
+birthdate = 2017-03-12
+single = "female"
+pair = true
+partner = "Emma Wagner"
+
+[[clubs.starters]]
+firstname = "Emma"
+lastname = "Wagner"
+birthdate = 2016-12-01
+single = "female"
+pair = true
+
+# Pair with a partner from RSC Köln.
+[[clubs.starters]]
+firstname = "Sophie"
+lastname = "Becker"
+birthdate = 2012-04-15
+single = "female"
+pair = true
+partner = "Lea Hoffmann"
+
+[[clubs.starters]]
+firstname = "Hannah"
+lastname = "Klein"
+birthdate = 1990-05-05
+single = "female"
+
+[[clubs.starters]]
+firstname = "Peter"
+lastname = "Lange"
+birthdate = 1965-08-08
+single = "male"
+
+# Open-ended category (70+).
+[[clubs.starters]]
+firstname = "Karl"
+lastname = "Richter"
+birthdate = 1952-01-20
+single = "male"
+
+# 10 starts, 150 € due: paid partially.
+[[clubs]]
+name = "RSC Köln"
+owner = "Jonas Becker"
+payment = 75
+
+[[clubs.starters]]
+firstname = "Finn"
+lastname = "Meyer"
+birthdate = 2015-07-07
+single = "male"
+
+[[clubs.starters]]
+firstname = "Lea"
+lastname = "Hoffmann"
+birthdate = 2012-10-03
+pair = true
+
+[[clubs.starters]]
+firstname = "Julia"
+lastname = "Krüger"
+birthdate = 2008-02-14
+single = "female"
+pair = true
+partner = "Max Krüger"
+
+[[clubs.starters]]
+firstname = "Max"
+lastname = "Krüger"
+birthdate = 2009-11-11
+single = "male"
+pair = true
+
+[[clubs.starters]]
+firstname = "Tom"
+lastname = "Schulz"
+birthdate = 2001-03-03
+single = "male"
+
+[[clubs.starters]]
+firstname = "Jan"
+lastname = "Zimmermann"
+birthdate = 1999-12-24
+single = "male"
+
+# Pair partner who isn't registered (yet).
+[[clubs.starters]]
+firstname = "Laura"
+lastname = "Schulz"
+birthdate = 2003-07-19
+pair = true
+partner_name = "Clara Berg"
+
+# Pair without a partner.
+[[clubs.starters]]
+firstname = "Nina"
+lastname = "Wolf"
+birthdate = 2011-05-25
+pair = true
+
+# 6 starts, 90 € due: nothing paid.
+[[clubs]]
+name = "RV Bonn"
+owner = "Lena Schmitz"
+
+[[clubs.starters]]
+firstname = "Anna"
+lastname = "Braun"
+birthdate = 2013-01-08
+single = "female"
+
+[[clubs.starters]]
+firstname = "Felix"
+lastname = "Braun"
+birthdate = 2010-09-09
+single = "male"
+
+[[clubs.starters]]
+firstname = "Marie"
+lastname = "Lehmann"
+birthdate = 2005-04-04
+single = "female"
+pair = true
+partner = "Leon Lehmann"
+
+[[clubs.starters]]
+firstname = "Leon"
+lastname = "Lehmann"
+birthdate = 2004-05-05
+single = "male"
+pair = true
+
+# Registered, but without any start.
+[[clubs.starters]]
+firstname = "Greta"
+lastname = "Vogel"
+birthdate = 2016-07-01
+
+# No starters, but paid: overpaid.
+[[clubs]]
+name = "Einrad-Freunde Aachen"
+owner = "Sabine Koch"
+payment = 30
+
+# Act details. An act exists for every single starter and every linked pair;
+# each entry selects one by a participant (starter) and act_type. Optional:
+# name, description, song (file name shown; a short tone is generated unless
+# song_source points to an audio file relative to this file), song_checked,
+# order, started_at, ended_at.
+#
+# EMU11 is finished and EMU13 is running (see the timeplan below), so the info
+# board and the live startlist have something to show.
+
+[[acts]]
+starter = "Ben Fischer"
+act_type = "single"
+name = "Kleiner Drache"
+song = "kleiner-drache.wav"
+song_checked = true
+order = 1
+started_at = 2027-06-05T10:10:00+02:00
+ended_at = 2027-06-05T10:13:00+02:00
+
+[[acts]]
+starter = "Noah Fischer"
+act_type = "single"
+name = "Piratenfahrt"
+description = "Mit Augenklappe und Hut."
+song = "piraten.wav"
+song_checked = true
+order = 2
+started_at = 2027-06-05T10:17:00+02:00
+ended_at = 2027-06-05T10:20:00+02:00
+
+[[acts]]
+starter = "Luca Weber"
+act_type = "single"
+name = "Roboter"
+song = "roboter-remix.wav"
+song_checked = true
+order = 1
+started_at = 2027-06-05T10:30:00+02:00
+ended_at = 2027-06-05T10:33:00+02:00
+
+[[acts]]
+starter = "Elias Weber"
+act_type = "single"
+name = "Dschungelbuch"
+song = "dschungelbuch.wav"
+order = 2
+started_at = 2027-06-05T10:37:00+02:00
+
+# Song uploaded, not checked yet.
+[[acts]]
+starter = "Finn Meyer"
+act_type = "single"
+name = "Feuerwehr"
+song = "feuerwehr.wav"
+order = 3
+
+[[acts]]
+starter = "Mia Schneider"
+act_type = "pair"
+name = "Zwei Schmetterlinge"
+description = "Beide in bunten Kostümen, Start von der Mitte."
+song = "schmetterlinge.wav"
+song_checked = true
+
+# Name only, no song yet.
+[[acts]]
+starter = "Sophie Becker"
+act_type = "pair"
+name = "Grenzenlos"
+
+[[acts]]
+starter = "Hannah Klein"
+act_type = "single"
+name = "Schwanensee"
+description = "Klassisch, mit Tutu."
+song = "schwanensee.wav"
+song_checked = true
+
+[[acts]]
+starter = "Karl Richter"
+act_type = "single"
+name = "Immer noch auf Rädern"
+song = "oldie.wav"
+
+[[acts]]
+starter = "Julia Krüger"
+act_type = "pair"
+name = "Geschwister"
+song = "geschwister.wav"
+
+# Categories and timeplan, same format as in config.toml.
+[[categories]]
+name = "EMU11"
+description = "Einzel Männlich U11"
+act_type = "single"
+single_male = true
+under_age = 11
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 4
+
+[[categories]]
+name = "EMU13"
+description = "Einzel Männlich U13"
+act_type = "single"
+single_male = true
+min_age = 11
+under_age = 13
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 4
+
+[[categories]]
+name = "EMU15"
+description = "Einzel Männlich U15"
+act_type = "single"
+single_male = true
+min_age = 13
+under_age = 15
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 4
+
+[[categories]]
+name = "EMU17"
+description = "Einzel Männlich U17"
+act_type = "single"
+single_male = true
+min_age = 15
+under_age = 17
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 6
+
+[[categories]]
+name = "EMU19"
+description = "Einzel Männlich U19"
+act_type = "single"
+single_male = true
+min_age = 17
+under_age = 19
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 6
+
+[[categories]]
+name = "EMU21"
+description = "Einzel Männlich U21"
+act_type = "single"
+single_male = true
+min_age = 19
+under_age = 21
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 6
+
+[[categories]]
+name = "EMU23"
+description = "Einzel Männlich U23"
+act_type = "single"
+single_male = true
+min_age = 21
+under_age = 23
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 6
+
+[[categories]]
+name = "EMU25"
+description = "Einzel Männlich U25"
+act_type = "single"
+single_male = true
+min_age = 23
+under_age = 25
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 6
+
+[[categories]]
+name = "EMU30"
+description = "Einzel Männlich U30"
+act_type = "single"
+single_male = true
+min_age = 25
+under_age = 30
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 6
+
+[[categories]]
+name = "EMU50"
+description = "Einzel Männlich U50"
+act_type = "single"
+single_male = true
+min_age = 30
+under_age = 50
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 6
+
+[[categories]]
+name = "EMU70"
+description = "Einzel Männlich U70"
+act_type = "single"
+single_male = true
+min_age = 50
+under_age = 70
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 6
+
+[[categories]]
+name = "EM70+"
+description = "Einzel Männlich 70+"
+act_type = "single"
+single_male = true
+min_age = 70
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 6
+
+[[categories]]
+name = "EWU11"
+description = "Einzel Weiblich U11"
+act_type = "single"
+under_age = 11
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 4
+
+[[categories]]
+name = "EWU13"
+description = "Einzel Weiblich U13"
+act_type = "single"
+min_age = 11
+under_age = 13
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 4
+
+[[categories]]
+name = "EWU15"
+description = "Einzel Weiblich U15"
+act_type = "single"
+min_age = 13
+under_age = 15
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 4
+
+[[categories]]
+name = "EWU17"
+description = "Einzel Weiblich U17"
+act_type = "single"
+min_age = 15
+under_age = 17
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 6
+
+[[categories]]
+name = "EWU19"
+description = "Einzel Weiblich U19"
+act_type = "single"
+min_age = 17
+under_age = 19
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 6
+
+[[categories]]
+name = "EWU21"
+description = "Einzel Weiblich U21"
+act_type = "single"
+min_age = 19
+under_age = 21
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 6
+
+[[categories]]
+name = "EWU23"
+description = "Einzel Weiblich U23"
+act_type = "single"
+min_age = 21
+under_age = 23
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 6
+
+[[categories]]
+name = "EWU25"
+description = "Einzel Weiblich U25"
+act_type = "single"
+min_age = 23
+under_age = 25
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 6
+
+[[categories]]
+name = "EWU30"
+description = "Einzel Weiblich U30"
+act_type = "single"
+min_age = 25
+under_age = 30
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 6
+
+[[categories]]
+name = "EWU50"
+description = "Einzel Weiblich U50"
+act_type = "single"
+min_age = 30
+under_age = 50
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 6
+
+[[categories]]
+name = "EWU70"
+description = "Einzel Weiblich U70"
+act_type = "single"
+min_age = 50
+under_age = 70
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 6
+
+[[categories]]
+name = "EW70+"
+description = "Einzel Weiblich 70+"
+act_type = "single"
+min_age = 70
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 6
+
+[[categories]]
+name = "PU11"
+description = "Paar U11"
+act_type = "pair"
+under_age = 11
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 2
+
+[[categories]]
+name = "PU13"
+description = "Paar U13"
+act_type = "pair"
+min_age = 11
+under_age = 13
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 2
+
+[[categories]]
+name = "PU15"
+description = "Paar U15"
+act_type = "pair"
+min_age = 13
+under_age = 15
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 2
+
+[[categories]]
+name = "PU17"
+description = "Paar U17"
+act_type = "pair"
+min_age = 15
+under_age = 17
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 3
+
+[[categories]]
+name = "PU19"
+description = "Paar U19"
+act_type = "pair"
+min_age = 17
+under_age = 19
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 3
+
+[[categories]]
+name = "PU21"
+description = "Paar U21"
+act_type = "pair"
+min_age = 19
+under_age = 21
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 3
+
+[[categories]]
+name = "PU23"
+description = "Paar U23"
+act_type = "pair"
+min_age = 21
+under_age = 23
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 3
+
+[[categories]]
+name = "PU25"
+description = "Paar U25"
+act_type = "pair"
+min_age = 23
+under_age = 25
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 3
+
+[[categories]]
+name = "PU30"
+description = "Paar U30"
+act_type = "pair"
+min_age = 25
+under_age = 30
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 3
+
+[[categories]]
+name = "PU50"
+description = "Paar U50"
+act_type = "pair"
+min_age = 30
+under_age = 50
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 3
+
+[[categories]]
+name = "PU70"
+description = "Paar U70"
+act_type = "pair"
+min_age = 50
+under_age = 70
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 3
+
+[[categories]]
+name = "P70+"
+description = "Paar 70+"
+act_type = "pair"
+min_age = 70
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 3
+
+# Timeplan entries can also carry their live state: started_at and ended_at.
+[[timeplan]]
+category = "EMU11"
+earliest_start = 2027-06-05T10:00:00+02:00
+started_at = 2027-06-05T10:00:00+02:00
+ended_at = 2027-06-05T10:20:00+02:00
+
+[[timeplan]]
+category = "EMU13"
+started_at = 2027-06-05T10:20:00+02:00
+
+[[timeplan]]
+category = "EMU15"
+
+[[timeplan]]
+category = "EMU17"
+
+[[timeplan]]
+category = "EMU19"
+
+[[timeplan]]
+category = "EMU21"
+
+[[timeplan]]
+category = "EMU23"
+
+[[timeplan]]
+category = "EMU25"
+
+[[timeplan]]
+category = "EMU30"
+
+[[timeplan]]
+category = "EMU50"
+
+[[timeplan]]
+category = "EMU70"
+
+[[timeplan]]
+category = "EM70+"
+
+[[timeplan]]
+category = "EWU11"
+
+[[timeplan]]
+category = "EWU13"
+
+[[timeplan]]
+category = "EWU15"
+
+[[timeplan]]
+category = "EWU17"
+
+[[timeplan]]
+category = "EWU19"
+
+[[timeplan]]
+category = "EWU21"
+
+[[timeplan]]
+category = "EWU23"
+
+[[timeplan]]
+category = "EWU25"
+
+[[timeplan]]
+category = "EWU30"
+
+[[timeplan]]
+category = "EWU50"
+
+[[timeplan]]
+category = "EWU70"
+
+[[timeplan]]
+category = "EW70+"
+
+[[timeplan]]
+label = "Mittagspause"
+duration_minutes = 45
+earliest_start = 2027-06-05T13:00:00+02:00
+
+[[timeplan]]
+category = "PU11"
+
+[[timeplan]]
+category = "PU13"
+
+[[timeplan]]
+category = "PU15"
+
+[[timeplan]]
+category = "PU17"
+
+[[timeplan]]
+category = "PU19"
+
+[[timeplan]]
+category = "PU21"
+
+[[timeplan]]
+category = "PU23"
+
+[[timeplan]]
+category = "PU25"
+
+[[timeplan]]
+category = "PU30"
+
+[[timeplan]]
+category = "PU50"
+
+[[timeplan]]
+category = "PU70"
+
+[[timeplan]]
+category = "P70+"
+
+[[timeplan]]
+label = "Siegerehrung"
+duration_minutes = 45

@@ -5,9 +5,17 @@ import { client } from "../../apiClient";
 import { type User, userContext } from "../../contexts/user";
 import "../elements/cup-context-club.js";
 import "../elements/cup-club-manager.js";
+import {
+  type SystemStatus,
+  systemStatusContext,
+} from "../../contexts/systemStatus";
+import { competitionName, formatDateRange } from "../../utils";
 
 @customElement("cup-view-home")
 export default class CupViewHome extends LitElement {
+  @consume({ context: systemStatusContext, subscribe: true })
+  systemStatus: SystemStatus | null = null;
+
   static override styles = css`
     * {
       margin: 0;
@@ -103,9 +111,20 @@ export default class CupViewHome extends LitElement {
   override render() {
     return html`<header>
         <img src="/assets/images/nrw-freestyle-cup.svg" />
-        <h1>Anmeldung NRW Freestyle Cup</h1>
-        <span class="date">19.04.2026</span>
-        <span class="location">SSV Nümbrecht</span>
+        <h1>Anmeldung ${competitionName(this.systemStatus?.competition)}</h1>
+        <span class="date"
+          >${
+            this.systemStatus?.competition
+              ? formatDateRange(
+                  this.systemStatus.competition.start_date,
+                  this.systemStatus.competition.end_date,
+                )
+              : nothing
+          }</span
+        >
+        <span class="location"
+          >${this.systemStatus?.competition?.location}</span
+        >
       </header>
       <main>
         <h2>Hi ${this.user?.name}</h2>

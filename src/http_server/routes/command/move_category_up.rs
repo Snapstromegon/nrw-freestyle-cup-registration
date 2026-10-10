@@ -57,7 +57,7 @@ pub async fn move_category_up(
     .await?;
 
     let current_record = current.ok_or(HttpError::StatusCode(StatusCode::NOT_FOUND))?;
-    
+
     // If category has no order, assign it to the end
     let current_order = if let Some(order) = current_record.order {
         order
@@ -72,7 +72,7 @@ pub async fn move_category_up(
         .await?
         .max_order
         .unwrap_or(0);
-        
+
         let new_order = max_order + 1;
         sqlx::query!(
             r#"UPDATE categories SET "order" = $1 WHERE name = $2"#,
@@ -81,7 +81,7 @@ pub async fn move_category_up(
         )
         .execute(&mut *tx)
         .await?;
-        
+
         new_order
     };
 
@@ -100,8 +100,10 @@ pub async fn move_category_up(
 
     if let Some(prev) = prev_entry {
         let prev_name = prev.name;
-        let prev_order = prev.order.ok_or(HttpError::StatusCode(StatusCode::BAD_REQUEST))?;
-        
+        let prev_order = prev
+            .order
+            .ok_or(HttpError::StatusCode(StatusCode::BAD_REQUEST))?;
+
         // Use a temporary negative order to avoid constraint violations
         let temp_order = -999999;
 

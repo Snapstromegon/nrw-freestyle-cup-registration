@@ -11,7 +11,6 @@ export default class CupStarterTable extends LitElement {
       components["schemas"]["Starter"]?,
     ];
     maxAge: Date;
-    sonderpokal: boolean;
   }[] = [];
 
   override render() {

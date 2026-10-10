@@ -4,6 +4,7 @@ use tracing::{info, instrument};
 use uuid::Uuid;
 
 use crate::{
+    act_type::ActType,
     http_server::{ClientError, HttpError, routes::http_types::ActParticipant},
     reloadable_sqlite::ReloadableSqlite,
 };
@@ -28,7 +29,7 @@ pub struct TimeplanAct {
     planned_start: time::OffsetDateTime,
     #[serde(with = "time::serde::iso8601")]
     planned_end: time::OffsetDateTime,
-    is_pair: bool,
+    act_type: ActType,
     participants: sqlx::types::Json<Vec<ActParticipant>>,
 }
 
@@ -196,7 +197,7 @@ pub async fn get_startlist_csv(
                         name,
                         started_at,
                         ended_at,
-                        is_pair,
+                        act_type as "act_type!: ActType",
                         participants as "participants!: sqlx::types::Json<Vec<ActParticipant>>"
                     FROM
                         view_act
@@ -235,7 +236,7 @@ pub async fn get_startlist_csv(
 
                     timeplan_acts.push(TimeplanAct {
                         id: act.id,
-                        is_pair: act.is_pair,
+                        act_type: act.act_type,
                         name: act.name,
                         participants: act.participants,
                         started_at: act.started_at,
@@ -372,7 +373,7 @@ pub async fn get_startlist_csv(
                     csv.push_str(&format!(
                         "{};{};{};{};{};{};{};{}\n",
                         description,
-                        if act.is_pair { 2 } else { 1 },
+                        act.participants.len(),
                         counter,
                         "Deutschland",
                         act.name,

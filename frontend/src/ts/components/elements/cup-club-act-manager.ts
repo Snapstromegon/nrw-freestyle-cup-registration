@@ -10,6 +10,7 @@ import {
   systemStatusContext,
 } from "../../contexts/systemStatus";
 import { type User, userContext } from "../../contexts/user";
+import { actTypeLabels, formatDate } from "../../utils";
 
 type Act = components["schemas"]["ClubAct"];
 
@@ -212,10 +213,15 @@ export default class CupClubActManager extends LitElement {
       ${
         this.adminMode
           ? nothing
-          : html` <p>
-            Änderungen können noch bis zum Musik Einsendeschluss am
-            <strong>01.04.2026</strong> vorgenommen werden.
-          </p>`
+          : this.systemStatus?.competition
+            ? html` <p>
+              Änderungen können noch bis zum Musik Einsendeschluss am
+              <strong
+                >${formatDate(this.systemStatus.competition.music_upload_end)}</strong
+              >
+              vorgenommen werden.
+            </p>`
+            : nothing
       }
       <h5>Zusammenfassung</h5>
       <table id="summary">
@@ -275,7 +281,6 @@ export default class CupClubActManager extends LitElement {
             <th>Kürtitel</th>
             <th>Beschreibung</th>
             <th>Typ</th>
-            <th hidden>Kategorie</th>
             <th>Kürmusik</th>
             <th>FahrerInnen</th>
             <th></th>
@@ -321,16 +326,7 @@ ${editAct.description || ""}</textarea
                       </td>
                       <td>
                         <label
-                          ><span>Typ</span> ${
-                            act.is_pair ? "Paarkür" : "Einzelkür"
-                          }</label
-                        >
-                      </td>
-                      <td hidden>
-                        <label
-                          ><span>Kategorie</span> ${
-                            act.is_sonderpokal ? "Sonderpokal" : "Nachwuchscup"
-                          }</label
+                          ><span>Typ</span> ${actTypeLabels[act.act_type]}</label
                         >
                       </td>
                       <td>
@@ -392,14 +388,8 @@ ${editAct.description || ""}</textarea
                       </td>
                       <td>
                         <label
-                          ><span>Typ</span> ${
-                            act.is_pair ? "Paarkür" : "Einzelkür"
-                          }</label
+                          ><span>Typ</span> ${actTypeLabels[act.act_type]}</label
                         >
-                      </td>
-                      <td hidden>
-                        <label><span>Kategorie</span></label
-                        >${act.is_sonderpokal ? "Sonderpokal" : "Nachwuchscup"}
                       </td>
                       <td>
                         <label><span>Musik</span></label>

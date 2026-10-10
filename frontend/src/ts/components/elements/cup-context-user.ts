@@ -1,12 +1,21 @@
+import { consume } from "@lit/context";
 import { provide } from "@lit/context";
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { client } from "../../apiClient.js";
 import { type User, userContext } from "../../contexts/user.js";
 import "./cup-centered-icon-box.js";
+import {
+  type SystemStatus,
+  systemStatusContext,
+} from "../../contexts/systemStatus.js";
+import { competitionName } from "../../utils.js";
 
 @customElement("cup-context-user")
 export default class CupContextUser extends LitElement {
+  @consume({ context: systemStatusContext, subscribe: true })
+  systemStatus: SystemStatus | null = null;
+
   static override styles = css`
     * {
       margin: 0;
@@ -104,7 +113,7 @@ export default class CupContextUser extends LitElement {
       ? html`<slot @login=${this.getLogin} @logout=${this.getLogin}></slot>`
       : html`<cup-centered-icon-box>
           <form @submit=${this.login}>
-            <h1>NRW Freestyle Cup 2026</h1>
+            <h1>${competitionName(this.systemStatus?.competition)}</h1>
             <h2>Vereinsanmeldung</h2>
             <p>Die Anmeldung erfolgt vereinsweise. Bitte nur einen Nutzer pro Verein anlegen.</p>
             <p><i>Aus Datenschutzgründen wurden alle Daten aus früheren Jahren gelöscht.</i></p>

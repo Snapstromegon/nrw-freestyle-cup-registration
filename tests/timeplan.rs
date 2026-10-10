@@ -77,13 +77,13 @@ fn custom_entry(label: &str, duration_seconds: i64) -> Value {
 
 #[sqlx::test]
 async fn list_timeplan_returns_seeded_entries_in_order(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
 
     let entries = list_timeplan(&app).await;
 
     assert!(!entries.is_empty());
     assert!(ids(&entries).is_sorted());
-    assert_eq!(entries[0]["category"], "NEM");
+    assert_eq!(entries[0]["category"], "EMU11");
     assert!(entries[0]["earliest_start_time"].is_string());
     let lunch = entries
         .iter()
@@ -96,7 +96,7 @@ async fn list_timeplan_returns_seeded_entries_in_order(db: SqlitePool) {
 
 #[sqlx::test]
 async fn timeplan_commands_require_admin(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let user = app.cookie_for(app.create_user("Alex", false).await);
     let before = list_timeplan(&app).await;
     let mut edit = custom_entry("X", 60);
@@ -122,20 +122,20 @@ async fn timeplan_commands_require_admin(db: SqlitePool) {
 
 #[sqlx::test]
 async fn add_edit_and_delete_timeplan_entries(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let admin = app.create_admin().await;
     replace_timeplan(
         &app,
         &admin,
         &[
-            category_entry("NEWU13", Some(START)),
+            category_entry("EWU13", Some(START)),
             custom_entry("Pause", 900),
         ],
     )
     .await;
 
     let entries = list_timeplan(&app).await;
-    assert_eq!(labels(&entries), ["NEWU13", "Pause"]);
+    assert_eq!(labels(&entries), ["EWU13", "Pause"]);
     assert_eq!(
         entries[0]["earliest_start_time"],
         "+002026-04-19T09:00:00.000000000Z"
@@ -160,12 +160,12 @@ async fn add_edit_and_delete_timeplan_entries(db: SqlitePool) {
         )
         .await;
     assert_eq!(response.status, StatusCode::OK);
-    assert_eq!(labels(&list_timeplan(&app).await), ["NEWU13"]);
+    assert_eq!(labels(&list_timeplan(&app).await), ["EWU13"]);
 }
 
 #[sqlx::test]
 async fn delete_unknown_timeplan_entry_is_not_found(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let admin = app.create_admin().await;
     let response = app
         .post(
@@ -179,7 +179,7 @@ async fn delete_unknown_timeplan_entry_is_not_found(db: SqlitePool) {
 
 #[sqlx::test]
 async fn move_timeplan_entries_up_and_down(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let admin = app.create_admin().await;
     replace_timeplan(
         &app,
@@ -219,7 +219,7 @@ async fn move_timeplan_entries_up_and_down(db: SqlitePool) {
 
 #[sqlx::test]
 async fn moving_first_entry_up_or_last_entry_down_is_rejected(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let admin = app.create_admin().await;
     replace_timeplan(
         &app,
@@ -270,7 +270,7 @@ async fn progress(app: &TestApp) -> (Vec<String>, Vec<String>) {
 
 #[sqlx::test]
 async fn timeplan_forward_and_backward_walk_through_acts(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let admin = app.create_admin().await;
     let (owner, club_id) = app.create_club_owner("Owner", "RSV").await;
     for (order, name) in [(1, "Anna"), (2, "Berta")] {
@@ -293,8 +293,8 @@ async fn timeplan_forward_and_backward_walk_through_acts(db: SqlitePool) {
         &app,
         &admin,
         &[
-            category_entry("NEWU13", Some(START)),
-            category_entry("NPU13", None),
+            category_entry("EWU13", Some(START)),
+            category_entry("PU13", None),
         ],
     )
     .await;
@@ -350,7 +350,7 @@ async fn timeplan_forward_and_backward_walk_through_acts(db: SqlitePool) {
 #[sqlx::test]
 #[ignore = "known bug: starting a custom entry returns 500 because it looks up a NULL category"]
 async fn timeplan_forward_starts_custom_entry(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let admin = app.create_admin().await;
     replace_timeplan(&app, &admin, &[custom_entry("Pause", 900)]).await;
 
@@ -364,7 +364,7 @@ async fn timeplan_forward_starts_custom_entry(db: SqlitePool) {
 
 #[sqlx::test]
 async fn timeplan_backward_without_progress_does_nothing(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let admin = app.create_admin().await;
     let before = list_timeplan(&app).await;
 
@@ -379,13 +379,13 @@ async fn timeplan_backward_without_progress_does_nothing(db: SqlitePool) {
 #[sqlx::test]
 #[ignore = "known bug: timeplan_forward cannot leave a started category without acts"]
 async fn timeplan_forward_finishes_category_without_acts(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let admin = app.create_admin().await;
     replace_timeplan(
         &app,
         &admin,
         &[
-            category_entry("NEWU13", Some(START)),
+            category_entry("EWU13", Some(START)),
             custom_entry("Pause", 900),
         ],
     )

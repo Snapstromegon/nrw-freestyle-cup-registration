@@ -1,3 +1,4 @@
+import { consume } from "@lit/context";
 import { Task } from "@lit/task";
 import { css, html, LitElement } from "lit";
 import { customElement } from "lit/decorators.js";
@@ -6,7 +7,11 @@ import "../elements/cup-context-club.js";
 import "../elements/cup-club-manager.js";
 import "../elements/cup-starter-table.js";
 import { repeat } from "lit/directives/repeat.js";
-import { getStarterPrice } from "../elements/cup-club-starter-manager";
+import {
+  type SystemStatus,
+  systemStatusContext,
+} from "../../contexts/systemStatus";
+import { getStarterPrice } from "../../utils";
 
 @customElement("cup-view-admin-payments")
 export default class CupViewAdminPayments extends LitElement {
@@ -60,8 +65,11 @@ export default class CupViewAdminPayments extends LitElement {
     }
   `;
 
+  @consume({ context: systemStatusContext, subscribe: true })
+  systemStatus: SystemStatus | null = null;
+
   clubs = new Task(this, {
-    task: async () => {
+    task: async ([competition]) => {
       const users = (await client.GET("/api/query/list_users")).data?.filter(
         (user) => user.club_id,
       );
@@ -87,13 +95,13 @@ export default class CupViewAdminPayments extends LitElement {
           club,
           user,
           owed: starters
-            ?.map((starter) => getStarterPrice(starter))
+            ?.map((starter) => getStarterPrice(starter, competition))
             .reduce((acc, curr) => acc + curr, 0),
         });
       }
       return clubs;
     },
-    args: () => [],
+    args: () => [this.systemStatus?.competition],
   });
 
   override render() {

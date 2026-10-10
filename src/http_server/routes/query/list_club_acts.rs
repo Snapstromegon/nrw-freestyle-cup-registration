@@ -3,6 +3,7 @@ use tracing::instrument;
 use uuid::Uuid;
 
 use crate::{
+    act_type::ActType,
     http_server::{ClientError, HttpError},
     reloadable_sqlite::ReloadableSqlite,
 };
@@ -14,8 +15,7 @@ pub struct ClubAct {
     description: Option<String>,
     song_file_name: Option<String>,
     song_file: Option<String>,
-    is_pair: bool,
-    is_sonderpokal: bool,
+    act_type: ActType,
     #[serde(with = "time::serde::iso8601")]
     created_at: time::OffsetDateTime,
     participants: Vec<ClubActParticipant>,
@@ -62,7 +62,7 @@ pub async fn list_club_acts(
             acts.description,
             acts.song_file_name,
             acts.song_file,
-            acts.is_pair,
+            acts.act_type as "act_type: ActType",
             acts.created_at as "created_at!: time::OffsetDateTime"
         FROM acts
         JOIN act_participants ON acts.id = act_participants.act_id
@@ -83,9 +83,7 @@ pub async fn list_club_acts(
                 starter.id as "id!: Uuid",
                 starter.firstname,
                 starter.lastname,
-                starter.birthdate,
-                starter.pair_sonderpokal,
-                starter.single_sonderpokal
+                starter.birthdate
             FROM act_participants
             JOIN starter ON act_participants.starter_id = starter.id
             WHERE act_participants.act_id = ?
@@ -101,15 +99,8 @@ pub async fn list_club_acts(
             description: act.description,
             song_file_name: act.song_file_name,
             song_file: act.song_file,
-            is_pair: act.is_pair,
+            act_type: act.act_type,
             created_at: act.created_at,
-            is_sonderpokal: participants.iter().any(|participant| {
-                if act.is_pair {
-                    participant.pair_sonderpokal
-                } else {
-                    participant.single_sonderpokal
-                }
-            }),
             participants: participants
                 .into_iter()
                 .map(|participant| ClubActParticipant {

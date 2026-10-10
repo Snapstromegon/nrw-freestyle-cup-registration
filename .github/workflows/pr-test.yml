@@ -56,9 +56,6 @@ jobs:
         SMTP_SERVER=smtp.example.com
         JWT_SECRET=dummy_jwt_secret_for_ci_build_only
         HTTP_ADDRESS=0.0.0.0:3000
-        START_REGISTER_DATE=2025-01-15T00:00:00.000+01:00
-        END_REGISTER_DATE=2026-03-15T00:00:00.000+01:00
-        END_MUSIC_UPLOAD_DATE=2026-03-15T00:00:00.000+01:00
         EOF
 
     - name: Test build

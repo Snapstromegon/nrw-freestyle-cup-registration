@@ -1,10 +1,19 @@
+import { consume } from "@lit/context";
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { client } from "../../apiClient";
 import "../elements/cup-centered-icon-box.js";
+import {
+  type SystemStatus,
+  systemStatusContext,
+} from "../../contexts/systemStatus";
+import { competitionName } from "../../utils";
 
 @customElement("cup-view-request-password-reset")
 export default class CupViewRequestPasswordReset extends LitElement {
+  @consume({ context: systemStatusContext, subscribe: true })
+  systemStatus: SystemStatus | null = null;
+
   static override styles = css`
     * {
       margin: 0;
@@ -94,7 +103,7 @@ export default class CupViewRequestPasswordReset extends LitElement {
   override render() {
     return html`<cup-centered-icon-box>
         <form @submit=${this.register}>
-          <h1>NRW Freestyle Cup 2026</h1>
+          <h1>${competitionName(this.systemStatus?.competition)}</h1>
           <h2>Passwort zurücksetzen</h2>
           <p>Du bekommst von uns eine Mail mit einem Link, mit dem du dein Passwort zurücksetzen kannst.</p>
           ${this.error ? html`<p id="error">${this.error}</p>` : nothing}

@@ -1,3 +1,4 @@
+import { consume } from "@lit/context";
 import { Task } from "@lit/task";
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
@@ -18,9 +19,17 @@ import {
 import "../elements/cup-clock.js";
 import "../elements/cup-countdown.js";
 import "../elements/cup-fotobox.js";
+import {
+  type SystemStatus,
+  systemStatusContext,
+} from "../../contexts/systemStatus";
+import { competitionName } from "../../utils";
 
 @customElement("cup-view-info-board")
 export default class CupViewInfoBoard extends LitElement {
+  @consume({ context: systemStatusContext, subscribe: true })
+  systemStatus: SystemStatus | null = null;
+
   static override styles = css`
     * {
       margin: 0;
@@ -452,7 +461,7 @@ export default class CupViewInfoBoard extends LitElement {
           <img
             id="fallback"
             src="/assets/images/logo_with_blobs.svg"
-            alt="NRW Freestyle Cup 2026"
+            alt=${competitionName(this.systemStatus?.competition)}
           />
           <h1>Siegerehrung</h1>
         </div>`;
@@ -465,32 +474,32 @@ export default class CupViewInfoBoard extends LitElement {
     return html`
       <div id="wrapper">
         <aside>
-          <h1>NRW Freestyle Cup 2026</h1>
+          <h1>${competitionName(this.systemStatus?.competition)}</h1>
           <img
             id="logo"
             src="/assets/images/nrw-freestyle-cup.svg"
-            alt="NRW Freestyle Cup 2026"
+            alt=${competitionName(this.systemStatus?.competition)}
           />
           <div id="qrcode">
             <h2>Fotos</h2>
             <img
               src="/assets/images/qrcode-fotos.svg"
-              alt="NRW Freestyle Cup 2026 Fotos QR Code"
+              alt="${competitionName(this.systemStatus?.competition)} Fotos QR Code"
             />
           </div>
           <cup-timeplan .timeplan=${this.predictedTimeplan}></cup-timeplan>
         </aside>
         <main>${this.renderMain()}</main>
         <footer>
-          <img src="/assets/images/gwn.svg" alt="NRW Freestyle Cup 2026" />
+          <img src="/assets/images/gwn.svg" alt=${competitionName(this.systemStatus?.competition)} />
           <img
             src="/assets/images/heiner-weiss.svg"
-            alt="NRW Freestyle Cup 2026"
+            alt=${competitionName(this.systemStatus?.competition)}
           />
-          <img src="/assets/images/gwn.svg" alt="NRW Freestyle Cup 2026" />
+          <img src="/assets/images/gwn.svg" alt=${competitionName(this.systemStatus?.competition)} />
           <img
             src="/assets/images/heiner-weiss.svg"
-            alt="NRW Freestyle Cup 2026"
+            alt=${competitionName(this.systemStatus?.competition)}
           />
         </footer>
       </div>

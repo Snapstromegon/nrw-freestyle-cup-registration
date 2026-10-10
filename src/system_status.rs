@@ -1,16 +1,17 @@
-use std::sync::Arc;
-
 use axum::{extract::FromRequestParts, http::request::Parts};
 use time::OffsetDateTime;
+use tracing::error;
 
-use crate::http_server::extractor::auth::Auth;
+use crate::{
+    competition::Competition, http_server::extractor::auth::Auth,
+    reloadable_sqlite::ReloadableSqlite,
+};
 
 #[derive(Debug, Clone, Copy, serde::Serialize, utoipa::ToSchema)]
 pub struct Capabilities {
     pub can_register: bool,
     pub can_create_club: bool,
     pub can_register_starter: bool,
-    pub can_register_judge: bool,
     pub can_upload_music: bool,
 }
 
@@ -24,7 +25,7 @@ pub struct StatusOptions {
 impl StatusOptions {
     /// Computes which actions are currently allowed based on the configured dates.
     ///
-    /// Registration (users, clubs, starters, judges) is possible between
+    /// Registration (users, clubs, starters) is possible between
     /// `start_register_date` and `end_register_date` (both inclusive); music
     /// uploads are possible until `end_music_upload_date`.
     ///
@@ -52,12 +53,23 @@ impl StatusOptions {
             can_register: in_register_period,
             can_create_club: in_register_period,
             can_register_starter: in_register_period,
-            can_register_judge: in_register_period,
             can_upload_music: now <= self.end_music_upload_date,
         }
     }
 }
 
+impl Capabilities {
+    /// Everything is closed, e.g. because no competition is configured.
+    pub const CLOSED: Capabilities = Capabilities {
+        can_register: false,
+        can_create_club: false,
+        can_register_starter: false,
+        can_upload_music: false,
+    };
+}
+
+/// Admins can always do everything. For everyone else the dates of the
+/// current competition decide.
 impl<S> FromRequestParts<S> for Capabilities
 where
     S: Send + Sync,
@@ -71,12 +83,19 @@ where
                 can_register: true,
                 can_create_club: true,
                 can_register_starter: true,
-                can_register_judge: true,
                 can_upload_music: true,
             });
         }
-        let status_options = parts.extensions.get::<Arc<StatusOptions>>().unwrap();
-        Ok(status_options.get_system_status())
+        let db = parts.extensions.get::<ReloadableSqlite>().unwrap();
+        let db = db.get().await.clone();
+        match Competition::current(&db).await {
+            Ok(Some(competition)) => Ok(competition.status_options().get_system_status()),
+            Ok(None) => Ok(Capabilities::CLOSED),
+            Err(e) => {
+                error!("Couldn't load the competition: {e}");
+                Ok(Capabilities::CLOSED)
+            }
+        }
     }
 }
 
@@ -98,7 +117,6 @@ mod tests {
         assert_eq!(capabilities.can_register, open);
         assert_eq!(capabilities.can_create_club, open);
         assert_eq!(capabilities.can_register_starter, open);
-        assert_eq!(capabilities.can_register_judge, open);
     }
 
     #[test]

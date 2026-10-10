@@ -5,10 +5,11 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
+    act_type::ActType,
     http_server::{ClientError, HttpError, extractor::auth::Auth},
     reloadable_sqlite::ReloadableSqlite,
     system_status::Capabilities,
-    utils::set_act,
+    utils::{check_single_start, set_act},
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -23,10 +24,8 @@ pub struct AddClubStarterBody {
     lastname: String,
     #[serde(with = "time::serde::iso8601")]
     birthdate: time::OffsetDateTime,
-    single_sonderpokal: bool,
     single_male: bool,
     single_female: bool,
-    pair_sonderpokal: bool,
     pair: bool,
     partner_id: Option<Uuid>,
     partner_name: Option<String>,
@@ -57,6 +56,7 @@ pub async fn add_club_starter(
     if !capabilities.can_register_starter {
         return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
     }
+    check_single_start(body.single_male, body.single_female).map_err(HttpError::ErrorMessages)?;
     let db = db.get().await.clone();
     let starter_id = Uuid::now_v7();
 
@@ -102,24 +102,20 @@ pub async fn add_club_starter(
           firstname,
           lastname,
           birthdate,
-          single_sonderpokal,
           single_male,
           single_female,
-          pair_sonderpokal,
           pair,
           partner_id,
           partner_name
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
         "#,
         starter_id,
         body.club_id,
         body.firstname,
         body.lastname,
         body.birthdate,
-        body.single_sonderpokal,
         body.single_male,
         body.single_female,
-        body.pair_sonderpokal,
         body.pair,
         partner_id,
         body.partner_name,
@@ -128,16 +124,19 @@ pub async fn add_club_starter(
     .await?;
 
     if body.single_female || body.single_male {
-        set_act(&db, "", &[starter_id], None, false)
+        set_act(&db, "", &[starter_id], None, ActType::Single)
             .await
             .map_err(HttpError::ErrorMessages)?;
     }
 
     if let Some(partner_id) = partner_id {
-        set_act(&db, "", &[starter_id, partner_id], None, true)
+        set_act(&db, "", &[starter_id, partner_id], None, ActType::Pair)
             .await
             .map_err(HttpError::ErrorMessages)?;
-        info!("Updating partner {:?} to link to starter {:?}", partner_id, starter_id);
+        info!(
+            "Updating partner {:?} to link to starter {:?}",
+            partner_id, starter_id
+        );
         sqlx::query!(
             r#"
                 UPDATE starter SET partner_id = ?, partner_name = ? WHERE id = ?

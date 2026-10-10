@@ -51,7 +51,7 @@ async fn register_creates_unverified_user_logs_in_and_sends_mail(db: SqlitePool)
 #[sqlx::test]
 async fn register_reports_mail_delivery_failure(db: SqlitePool) {
     // No mail server is reachable for this app.
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
 
     let response = app
         .post(
@@ -140,7 +140,7 @@ async fn register_rejects_duplicate_email(db: SqlitePool) {
 
 #[sqlx::test]
 async fn register_is_forbidden_outside_registration_period(db: SqlitePool) {
-    let app = TestApp::with_status(db, closed_registration());
+    let app = TestApp::with_status(db, closed_registration()).await;
 
     let response = app
         .post(
@@ -241,7 +241,7 @@ async fn resend_mail_validation_requires_login(db: SqlitePool) {
 
 #[sqlx::test]
 async fn verify_email_with_unknown_token_is_not_found(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let response = app
         .post(
             "/api/command/verify_email",
@@ -254,7 +254,7 @@ async fn verify_email_with_unknown_token_is_not_found(db: SqlitePool) {
 
 #[sqlx::test]
 async fn login_with_correct_password_sets_cookie(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let user_id = app.create_user("Alex", false).await;
 
     let response = app
@@ -274,7 +274,7 @@ async fn login_with_correct_password_sets_cookie(db: SqlitePool) {
 
 #[sqlx::test]
 async fn login_with_wrong_password_or_unknown_email_is_unauthorized(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     app.create_user("Alex", false).await;
 
     for body in [
@@ -290,7 +290,7 @@ async fn login_with_wrong_password_or_unknown_email_is_unauthorized(db: SqlitePo
 
 #[sqlx::test]
 async fn logout_clears_jwt_cookie(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
 
     let response = app.post("/api/command/logout", json!(null), None).await;
 
@@ -300,7 +300,7 @@ async fn logout_clears_jwt_cookie(db: SqlitePool) {
 
 #[sqlx::test]
 async fn whoami_requires_valid_jwt(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
 
     let missing = app.get("/api/query/whoami", None).await;
     assert_eq!(missing.status, StatusCode::UNAUTHORIZED);
@@ -311,7 +311,7 @@ async fn whoami_requires_valid_jwt(db: SqlitePool) {
 
 #[sqlx::test]
 async fn jwt_for_deleted_user_is_rejected(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let cookie = app.cookie_for(Uuid::now_v7());
 
     let response = app.get("/api/query/whoami", Some(&cookie)).await;

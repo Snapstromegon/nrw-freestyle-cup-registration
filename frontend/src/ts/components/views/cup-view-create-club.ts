@@ -7,6 +7,7 @@ import {
   type SystemStatus,
   systemStatusContext,
 } from "../../contexts/systemStatus";
+import { competitionName } from "../../utils";
 
 @customElement("cup-view-create-club")
 export default class CupViewCreateClub extends LitElement {
@@ -101,7 +102,7 @@ export default class CupViewCreateClub extends LitElement {
   override render() {
     return html`<cup-centered-icon-box>
       <form @submit=${this.createClub}>
-        <h1>NRW Freestyle Cup 2026</h1>
+        <h1>${competitionName(this.systemStatus?.competition)}</h1>
         <h2>Verein erstellen</h2>
         ${
           this.systemStatus?.can_create_club

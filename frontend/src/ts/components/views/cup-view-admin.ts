@@ -45,7 +45,6 @@ export default class CupViewAdmin extends LitElement {
       const users = data.data as (User & {
         club?: components["schemas"]["Club"];
         starters?: components["schemas"]["ClubStarter"][];
-        judges?: components["schemas"]["ClubJudge"][];
       })[];
 
       for (const user of users) {
@@ -64,16 +63,8 @@ export default class CupViewAdmin extends LitElement {
               },
             },
           });
-          const judges = await client.GET(`/api/query/list_club_judges`, {
-            params: {
-              query: {
-                club_id: user.club_id!,
-              },
-            },
-          });
           user.club = club.data;
           user.starters = starters.data;
-          user.judges = judges.data;
         }
       }
       return users;
@@ -88,7 +79,6 @@ export default class CupViewAdmin extends LitElement {
         <a href="/admin-payments">Zahlungsmanager</a>
         <a href="/admin-acts-overview">Küren Übersicht</a>
         <a href="/admin-categories">Kategorie Verwaltung</a>
-        <a href="/admin-judges">Judges Übersicht</a>
         <a href="/admin-music-control">Musik Player</a>
         <a href="/admin-medals">Medaillen Generator</a>
       </nav>

@@ -2,6 +2,8 @@ use std::collections::HashSet;
 
 use uuid::Uuid;
 
+use crate::act_type::ActType;
+
 /// Checks that a password satisfies the registration password policy.
 ///
 /// A password must be at least 8 bytes long and contain characters from at
@@ -49,17 +51,35 @@ pub fn check_password(password: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// A rider can start in at most one single act, either male or female.
+///
+/// ```
+/// use nrw_freestyle_cup_registration::utils::check_single_start;
+///
+/// assert!(check_single_start(true, false).is_ok());
+/// assert!(check_single_start(false, false).is_ok());
+/// assert!(check_single_start(true, true).is_err());
+/// ```
+pub fn check_single_start(single_male: bool, single_female: bool) -> Result<(), String> {
+    if single_male && single_female {
+        return Err(
+            "Ein Starter kann nur in einer Einzelkür starten (Einzel M oder Einzel W).".to_string(),
+        );
+    }
+    Ok(())
+}
+
 pub async fn get_act_id_for_starter_id(
     db: &sqlx::SqlitePool,
     starter_id: Uuid,
-    is_pair: bool,
+    act_type: ActType,
 ) -> Result<Option<Uuid>, String> {
     let act_id = sqlx::query!(
         r#"
-        SELECT act_id as "act_id: Uuid" FROM act_participants LEFT JOIN acts ON act_participants.act_id = acts.id WHERE starter_id = ? AND is_pair = ?
+        SELECT act_id as "act_id: Uuid" FROM act_participants LEFT JOIN acts ON act_participants.act_id = acts.id WHERE starter_id = ? AND act_type = ?
         "#,
         starter_id,
-        is_pair
+        act_type
     )
     .fetch_optional(db)
     .await
@@ -90,18 +110,18 @@ pub async fn set_act(
     name: &str,
     starters: &[Uuid],
     description: Option<&str>,
-    is_pair: bool,
+    act_type: ActType,
 ) -> Result<Uuid, String> {
     let id = Uuid::new_v4();
     sqlx::query!(
         r#"
-        INSERT INTO acts (id, name, description, is_pair)
+        INSERT INTO acts (id, name, description, act_type)
         VALUES (?, ?, ?, ?)
         "#,
         id,
         name,
         description,
-        is_pair
+        act_type
     )
     .execute(db)
     .await
@@ -135,11 +155,11 @@ pub async fn initialize_acts(db: &sqlx::SqlitePool) -> Result<(), String> {
     .await
     .map_err(|e| format!("Fehler beim Abfragen der Einzelstarter: {}", e))?;
     for starter in single_starters {
-        if get_act_id_for_starter_id(db, starter.id, false)
+        if get_act_id_for_starter_id(db, starter.id, ActType::Single)
             .await?
             .is_none()
         {
-            set_act(db, "", &[starter.id], None, false).await?;
+            set_act(db, "", &[starter.id], None, ActType::Single).await?;
         }
     }
 
@@ -154,7 +174,7 @@ pub async fn initialize_acts(db: &sqlx::SqlitePool) -> Result<(), String> {
 
     for pair_starter in pair_starters {
         if !covered.contains(&pair_starter.id) {
-            if get_act_id_for_starter_id(db, pair_starter.id, true)
+            if get_act_id_for_starter_id(db, pair_starter.id, ActType::Pair)
                 .await?
                 .is_none()
             {
@@ -163,7 +183,7 @@ pub async fn initialize_acts(db: &sqlx::SqlitePool) -> Result<(), String> {
                     "",
                     &[pair_starter.id, pair_starter.partner_id],
                     None,
-                    true,
+                    ActType::Pair,
                 )
                 .await?;
             }
@@ -280,9 +300,9 @@ mod tests {
         let id = Uuid::now_v7();
         sqlx::query(
             r#"
-            INSERT INTO starter (id, club_id, firstname, lastname, birthdate, single_sonderpokal,
-                single_male, single_female, pair_sonderpokal, pair, partner_id)
-            VALUES (?, ?, ?, 'Test', ?, false, false, ?, false, ?, ?)
+            INSERT INTO starter (id, club_id, firstname, lastname, birthdate,
+                single_male, single_female, pair, partner_id)
+            VALUES (?, ?, ?, 'Test', ?, false, ?, ?, ?)
             "#,
         )
         .bind(id)
@@ -309,9 +329,9 @@ mod tests {
         }
     }
 
-    async fn count_acts(db: &SqlitePool, is_pair: bool) -> i64 {
-        sqlx::query_scalar("SELECT COUNT(*) FROM acts WHERE is_pair = ?")
-            .bind(is_pair)
+    async fn count_acts(db: &SqlitePool, act_type: ActType) -> i64 {
+        sqlx::query_scalar("SELECT COUNT(*) FROM acts WHERE act_type = ?")
+            .bind(act_type)
             .fetch_one(db)
             .await
             .unwrap()
@@ -323,19 +343,19 @@ mod tests {
         let a = insert_starter(&db, club_id, "Anna", false, true, None).await;
         let b = insert_starter(&db, club_id, "Berta", false, true, None).await;
 
-        let act_id = set_act(&db, "Duo", &[a, b], Some("Beschreibung"), true)
+        let act_id = set_act(&db, "Duo", &[a, b], Some("Beschreibung"), ActType::Pair)
             .await
             .unwrap();
 
-        let (name, description, is_pair): (String, Option<String>, bool) =
-            sqlx::query_as("SELECT name, description, is_pair FROM acts WHERE id = ?")
+        let (name, description, act_type): (String, Option<String>, ActType) =
+            sqlx::query_as("SELECT name, description, act_type FROM acts WHERE id = ?")
                 .bind(act_id)
                 .fetch_one(&db)
                 .await
                 .unwrap();
         assert_eq!(name, "Duo");
         assert_eq!(description.as_deref(), Some("Beschreibung"));
-        assert!(is_pair);
+        assert_eq!(act_type, ActType::Pair);
 
         let participants: i64 =
             sqlx::query_scalar("SELECT COUNT(*) FROM act_participants WHERE act_id = ?")
@@ -352,18 +372,20 @@ mod tests {
         let starter = insert_starter(&db, club_id, "Anna", true, false, None).await;
 
         assert_eq!(
-            get_act_id_for_starter_id(&db, starter, false).await,
+            get_act_id_for_starter_id(&db, starter, ActType::Single).await,
             Ok(None)
         );
 
-        let act_id = set_act(&db, "", &[starter], None, false).await.unwrap();
+        let act_id = set_act(&db, "", &[starter], None, ActType::Single)
+            .await
+            .unwrap();
 
         assert_eq!(
-            get_act_id_for_starter_id(&db, starter, false).await,
+            get_act_id_for_starter_id(&db, starter, ActType::Single).await,
             Ok(Some(act_id))
         );
         assert_eq!(
-            get_act_id_for_starter_id(&db, starter, true).await,
+            get_act_id_for_starter_id(&db, starter, ActType::Pair).await,
             Ok(None)
         );
     }
@@ -372,11 +394,13 @@ mod tests {
     async fn delete_act_removes_act_and_participants(db: SqlitePool) {
         let club_id = insert_club(&db).await;
         let starter = insert_starter(&db, club_id, "Anna", true, false, None).await;
-        let act_id = set_act(&db, "", &[starter], None, false).await.unwrap();
+        let act_id = set_act(&db, "", &[starter], None, ActType::Single)
+            .await
+            .unwrap();
 
         delete_act(&db, act_id).await.unwrap();
 
-        assert_eq!(count_acts(&db, false).await, 0);
+        assert_eq!(count_acts(&db, ActType::Single).await, 0);
         let participants: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM act_participants")
             .fetch_one(&db)
             .await
@@ -404,16 +428,20 @@ mod tests {
 
         initialize_acts(&db).await.unwrap();
 
-        assert_eq!(count_acts(&db, false).await, 1);
-        assert_eq!(count_acts(&db, true).await, 1);
+        assert_eq!(count_acts(&db, ActType::Single).await, 1);
+        assert_eq!(count_acts(&db, ActType::Pair).await, 1);
         assert!(
-            get_act_id_for_starter_id(&db, single, false)
+            get_act_id_for_starter_id(&db, single, ActType::Single)
                 .await
                 .unwrap()
                 .is_some()
         );
-        let pair_act_a = get_act_id_for_starter_id(&db, a, true).await.unwrap();
-        let pair_act_b = get_act_id_for_starter_id(&db, b, true).await.unwrap();
+        let pair_act_a = get_act_id_for_starter_id(&db, a, ActType::Pair)
+            .await
+            .unwrap();
+        let pair_act_b = get_act_id_for_starter_id(&db, b, ActType::Pair)
+            .await
+            .unwrap();
         assert!(pair_act_a.is_some());
         assert_eq!(pair_act_a, pair_act_b);
     }
@@ -429,7 +457,7 @@ mod tests {
         initialize_acts(&db).await.unwrap();
         initialize_acts(&db).await.unwrap();
 
-        assert_eq!(count_acts(&db, false).await, 1);
-        assert_eq!(count_acts(&db, true).await, 1);
+        assert_eq!(count_acts(&db, ActType::Single).await, 1);
+        assert_eq!(count_acts(&db, ActType::Pair).await, 1);
     }
 }

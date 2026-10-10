@@ -12,6 +12,10 @@ path = "src/bin/registration_server.rs"
 name = "gen_openapi"
 path = "src/bin/gen_openapi.rs"
 
+[[bin]]
+name = "seed_demo"
+path = "src/bin/seed_demo.rs"
+
 [dependencies]
 askama = "0.16.0"
 axum = { version = "0.8", features = ["macros", "multipart"] }
@@ -41,7 +45,8 @@ sqlx = { version = "0.9.0", features = [
   "uuid",
 ] }
 thiserror = "2"
-time = { version = "0.3", features = ["serde"] }
+time = { version = "0.3", features = ["serde", "macros", "parsing", "formatting"] }
+toml = "1"
 tokio = { version = "1.52.3", features = ["full"] }
 tower = "0.5.3"
 tower-http = { version = "0.7.0", features = [
@@ -52,7 +57,7 @@ tower-http = { version = "0.7.0", features = [
 ] }
 tracing = "0.1.44"
 tracing-subscriber = "0.3.23"
-url = "2.5.8"
+url = { version = "2.5.8", features = ["serde"] }
 utoipa = { version = "5", features = [
   "axum_extras",
   "debug",

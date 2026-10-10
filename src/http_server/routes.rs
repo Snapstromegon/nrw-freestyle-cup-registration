@@ -17,10 +17,7 @@ use utoipa::{OpenApi as OpenApiTrait, openapi::OpenApi};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::{
-    jwt::JWTConfig, mailer::Mailer, reloadable_sqlite::ReloadableSqlite,
-    system_status::StatusOptions,
-};
+use crate::{jwt::JWTConfig, mailer::Mailer, reloadable_sqlite::ReloadableSqlite};
 
 use super::HttpServerOptions;
 
@@ -62,7 +59,6 @@ pub fn get_api_router(
     db: ReloadableSqlite,
     mailer: Arc<Mailer>,
     jwt_config: Arc<JWTConfig>,
-    status_options: Arc<StatusOptions>,
 ) -> Router {
     let (router, openapi) = get_openapi_router();
     router
@@ -71,7 +67,6 @@ pub fn get_api_router(
         .layer(Extension(mailer))
         .layer(Extension(jwt_config))
         .layer(Extension(http_options))
-        .layer(Extension(status_options))
 }
 
 #[must_use]
@@ -84,7 +79,6 @@ pub fn get_router(
     db: ReloadableSqlite,
     mailer: Arc<Mailer>,
     jwt_config: Arc<JWTConfig>,
-    status_options: Arc<StatusOptions>,
 ) -> Router {
     let request_id_layer = ServiceBuilder::new()
         .layer(SetRequestIdLayer::new(
@@ -123,12 +117,6 @@ pub fn get_router(
     Router::new()
         .fallback_service(serve_assets)
         .nest_service("/songs", ServeDir::new(http_options.data_path.clone()))
-        .merge(get_api_router(
-            http_options,
-            db,
-            mailer,
-            jwt_config,
-            status_options,
-        ))
+        .merge(get_api_router(http_options, db, mailer, jwt_config))
         .layer(request_id_layer)
 }

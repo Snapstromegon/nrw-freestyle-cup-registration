@@ -32,7 +32,7 @@ async fn list_acts(app: &TestApp, club_id: Uuid) -> Vec<Value> {
 
 #[sqlx::test]
 async fn create_club_assigns_club_to_owner(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let (cookie, club_id) = app.create_club_owner("Owner", "RSV Test").await;
 
     let whoami = app.get("/api/query/whoami", Some(&cookie)).await;
@@ -48,7 +48,7 @@ async fn create_club_assigns_club_to_owner(db: SqlitePool) {
 
 #[sqlx::test]
 async fn create_club_requires_login(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let response = app
         .post("/api/command/create_club", json!({ "name": "RSV" }), None)
         .await;
@@ -57,14 +57,14 @@ async fn create_club_requires_login(db: SqlitePool) {
 
 #[sqlx::test]
 async fn get_club_without_id_or_login_is_not_found(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let response = app.get("/api/query/get_club", None).await;
     assert_eq!(response.status, StatusCode::NOT_FOUND);
 }
 
 #[sqlx::test]
 async fn club_actions_are_forbidden_outside_registration_period(db: SqlitePool) {
-    let app = TestApp::with_status(db, closed_registration());
+    let app = TestApp::with_status(db, closed_registration()).await;
     let cookie = app.cookie_for(app.create_user("Owner", false).await);
 
     let response = app
@@ -80,7 +80,7 @@ async fn club_actions_are_forbidden_outside_registration_period(db: SqlitePool) 
 
 #[sqlx::test]
 async fn admins_bypass_registration_period(db: SqlitePool) {
-    let app = TestApp::with_status(db, closed_registration());
+    let app = TestApp::with_status(db, closed_registration()).await;
     let admin = app.create_admin().await;
 
     let status = app.get("/api/query/get_system_status", Some(&admin)).await;
@@ -98,7 +98,7 @@ async fn admins_bypass_registration_period(db: SqlitePool) {
 
 #[sqlx::test]
 async fn rename_club_by_owner_changes_name(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let (cookie, club_id) = app.create_club_owner("Owner", "Old Name").await;
 
     let response = app
@@ -116,7 +116,7 @@ async fn rename_club_by_owner_changes_name(db: SqlitePool) {
 
 #[sqlx::test]
 async fn rename_club_by_other_user_does_not_change_name(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let (owner, club_id) = app.create_club_owner("Owner", "Original").await;
     let (intruder, _) = app.create_club_owner("Intruder", "Other Club").await;
 
@@ -133,7 +133,7 @@ async fn rename_club_by_other_user_does_not_change_name(db: SqlitePool) {
 
 #[sqlx::test]
 async fn single_starter_gets_a_single_act(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let (cookie, club_id) = app.create_club_owner("Owner", "RSV").await;
 
     let starter_id = app
@@ -147,13 +147,13 @@ async fn single_starter_gets_a_single_act(db: SqlitePool) {
 
     let acts = list_acts(&app, club_id).await;
     assert_eq!(acts.len(), 1);
-    assert_eq!(acts[0]["is_pair"], false);
+    assert_eq!(acts[0]["act_type"], "single");
     assert_eq!(acts[0]["participants"][0]["id"], starter_id.to_string());
 }
 
 #[sqlx::test]
 async fn pair_partners_are_linked_by_name(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let (cookie, club_id) = app.create_club_owner("Owner", "RSV").await;
 
     let mut first = starter_body(club_id, "Anna", false, true);
@@ -179,13 +179,13 @@ async fn pair_partners_are_linked_by_name(db: SqlitePool) {
 
     let acts = list_acts(&app, club_id).await;
     assert_eq!(acts.len(), 1);
-    assert_eq!(acts[0]["is_pair"], true);
+    assert_eq!(acts[0]["act_type"], "pair");
     assert_eq!(acts[0]["participants"].as_array().unwrap().len(), 2);
 }
 
 #[sqlx::test]
 async fn deleting_a_starter_removes_acts_and_unlinks_partner(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let (cookie, club_id) = app.create_club_owner("Owner", "RSV").await;
 
     let anna = app
@@ -214,7 +214,7 @@ async fn deleting_a_starter_removes_acts_and_unlinks_partner(db: SqlitePool) {
 
 #[sqlx::test]
 async fn adding_starter_requires_login(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let response = app
         .post(
             "/api/command/add_club_starter",
@@ -227,7 +227,7 @@ async fn adding_starter_requires_login(db: SqlitePool) {
 
 #[sqlx::test]
 async fn set_payment_is_admin_only(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let (owner, club_id) = app.create_club_owner("Owner", "RSV").await;
     let admin = app.create_admin().await;
     let body = json!({ "club_id": club_id, "amount": 42.5 });
@@ -256,7 +256,7 @@ fn edit_body(starter_id: Uuid, firstname: &str, single: bool, pair: bool) -> Val
 
 #[sqlx::test]
 async fn edit_club_starter_updates_data_and_single_act(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let (cookie, club_id) = app.create_club_owner("Owner", "RSV").await;
     let anna = app
         .add_starter(&cookie, starter_body(club_id, "Anna", true, false))
@@ -288,12 +288,12 @@ async fn edit_club_starter_updates_data_and_single_act(db: SqlitePool) {
     assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
     let acts = list_acts(&app, club_id).await;
     assert_eq!(acts.len(), 1);
-    assert_eq!(acts[0]["is_pair"], false);
+    assert_eq!(acts[0]["act_type"], "single");
 }
 
 #[sqlx::test]
 async fn edit_club_starter_links_partner_and_creates_pair_act(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let (cookie, club_id) = app.create_club_owner("Owner", "RSV").await;
     let anna = app
         .add_starter(&cookie, starter_body(club_id, "Anna", false, true))
@@ -323,12 +323,12 @@ async fn edit_club_starter_links_partner_and_creates_pair_act(db: SqlitePool) {
     assert_eq!(find(berta)["partner_name"], "Anna Muster");
     let acts = list_acts(&app, club_id).await;
     assert_eq!(acts.len(), 1);
-    assert_eq!(acts[0]["is_pair"], true);
+    assert_eq!(acts[0]["act_type"], "pair");
 }
 
 #[sqlx::test]
 async fn edit_club_starter_rejects_pairing_with_oneself(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let (cookie, club_id) = app.create_club_owner("Owner", "RSV").await;
     let anna = app
         .add_starter(&cookie, starter_body(club_id, "Anna", false, true))
@@ -355,7 +355,7 @@ async fn edit_club_starter_rejects_pairing_with_oneself(db: SqlitePool) {
 
 #[sqlx::test]
 async fn edit_club_starter_is_forbidden_outside_registration_period(db: SqlitePool) {
-    let app = TestApp::with_status(db, closed_registration());
+    let app = TestApp::with_status(db, closed_registration()).await;
     let owner = app.cookie_for(app.create_user("Owner", false).await);
 
     let response = app
@@ -367,4 +367,39 @@ async fn edit_club_starter_is_forbidden_outside_registration_period(db: SqlitePo
         .await;
 
     assert_eq!(response.status, StatusCode::FORBIDDEN);
+}
+
+#[sqlx::test]
+async fn starter_can_only_start_in_one_single_act(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let (cookie, club_id) = app.create_club_owner("Owner", "RSV").await;
+
+    let mut both = starter_body(club_id, "Anna", true, false);
+    both["single_male"] = json!(true);
+    let response = app
+        .post("/api/command/add_club_starter", both, Some(&cookie))
+        .await;
+    assert_eq!(response.status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert!(
+        response.body["message"]
+            .as_str()
+            .unwrap()
+            .contains("einer Einzelkür"),
+        "{:?}",
+        response.body
+    );
+    assert!(list_starters(&app, club_id).await.is_empty());
+
+    let anna = app
+        .add_starter(&cookie, starter_body(club_id, "Anna", true, false))
+        .await;
+    let mut edit = edit_body(anna, "Anna", true, false);
+    edit["single_male"] = json!(true);
+    let response = app
+        .post("/api/command/edit_club_starter", edit, Some(&cookie))
+        .await;
+    assert_eq!(response.status, StatusCode::INTERNAL_SERVER_ERROR);
+    let starters = list_starters(&app, club_id).await;
+    assert_eq!(starters[0]["single_male"], false);
+    assert_eq!(list_acts(&app, club_id).await.len(), 1);
 }

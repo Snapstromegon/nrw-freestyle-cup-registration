@@ -31,8 +31,7 @@ fn category_body(name: &str) -> Value {
         // Format sent by the admin frontend.
         "from_birthday": "2000-01-01T00:00:00Z",
         "to_birthday": "2010-01-01T00:00:00Z",
-        "is_pair": false,
-        "is_sonderpokal": false,
+        "act_type": "single",
         "is_single_male": false,
         "einfahrzeit_seconds": 300,
         "act_duration_seconds": 120,
@@ -42,7 +41,7 @@ fn category_body(name: &str) -> Value {
 
 #[sqlx::test]
 async fn list_users_is_admin_only(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let admin = app.create_admin().await;
     let user = app.cookie_for(app.create_user("Alex", false).await);
 
@@ -67,7 +66,7 @@ async fn list_users_is_admin_only(db: SqlitePool) {
 
 #[sqlx::test]
 async fn list_starters_is_admin_only(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let admin = app.create_admin().await;
     let user = app.cookie_for(app.create_user("Alex", false).await);
 
@@ -91,35 +90,57 @@ async fn list_starters_is_admin_only(db: SqlitePool) {
 
 #[sqlx::test]
 async fn system_status_reflects_open_registration(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let response = app.get("/api/query/get_system_status", None).await;
     assert_eq!(response.status, StatusCode::OK);
+    let mut body = response.body;
+    let competition = body.as_object_mut().unwrap().remove("competition").unwrap();
     assert_eq!(
-        response.body,
+        body,
         json!({
             "can_register": true,
             "can_create_club": true,
             "can_register_starter": true,
-            "can_register_judge": true,
             "can_upload_music": true,
         })
     );
+    assert_eq!(competition["name"], "NRW Freestyle Cup 2027");
+    assert_eq!(competition["determining_day"], "2027-06-01");
+    assert_eq!(competition["fee_per_start"], 15.0);
+    assert_eq!(competition["max_fee_per_starter"], 45.0);
+    assert_eq!(competition["payment_reference"], "Startgeld");
+}
+
+#[sqlx::test]
+async fn everything_is_closed_without_competition(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    sqlx::query("DELETE FROM competition")
+        .execute(&app.db)
+        .await
+        .unwrap();
+
+    let response = app.get("/api/query/get_system_status", None).await;
+    assert_eq!(response.status, StatusCode::OK);
+    assert_eq!(response.body["competition"], Value::Null);
+    assert_eq!(response.body["can_register"], false);
+    assert_eq!(response.body["can_register_starter"], false);
+    assert_eq!(response.body["can_upload_music"], false);
 }
 
 #[sqlx::test]
 async fn categories_are_seeded_in_order(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let categories = category_orders(&app).await;
 
-    assert_eq!(categories.len(), 15);
-    assert_eq!(categories[0], ("NEM".to_string(), Some(1)));
+    assert_eq!(categories.len(), 36);
+    assert_eq!(categories[0], ("EMU11".to_string(), Some(1)));
     let orders: Vec<_> = categories.iter().map(|(_, o)| o.unwrap()).collect();
     assert!(orders.is_sorted());
 }
 
 #[sqlx::test]
 async fn category_commands_require_admin(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let user = app.cookie_for(app.create_user("Alex", false).await);
 
     let as_user = app
@@ -137,15 +158,15 @@ async fn category_commands_require_admin(db: SqlitePool) {
         "/api/command/move_category_up",
         "/api/command/move_category_down",
     ] {
-        let response = app.post(uri, json!({ "name": "NEM" }), Some(&user)).await;
+        let response = app.post(uri, json!({ "name": "EMU11" }), Some(&user)).await;
         assert_eq!(response.status, StatusCode::FORBIDDEN, "{uri}");
     }
-    assert_eq!(category_orders(&app).await.len(), 15);
+    assert_eq!(category_orders(&app).await.len(), 36);
 }
 
 #[sqlx::test]
 async fn admin_can_add_and_edit_category(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let admin = app.create_admin().await;
 
     let added = app
@@ -177,7 +198,7 @@ async fn admin_can_add_and_edit_category(db: SqlitePool) {
 #[sqlx::test]
 #[ignore = "known bug: category birthdays are stored unvalidated and break list_categories"]
 async fn category_with_date_only_birthday_does_not_break_listing(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let admin = app.create_admin().await;
     let mut body = category_body("DATE-ONLY");
     body["from_birthday"] = json!("2000-01-01");
@@ -195,44 +216,44 @@ async fn category_with_date_only_birthday_does_not_break_listing(db: SqlitePool)
 
 #[sqlx::test]
 async fn move_category_up_and_down_swaps_neighbours(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let admin = app.create_admin().await;
 
     let up = app
         .post(
             "/api/command/move_category_up",
-            json!({ "name": "NEWU11" }),
+            json!({ "name": "EMU13" }),
             Some(&admin),
         )
         .await;
     assert_eq!(up.status, StatusCode::OK, "{:?}", up.body);
     let categories = category_orders(&app).await;
-    assert_eq!(order_of(&categories, "NEWU11"), Some(1));
-    assert_eq!(order_of(&categories, "NEM"), Some(2));
+    assert_eq!(order_of(&categories, "EMU13"), Some(1));
+    assert_eq!(order_of(&categories, "EMU11"), Some(2));
 
     let down = app
         .post(
             "/api/command/move_category_down",
-            json!({ "name": "NEWU11" }),
+            json!({ "name": "EMU13" }),
             Some(&admin),
         )
         .await;
     assert_eq!(down.status, StatusCode::OK, "{:?}", down.body);
     let categories = category_orders(&app).await;
-    assert_eq!(order_of(&categories, "NEM"), Some(1));
-    assert_eq!(order_of(&categories, "NEWU11"), Some(2));
+    assert_eq!(order_of(&categories, "EMU11"), Some(1));
+    assert_eq!(order_of(&categories, "EMU13"), Some(2));
 }
 
 #[sqlx::test]
 async fn moving_first_category_up_or_last_down_is_rejected(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let admin = app.create_admin().await;
     let before = category_orders(&app).await;
 
     let up = app
         .post(
             "/api/command/move_category_up",
-            json!({ "name": "NEM" }),
+            json!({ "name": "EMU11" }),
             Some(&admin),
         )
         .await;
@@ -241,7 +262,7 @@ async fn moving_first_category_up_or_last_down_is_rejected(db: SqlitePool) {
     let down = app
         .post(
             "/api/command/move_category_down",
-            json!({ "name": "SP15+" }),
+            json!({ "name": "P70+" }),
             Some(&admin),
         )
         .await;
@@ -252,22 +273,22 @@ async fn moving_first_category_up_or_last_down_is_rejected(db: SqlitePool) {
 
 #[sqlx::test]
 async fn delete_category_removes_its_timeplan_entries(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let admin = app.create_admin().await;
 
     let response = app
         .post(
             "/api/command/delete_category",
-            json!({ "name": "NEWU13" }),
+            json!({ "name": "EWU13" }),
             Some(&admin),
         )
         .await;
     assert_eq!(response.status, StatusCode::OK);
 
     let categories = category_orders(&app).await;
-    assert!(!categories.iter().any(|(name, _)| name == "NEWU13"));
+    assert!(!categories.iter().any(|(name, _)| name == "EWU13"));
     let timeplan_refs: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM timeplan WHERE category = 'NEWU13'")
+        sqlx::query_scalar("SELECT COUNT(*) FROM timeplan WHERE category = 'EWU13'")
             .fetch_one(&app.db)
             .await
             .unwrap();
@@ -276,7 +297,7 @@ async fn delete_category_removes_its_timeplan_entries(db: SqlitePool) {
 
 #[sqlx::test]
 async fn delete_unknown_category_is_not_found(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let admin = app.create_admin().await;
     let response = app
         .post(
@@ -294,7 +315,7 @@ fn parse_time(value: &Value) -> OffsetDateTime {
 
 #[sqlx::test]
 async fn predicted_timeplan_is_contiguous_and_planned(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let timeplan_rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM timeplan")
         .fetch_one(&app.db)
         .await
@@ -323,7 +344,7 @@ async fn predicted_timeplan_is_contiguous_and_planned(db: SqlitePool) {
 
     // A category without acts only lasts as long as its warm-up time.
     let first = &items[0]["timeplan_entry"]["Category"];
-    assert_eq!(first["name"], "NEM");
+    assert_eq!(first["name"], "EMU11");
     assert_eq!(first["duration_seconds"], first["einfahrzeit_seconds"]);
     assert!(first["acts"].as_array().unwrap().is_empty());
 
@@ -336,7 +357,7 @@ async fn predicted_timeplan_is_contiguous_and_planned(db: SqlitePool) {
 
 #[sqlx::test]
 async fn timeplan_forward_starts_first_entry(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let admin = app.create_admin().await;
     let user = app.cookie_for(app.create_user("Alex", false).await);
 
@@ -359,7 +380,7 @@ async fn timeplan_forward_starts_first_entry(db: SqlitePool) {
 
 #[sqlx::test]
 async fn reload_db_rejects_non_admin_without_token(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let user = app.cookie_for(app.create_user("Alex", false).await);
 
     let response = app
@@ -384,14 +405,14 @@ async fn reload_db_rejects_non_admin_without_token(db: SqlitePool) {
 
 #[sqlx::test]
 async fn unknown_api_route_is_not_found(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let response = app.get("/api/query/does_not_exist", None).await;
     assert_eq!(response.status, StatusCode::NOT_FOUND);
 }
 
 #[sqlx::test]
 async fn swagger_serves_openapi_document(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let response = app.get("/openapi.json", None).await;
     assert_eq!(response.status, StatusCode::OK);
     assert!(response.body["paths"]["/api/command/register"].is_object());

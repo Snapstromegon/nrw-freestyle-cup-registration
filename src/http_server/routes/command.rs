@@ -2,17 +2,14 @@ use axum::extract::DefaultBodyLimit;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 mod add_category;
-mod add_club_judge;
 mod add_club_starter;
 mod add_timeplan_entry;
 mod create_club;
 mod delete_category;
-mod delete_club_judge;
 mod delete_club_starter;
 mod delete_timeplan_entry;
 mod edit_category;
 mod edit_club_act;
-mod edit_club_judge;
 mod edit_club_starter;
 mod edit_timeplan_entry;
 mod login;
@@ -57,9 +54,6 @@ pub fn get_command_router() -> OpenApiRouter {
         .routes(routes!(add_club_starter::add_club_starter))
         .routes(routes!(delete_club_starter::delete_club_starter))
         .routes(routes!(edit_club_starter::edit_club_starter))
-        .routes(routes!(add_club_judge::add_club_judge))
-        .routes(routes!(delete_club_judge::delete_club_judge))
-        .routes(routes!(edit_club_judge::edit_club_judge))
         .routes(routes!(edit_club_act::edit_club_act))
         .routes(routes!(save_act_song::save_act_song))
         .routes(routes!(set_payment::set_payment))

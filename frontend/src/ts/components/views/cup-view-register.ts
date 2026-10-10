@@ -7,6 +7,7 @@ import {
   type SystemStatus,
   systemStatusContext,
 } from "../../contexts/systemStatus";
+import { competitionName } from "../../utils";
 
 @customElement("cup-view-register")
 export default class CupViewRegister extends LitElement {
@@ -101,7 +102,7 @@ export default class CupViewRegister extends LitElement {
   override render() {
     return html`<cup-centered-icon-box>
       <form @submit=${this.register}>
-        <h1>NRW Freestyle Cup 2026</h1>
+        <h1>${competitionName(this.systemStatus?.competition)}</h1>
         <h2>Registrierung</h2>
         ${this.error ? html`<p id="error">${this.error}</p>` : nothing}
         ${

@@ -3,6 +3,7 @@ import { css, html, LitElement } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 import { client, type components } from "../../apiClient";
+import { type ActType, actTypeLabels } from "../../utils";
 
 @customElement("cup-view-admin-categories")
 export default class CupViewAdminCategories extends LitElement {
@@ -213,8 +214,7 @@ export default class CupViewAdminCategories extends LitElement {
             <th>Beschreibung</th>
             <th>Von</th>
             <th>Bis</th>
-            <th>Paar</th>
-            <th>Sonderpokal</th>
+            <th>Typ</th>
             <th>Männlich</th>
             <th>Einfahrt (s)</th>
             <th>Kür (s)</th>
@@ -264,8 +264,7 @@ export default class CupViewAdminCategories extends LitElement {
         <td>
           ${this.formatDateForInput(new Date(category.to_birthday || ""))}
         </td>
-        <td>${category.is_pair ? "✓" : ""}</td>
-        <td>${category.is_sonderpokal ? "✓" : ""}</td>
+        <td>${actTypeLabels[category.act_type]}</td>
         <td>${category.is_single_male ? "✓" : ""}</td>
         <td>${this.formatSecondsAsTime(category.einfahrzeit_seconds || 0)}</td>
         <td>${this.formatSecondsAsTime(category.act_duration_seconds || 0)}</td>
@@ -385,32 +384,18 @@ export default class CupViewAdminCategories extends LitElement {
           />
         </td>
         <td>
-          <input
-            type="checkbox"
-            ?checked=${this.editForm.is_pair ?? category.is_pair}
+          <select
             @change=${
               // eslint-disable-next-line lit/no-template-arrow
               (e: Event) =>
                 (this.editForm = {
                   ...this.editForm,
-                  is_pair: (e.target as HTMLInputElement).checked,
+                  act_type: (e.target as HTMLSelectElement).value as ActType,
                 })
             }
-          />
-        </td>
-        <td>
-          <input
-            type="checkbox"
-            ?checked=${this.editForm.is_sonderpokal ?? category.is_sonderpokal}
-            @change=${
-              // eslint-disable-next-line lit/no-template-arrow
-              (e: Event) =>
-                (this.editForm = {
-                  ...this.editForm,
-                  is_sonderpokal: (e.target as HTMLInputElement).checked,
-                })
-            }
-          />
+          >
+            ${this.actTypeOptions(this.editForm.act_type ?? category.act_type)}
+          </select>
         </td>
         <td>
           <input
@@ -505,11 +490,19 @@ export default class CupViewAdminCategories extends LitElement {
     `;
   }
 
+  private actTypeOptions(selected: ActType) {
+    return Object.entries(actTypeLabels).map(
+      ([value, label]) =>
+        html`<option value=${value} ?selected=${selected === value}>
+          ${label}
+        </option>`,
+    );
+  }
+
   private showAddForm() {
     this.showNewForm = true;
     this.newCategory = {
-      is_pair: false,
-      is_sonderpokal: false,
+      act_type: "single",
       is_single_male: false,
       einfahrzeit_seconds: 600, // 10 minutes default
       act_duration_seconds: 120, // 2 minutes default
@@ -534,8 +527,7 @@ export default class CupViewAdminCategories extends LitElement {
           description: this.newCategory.description || null,
           from_birthday: this.newCategory.from_birthday + "T00:00:00Z",
           to_birthday: this.newCategory.to_birthday + "T00:00:00Z",
-          is_pair: this.newCategory.is_pair || false,
-          is_sonderpokal: this.newCategory.is_sonderpokal || false,
+          act_type: this.newCategory.act_type || "single",
           is_single_male: this.newCategory.is_single_male || false,
           einfahrzeit_seconds: this.newCategory.einfahrzeit_seconds || 600,
           act_duration_seconds: this.newCategory.act_duration_seconds || 120,
@@ -616,32 +608,18 @@ export default class CupViewAdminCategories extends LitElement {
           />
         </td>
         <td>
-          <input
-            type="checkbox"
-            ?checked=${this.newCategory.is_pair}
+          <select
             @change=${
               // eslint-disable-next-line lit/no-template-arrow
               (e: Event) =>
                 (this.newCategory = {
                   ...this.newCategory,
-                  is_pair: (e.target as HTMLInputElement).checked,
+                  act_type: (e.target as HTMLSelectElement).value as ActType,
                 })
             }
-          />
-        </td>
-        <td>
-          <input
-            type="checkbox"
-            ?checked=${this.newCategory.is_sonderpokal}
-            @change=${
-              // eslint-disable-next-line lit/no-template-arrow
-              (e: Event) =>
-                (this.newCategory = {
-                  ...this.newCategory,
-                  is_sonderpokal: (e.target as HTMLInputElement).checked,
-                })
-            }
-          />
+          >
+            ${this.actTypeOptions(this.newCategory.act_type ?? "single")}
+          </select>
         </td>
         <td>
           <input
@@ -735,8 +713,7 @@ export default class CupViewAdminCategories extends LitElement {
       to_birthday: this.formatDateForInput(
         new Date(category.to_birthday || ""),
       ),
-      is_pair: category.is_pair,
-      is_sonderpokal: category.is_sonderpokal,
+      act_type: category.act_type,
       is_single_male: category.is_single_male,
       einfahrzeit_seconds: category.einfahrzeit_seconds,
       act_duration_seconds: category.act_duration_seconds,
@@ -762,8 +739,7 @@ export default class CupViewAdminCategories extends LitElement {
           description: this.editForm.description || null,
           from_birthday: this.editForm.from_birthday + "T00:00:00Z",
           to_birthday: this.editForm.to_birthday + "T00:00:00Z",
-          is_pair: this.editForm.is_pair!,
-          is_sonderpokal: this.editForm.is_sonderpokal!,
+          act_type: this.editForm.act_type!,
           is_single_male: this.editForm.is_single_male!,
           einfahrzeit_seconds: this.editForm.einfahrzeit_seconds!,
           act_duration_seconds: this.editForm.act_duration_seconds!,

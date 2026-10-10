@@ -1,5 +1,6 @@
+import { consume } from "@lit/context";
 import { Task } from "@lit/task";
-import { css, html, LitElement } from "lit";
+import { css, html, LitElement, nothing } from "lit";
 import { customElement } from "lit/decorators.js";
 import { client, type components } from "../../apiClient";
 import "../elements/cup-context-club.js";
@@ -7,9 +8,17 @@ import "../elements/cup-club-manager.js";
 import "../elements/cup-starter-table.js";
 import { cache } from "lit/directives/cache.js";
 import { repeat } from "lit/directives/repeat.js";
+import {
+  type SystemStatus,
+  systemStatusContext,
+} from "../../contexts/systemStatus";
+import { competitionName, formatDateRange } from "../../utils";
 
 @customElement("cup-view-startlist")
 export default class CupViewStartlist extends LitElement {
+  @consume({ context: systemStatusContext, subscribe: true })
+  systemStatus: SystemStatus | null = null;
+
   static override styles = css`
     * {
       margin: 0;
@@ -200,9 +209,20 @@ export default class CupViewStartlist extends LitElement {
   override render() {
     return html`<header>
         <img src="/assets/images/nrw-freestyle-cup.svg" />
-        <h1>Startliste NRW Freestyle Cup</h1>
-        <span class="date">19.04.2026</span>
-        <span class="location">SSV Nümbrecht</span>
+        <h1>Startliste ${competitionName(this.systemStatus?.competition)}</h1>
+        <span class="date"
+          >${
+            this.systemStatus?.competition
+              ? formatDateRange(
+                  this.systemStatus.competition.start_date,
+                  this.systemStatus.competition.end_date,
+                )
+              : nothing
+          }</span
+        >
+        <span class="location"
+          >${this.systemStatus?.competition?.location}</span
+        >
       </header>
       <main>
         <nav>

@@ -3,6 +3,7 @@ use tracing::instrument;
 use uuid::Uuid;
 
 use crate::{
+    act_type::ActType,
     http_server::{ClientError, HttpError},
     reloadable_sqlite::ReloadableSqlite,
 };
@@ -19,9 +20,8 @@ pub struct StartlistActParticipant {
 pub struct StartlistAct {
     id: Uuid,
     name: String,
-    is_pair: Option<bool>,
+    act_type: ActType,
     max_age: Option<f64>,
-    is_sonderpokal: Option<bool>,
     participants: Vec<StartlistActParticipant>,
     category: Option<String>,
     act_order: Option<i64>,
@@ -46,9 +46,8 @@ pub async fn startlist(
     pub struct DBStartlistAct {
         id: Uuid,
         name: String,
-        is_pair: Option<bool>,
+        act_type: ActType,
         max_age: Option<f64>,
-        is_sonderpokal: Option<bool>,
         participants: sqlx::types::Json<Vec<StartlistActParticipant>>,
         category: Option<String>,
         act_order: Option<i64>,
@@ -59,9 +58,8 @@ pub async fn startlist(
             StartlistAct {
                 id: db_act.id,
                 name: db_act.name,
-                is_pair: db_act.is_pair,
+                act_type: db_act.act_type,
                 max_age: db_act.max_age,
-                is_sonderpokal: db_act.is_sonderpokal,
                 participants: db_act.participants.0,
                 category: db_act.category,
                 act_order: db_act.act_order,
@@ -78,9 +76,8 @@ pub async fn startlist(
             view_act."order" as "act_order",
             categories."order" as "category_order",
             view_act.name,
-            view_act.is_pair as "is_pair: bool",
+            view_act.act_type as "act_type!: ActType",
             max_age,
-            view_act.is_sonderpokal as "is_sonderpokal: bool",
             participants as "participants!: sqlx::types::Json<Vec<StartlistActParticipant>>",
             category
         FROM view_act JOIN categories ON view_act.category = categories.name

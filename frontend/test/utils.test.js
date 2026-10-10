@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
+  countStarts,
   currentTimeplanAct,
   currentTimeplanEntry,
+  formatDate,
+  formatDateRange,
+  getStarterPrice,
+  isUnderAge,
   lastTimeplanAct,
   lastTimeplanEntry,
   nextTimeplanAct,
@@ -176,5 +181,71 @@ describe("timeplan acts", () => {
       custom("Siegerehrung", "Started"),
     );
     assert.equal(lastTimeplanAct(plan), undefined);
+  });
+});
+
+describe("getStarterPrice", () => {
+  const starter = (single_male, single_female, pair) => ({
+    single_male,
+    single_female,
+    pair,
+  });
+  const competition = { fee_per_start: 15, max_fee_per_starter: 45 };
+
+  test("charges the fee per start", () => {
+    assert.equal(getStarterPrice(starter(false, false, false), competition), 0);
+    assert.equal(getStarterPrice(starter(false, true, false), competition), 15);
+    assert.equal(getStarterPrice(starter(true, false, true), competition), 30);
+  });
+
+  test("caps the fee at the maximum", () => {
+    const cheap = { fee_per_start: 20, max_fee_per_starter: 35 };
+    assert.equal(getStarterPrice(starter(true, false, true), cheap), 35);
+    // Three starts at 15 € reach exactly the 45 € cap.
+    assert.equal(getStarterPrice(starter(true, true, true), competition), 45);
+  });
+
+  test("has no cap without a maximum", () => {
+    const uncapped = { fee_per_start: 20, max_fee_per_starter: null };
+    assert.equal(getStarterPrice(starter(true, true, true), uncapped), 60);
+  });
+
+  test("is free without a competition", () => {
+    assert.equal(getStarterPrice(starter(true, false, true), null), 0);
+  });
+
+  test("countStarts counts every registered start", () => {
+    assert.equal(countStarts(starter(true, false, true)), 2);
+  });
+});
+
+describe("date formatting", () => {
+  test("formats plain dates independent of the time zone", () => {
+    assert.equal(formatDate("2027-06-05"), "05.06.2027");
+  });
+
+  test("shows a single day once", () => {
+    assert.equal(formatDateRange("2027-06-05", "2027-06-05"), "05.06.2027");
+  });
+
+  test("shows multi-day competitions as a range", () => {
+    assert.equal(
+      formatDateRange("2027-06-05", "2027-06-06"),
+      "05.06.2027 – 06.06.2027",
+    );
+  });
+});
+
+describe("isUnderAge", () => {
+  const competition = { determining_day: "2027-06-01" };
+
+  test("counts the 15th birthday on the determining day as 15+", () => {
+    assert.equal(isUnderAge(new Date("2012-06-01"), 15, competition), false);
+    assert.equal(isUnderAge(new Date("2012-06-02"), 15, competition), true);
+  });
+
+  test("handles older and younger riders", () => {
+    assert.equal(isUnderAge(new Date("2000-01-01"), 15, competition), false);
+    assert.equal(isUnderAge(new Date("2020-01-01"), 15, competition), true);
   });
 });

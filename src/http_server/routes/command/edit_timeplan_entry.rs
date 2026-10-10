@@ -13,7 +13,7 @@ pub struct EditTimeplanEntryResponse {}
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct EditTimeplanEntryBody {
-    id: i64, // Primary key - timeplan entry to edit
+    id: i64,                             // Primary key - timeplan entry to edit
     earliest_start_time: Option<String>, // ISO datetime string
     duration_seconds: Option<i32>,
     label: Option<String>,

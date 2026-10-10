@@ -1,5 +1,7 @@
 use uuid::Uuid;
 
+use crate::act_type::ActType;
+
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct User {
     pub id: Uuid,
@@ -26,9 +28,8 @@ pub struct Act {
     pub description: Option<String>,
     pub song_file_name: Option<String>,
     pub song_checked: bool,
-    pub is_pair: Option<bool>,
+    pub act_type: ActType,
     pub max_age: Option<f64>,
-    pub is_sonderpokal: Option<bool>,
     pub participants: Vec<ActParticipant>,
     pub category: Option<String>,
     pub act_order: Option<i64>,

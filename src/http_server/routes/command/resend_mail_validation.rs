@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use crate::{
-    http_server::{ClientError, HttpError, HttpServerOptions, extractor::auth::Auth}, mailer::Mailer, reloadable_sqlite::ReloadableSqlite, templates::VerifyMail
+    http_server::{ClientError, HttpError, HttpServerOptions, extractor::auth::Auth},
+    mailer::Mailer,
+    reloadable_sqlite::ReloadableSqlite,
+    templates::VerifyMail,
 };
 use askama::Template;
 use axum::{Extension, Json};

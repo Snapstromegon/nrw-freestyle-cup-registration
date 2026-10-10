@@ -38,32 +38,109 @@ async fn club_with_acts(app: &TestApp) -> (String, Uuid, Uuid) {
 
 #[sqlx::test]
 async fn get_act_returns_category_and_participants(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let (_, single, pair) = club_with_acts(&app).await;
 
     let act = get_act(&app, single).await;
     assert_eq!(act["id"], single.to_string());
-    assert_eq!(act["is_pair"], false);
-    assert_eq!(act["category"], "NEWU13");
+    assert_eq!(act["act_type"], "single");
+    assert_eq!(act["category"], "EWU13");
     assert_eq!(act["song_checked"], false);
     assert_eq!(act["song_file"], Value::Null);
     let participants = act["participants"].as_array().unwrap();
     assert_eq!(participants.len(), 1);
     assert_eq!(participants[0]["firstname"], "Anna");
     assert_eq!(participants[0]["club_name"], "RSV");
-    // Born 2012-05-01, competition on 2026-04-19.
+    // Born 2015-05-01, determining day 2027-06-01.
     let max_age = act["max_age"].as_f64().unwrap();
-    assert!((13.9..14.0).contains(&max_age), "{max_age}");
+    assert!((12.0..12.1).contains(&max_age), "{max_age}");
 
     let act = get_act(&app, pair).await;
-    assert_eq!(act["is_pair"], true);
-    assert_eq!(act["category"], "NPU13");
+    assert_eq!(act["act_type"], "pair");
+    assert_eq!(act["category"], "PU13");
     assert_eq!(act["participants"].as_array().unwrap().len(), 2);
+}
+
+/// Category of the act of the given type the starter takes part in.
+async fn category_of(app: &TestApp, starter_id: Uuid, act_type: &str) -> Value {
+    let act_id: Uuid = sqlx::query_scalar(
+        "SELECT act_id FROM act_participants JOIN acts ON acts.id = act_id WHERE starter_id = ? AND act_type = ?",
+    )
+    .bind(starter_id)
+    .bind(act_type)
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
+    get_act(app, act_id).await["category"].clone()
+}
+
+#[sqlx::test]
+async fn categories_follow_gender_and_age(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let (cookie, club_id) = app.create_club_owner("Owner", "RSV").await;
+    let starter = |name: &str, birthdate: &str, male: bool, female: bool, pair: bool| {
+        let mut body = starter_body(club_id, name, female, pair);
+        body["single_male"] = json!(male);
+        body["birthdate"] = json!(birthdate);
+        body
+    };
+
+    // Same age, different gender.
+    let max = app
+        .add_starter(
+            &cookie,
+            starter("Max", "2015-05-01T00:00:00.000Z", true, false, false),
+        )
+        .await;
+    let mia = app
+        .add_starter(
+            &cookie,
+            starter("Mia", "2015-05-01T00:00:00.000Z", false, true, false),
+        )
+        .await;
+    assert_eq!(category_of(&app, max, "single").await, "EMU13");
+    assert_eq!(category_of(&app, mia, "single").await, "EWU13");
+
+    // Turning 17 on the determining day counts as U19, one day later as U17.
+    let older = app
+        .add_starter(
+            &cookie,
+            starter("Olga", "2010-06-01T00:00:00.000Z", false, true, false),
+        )
+        .await;
+    let younger = app
+        .add_starter(
+            &cookie,
+            starter("Yara", "2010-06-02T00:00:00.000Z", false, true, false),
+        )
+        .await;
+    assert_eq!(category_of(&app, older, "single").await, "EWU19");
+    assert_eq!(category_of(&app, younger, "single").await, "EWU17");
+
+    let senior = app
+        .add_starter(
+            &cookie,
+            starter("Sepp", "1950-01-01T00:00:00.000Z", true, false, false),
+        )
+        .await;
+    assert_eq!(category_of(&app, senior, "single").await, "EM70+");
+
+    // Pairs aren't split by gender, even if both riders also start in a male single.
+    let ben = app
+        .add_starter(
+            &cookie,
+            starter("Ben", "2015-05-01T00:00:00.000Z", true, false, true),
+        )
+        .await;
+    let mut tom = starter("Tom", "2015-05-01T00:00:00.000Z", true, false, true);
+    tom["partner_id"] = json!(ben);
+    app.add_starter(&cookie, tom).await;
+    assert_eq!(category_of(&app, ben, "pair").await, "PU13");
 }
 
 #[sqlx::test]
 async fn get_unknown_act_fails(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let response = app
         .get(
             &format!("/api/query/get_act?act_id={}", Uuid::now_v7()),
@@ -75,7 +152,7 @@ async fn get_unknown_act_fails(db: SqlitePool) {
 
 #[sqlx::test]
 async fn list_acts_is_sorted_by_category_order(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let (_, single, pair) = club_with_acts(&app).await;
 
     let acts = list_acts(&app).await;
@@ -86,7 +163,7 @@ async fn list_acts_is_sorted_by_category_order(db: SqlitePool) {
 
 #[sqlx::test]
 async fn edit_club_act_sets_name_and_description(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let (cookie, single, _) = club_with_acts(&app).await;
 
     let response = app
@@ -105,7 +182,7 @@ async fn edit_club_act_sets_name_and_description(db: SqlitePool) {
 
 #[sqlx::test]
 async fn edit_club_act_is_forbidden_after_music_deadline(db: SqlitePool) {
-    let app = TestApp::with_status(db, closed_registration());
+    let app = TestApp::with_status(db, closed_registration()).await;
     let owner = app.cookie_for(app.create_user("Owner", false).await);
 
     let response = app
@@ -121,7 +198,7 @@ async fn edit_club_act_is_forbidden_after_music_deadline(db: SqlitePool) {
 
 #[sqlx::test]
 async fn save_act_song_stores_file_and_metadata(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let (cookie, single, _) = club_with_acts(&app).await;
     let contents = b"ID3 not really an mp3";
 
@@ -147,7 +224,7 @@ async fn save_act_song_stores_file_and_metadata(db: SqlitePool) {
 
 #[sqlx::test]
 async fn save_act_song_replaces_previous_upload(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let (cookie, single, _) = club_with_acts(&app).await;
     let uri = format!("/api/command/save_act_song?act_id={single}");
 
@@ -165,7 +242,7 @@ async fn save_act_song_replaces_previous_upload(db: SqlitePool) {
 
 #[sqlx::test]
 async fn save_act_song_rejects_file_without_extension(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let (cookie, single, _) = club_with_acts(&app).await;
 
     let response = app
@@ -183,7 +260,7 @@ async fn save_act_song_rejects_file_without_extension(db: SqlitePool) {
 
 #[sqlx::test]
 async fn save_act_song_requires_login(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let response = app
         .post_file(
             &format!("/api/command/save_act_song?act_id={}", Uuid::now_v7()),
@@ -198,7 +275,7 @@ async fn save_act_song_requires_login(db: SqlitePool) {
 #[sqlx::test]
 #[ignore = "known bug: save_act_song does not check can_upload_music"]
 async fn save_act_song_is_forbidden_after_music_deadline(db: SqlitePool) {
-    let app = TestApp::with_status(db, closed_registration());
+    let app = TestApp::with_status(db, closed_registration()).await;
     let owner = app.cookie_for(app.create_user("Owner", false).await);
 
     let response = app
@@ -215,7 +292,7 @@ async fn save_act_song_is_forbidden_after_music_deadline(db: SqlitePool) {
 
 #[sqlx::test]
 async fn set_song_checked_is_admin_only(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let (owner, single, _) = club_with_acts(&app).await;
     let admin = app.create_admin().await;
 
@@ -244,7 +321,7 @@ async fn set_song_checked_is_admin_only(db: SqlitePool) {
 
 #[sqlx::test]
 async fn set_act_order_reorders_acts_within_category(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let (owner, club_id) = app.create_club_owner("Owner", "RSV").await;
     let admin = app.create_admin().await;
     let anna = app.add_single_act(&owner, club_id, "Anna").await;
@@ -279,7 +356,7 @@ async fn set_act_order_reorders_acts_within_category(db: SqlitePool) {
 
 #[sqlx::test]
 async fn startlist_lists_acts_with_participants_and_clubs(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let (_, single, pair) = club_with_acts(&app).await;
 
     let response = app.get("/api/query/startlist", None).await;
@@ -288,7 +365,7 @@ async fn startlist_lists_acts_with_participants_and_clubs(db: SqlitePool) {
     let acts = response.body.as_array().unwrap();
     assert_eq!(acts.len(), 2);
     assert_eq!(acts[0]["id"], single.to_string());
-    assert_eq!(acts[0]["category"], "NEWU13");
+    assert_eq!(acts[0]["category"], "EWU13");
     assert_eq!(acts[0]["participants"][0]["club_name"], "RSV");
     assert_eq!(acts[1]["id"], pair.to_string());
     assert_eq!(acts[1]["participants"].as_array().unwrap().len(), 2);
@@ -299,7 +376,7 @@ async fn startlist_lists_acts_with_participants_and_clubs(db: SqlitePool) {
 
 #[sqlx::test]
 async fn startlist_csv_contains_header_sections_and_acts(db: SqlitePool) {
-    let app = TestApp::new(db);
+    let app = TestApp::new(db).await;
     let (cookie, single, _) = club_with_acts(&app).await;
     app.post(
         "/api/command/edit_club_act",
@@ -326,7 +403,7 @@ async fn startlist_csv_contains_header_sections_and_acts(db: SqlitePool) {
     assert_eq!(
         fields[..7],
         [
-            "Nachwuchscup Einzel Weiblich U13",
+            "Einzel Weiblich U13",
             "1",
             "1",
             "Deutschland",

@@ -5,9 +5,17 @@ import { customElement } from "lit/decorators.js";
 import { client } from "../../apiClient";
 import { type User, userContext } from "../../contexts/user";
 import "../elements/cup-centered-icon-box.js";
+import {
+  type SystemStatus,
+  systemStatusContext,
+} from "../../contexts/systemStatus";
+import { competitionName } from "../../utils";
 
 @customElement("cup-view-verify-email")
 export default class CupViewVerifyEmail extends LitElement {
+  @consume({ context: systemStatusContext, subscribe: true })
+  systemStatus: SystemStatus | null = null;
+
   static override styles = css`
     * {
       margin: 0;
@@ -72,7 +80,7 @@ export default class CupViewVerifyEmail extends LitElement {
   override render() {
     return html`<cup-centered-icon-box>
       <div id="status">
-        <h1>NRW Freestyle Cup 2026</h1>
+        <h1>${competitionName(this.systemStatus?.competition)}</h1>
         <h2>Email Validierung</h2>
         ${this.verificationTask.render({
           complete: () => html`<p>Email erfolgreich verifiziert!</p>`,

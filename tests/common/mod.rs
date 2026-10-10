@@ -19,10 +19,12 @@ use axum::{
 };
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Validation};
 use nrw_freestyle_cup_registration::{
+    config::ConfigFile,
     http_server::{HttpServerOptions, routes::get_api_router},
     jwt::JWTConfig,
     mailer::Mailer,
     reloadable_sqlite::ReloadableSqlite,
+    seed,
     system_status::StatusOptions,
 };
 use password_auth::generate_hash;
@@ -101,31 +103,51 @@ pub fn closed_registration() -> StatusOptions {
     }
 }
 
+/// Seeds the competition, categories and timeplan from `tests/fixtures/config.toml`
+/// and sets the registration dates of the competition to `status`.
+pub async fn seed_db(db: &SqlitePool, status: &StatusOptions) {
+    let file = ConfigFile::parse(include_str!("../fixtures/config.toml")).unwrap();
+    seed::seed(
+        db,
+        file.competition.as_ref(),
+        &file.categories,
+        &file.timeplan,
+    )
+    .await
+    .unwrap();
+    sqlx::query(
+        "UPDATE competition SET registration_start = ?, registration_end = ?, music_upload_end = ?",
+    )
+    .bind(status.start_register_date)
+    .bind(status.end_register_date)
+    .bind(status.end_music_upload_date)
+    .execute(db)
+    .await
+    .unwrap();
+}
+
 impl TestApp {
     /// App without a mail server; sending a mail makes the request fail.
-    pub fn new(db: SqlitePool) -> Self {
-        Self::with_status(db, open_registration())
+    pub async fn new(db: SqlitePool) -> Self {
+        Self::with_status(db, open_registration()).await
     }
 
-    pub fn with_status(db: SqlitePool, status: StatusOptions) -> Self {
+    pub async fn with_status(db: SqlitePool, status: StatusOptions) -> Self {
+        seed_db(&db, &status).await;
         // Nothing listens on port 1, so any attempt to send a mail fails.
         let mailer = Mailer::from_url("smtp://127.0.0.1:1", FROM_ADDRESS).unwrap();
-        Self::build(db, status, mailer, None)
+        Self::build(db, mailer, None)
     }
 
     /// App sending mails to a dedicated Mailpit container.
     pub async fn with_mailpit(db: SqlitePool) -> Self {
+        seed_db(&db, &open_registration()).await;
         let mailpit = Mailpit::start().await;
         let mailer = mailpit.mailer();
-        Self::build(db, open_registration(), mailer, Some(mailpit))
+        Self::build(db, mailer, Some(mailpit))
     }
 
-    fn build(
-        db: SqlitePool,
-        status: StatusOptions,
-        mailer: Mailer,
-        mailpit: Option<Mailpit>,
-    ) -> Self {
+    fn build(db: SqlitePool, mailer: Mailer, mailpit: Option<Mailpit>) -> Self {
         let mut validation = Validation::new(Algorithm::HS512);
         validation.validate_aud = false;
         let jwt = Arc::new(JWTConfig::new(
@@ -147,7 +169,6 @@ impl TestApp {
             ReloadableSqlite::new(db.clone(), String::new()),
             Arc::new(mailer),
             jwt.clone(),
-            Arc::new(status),
         );
         Self {
             db,
@@ -339,17 +360,15 @@ pub fn email_for(name: &str) -> String {
 }
 
 /// Body for `add_club_starter`. The birthdate places single female starters in
-/// the seeded `NEWU13` category.
+/// the seeded `EWU13` category (12 years old on the determining day 2027-06-01).
 pub fn starter_body(club_id: Uuid, firstname: &str, single: bool, pair: bool) -> Value {
     json!({
         "club_id": club_id,
         "firstname": firstname,
         "lastname": "Muster",
-        "birthdate": "2012-05-01T00:00:00.000Z",
-        "single_sonderpokal": false,
+        "birthdate": "2015-05-01T00:00:00.000Z",
         "single_male": false,
         "single_female": single,
-        "pair_sonderpokal": false,
         "pair": pair,
         "partner_id": null,
         "partner_name": null,

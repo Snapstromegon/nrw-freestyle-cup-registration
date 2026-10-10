@@ -5,10 +5,11 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
+    act_type::ActType,
     http_server::{ClientError, HttpError, extractor::auth::Auth},
     reloadable_sqlite::ReloadableSqlite,
     system_status::Capabilities,
-    utils::{delete_act, get_act_id_for_starter_id, set_act},
+    utils::{check_single_start, delete_act, get_act_id_for_starter_id, set_act},
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -21,10 +22,8 @@ pub struct EditClubStarterBody {
     lastname: String,
     #[serde(with = "time::serde::iso8601")]
     birthdate: time::OffsetDateTime,
-    single_sonderpokal: bool,
     single_male: bool,
     single_female: bool,
-    pair_sonderpokal: bool,
     pair: bool,
     partner_name: Option<String>,
     partner_id: Option<Uuid>,
@@ -55,6 +54,7 @@ pub async fn edit_club_starter(
     if !capabilities.can_register_starter {
         return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
     }
+    check_single_start(body.single_male, body.single_female).map_err(HttpError::ErrorMessages)?;
     let db = db.get().await.clone();
 
     let self_name = format!("{} {}", body.firstname, body.lastname);
@@ -156,7 +156,7 @@ pub async fn edit_club_starter(
             .await?;
 
             // Reset act
-            if let Some(own_act_id) = get_act_id_for_starter_id(&db, body.starter_id, true)
+            if let Some(own_act_id) = get_act_id_for_starter_id(&db, body.starter_id, ActType::Pair)
                 .await
                 .map_err(HttpError::ErrorMessages)?
             {
@@ -164,7 +164,7 @@ pub async fn edit_club_starter(
                     .await
                     .map_err(HttpError::ErrorMessages)?;
             }
-            if let Some(partner_act_id) = get_act_id_for_starter_id(&db, partner_id, true)
+            if let Some(partner_act_id) = get_act_id_for_starter_id(&db, partner_id, ActType::Pair)
                 .await
                 .map_err(HttpError::ErrorMessages)?
             {
@@ -173,7 +173,7 @@ pub async fn edit_club_starter(
                     .map_err(HttpError::ErrorMessages)?;
             }
 
-            set_act(&db, "", &[body.starter_id, partner_id], None, true)
+            set_act(&db, "", &[body.starter_id, partner_id], None, ActType::Pair)
                 .await
                 .map_err(HttpError::ErrorMessages)?;
         }
@@ -185,10 +185,8 @@ pub async fn edit_club_starter(
           firstname = ?,
           lastname = ?,
           birthdate = ?,
-          single_sonderpokal = ?,
           single_male = ?,
           single_female = ?,
-          pair_sonderpokal = ?,
           pair = ?,
           partner_name = ?,
           partner_id = ?
@@ -197,10 +195,8 @@ pub async fn edit_club_starter(
         body.firstname,
         body.lastname,
         body.birthdate,
-        body.single_sonderpokal,
         body.single_male,
         body.single_female,
-        body.pair_sonderpokal,
         body.pair,
         body.partner_name,
         partner_id,
@@ -209,11 +205,11 @@ pub async fn edit_club_starter(
     .execute(&db)
     .await?;
 
-    let existing_act = get_act_id_for_starter_id(&db, body.starter_id, false)
+    let existing_act = get_act_id_for_starter_id(&db, body.starter_id, ActType::Single)
         .await
         .map_err(HttpError::ErrorMessages)?;
     if (body.single_female || body.single_male) && existing_act.is_none() {
-        set_act(&db, "", &[body.starter_id], None, false)
+        set_act(&db, "", &[body.starter_id], None, ActType::Single)
             .await
             .map_err(HttpError::ErrorMessages)?;
     } else if (!body.single_female && !body.single_male) && existing_act.is_some() {

@@ -32,6 +32,9 @@ release: clean-frontend openapi frontend-release migrate-db
 centos-release: clean-frontend openapi frontend-release migrate-db
 	cargo build --release --target x86_64-unknown-linux-musl
 
+demo:
+	cargo run --bin seed_demo
+
 run-release: release
 	cargo run --release
 

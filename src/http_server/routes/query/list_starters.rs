@@ -16,10 +16,8 @@ pub struct Starter {
     lastname: String,
     #[serde(with = "time::serde::iso8601")]
     birthdate: time::OffsetDateTime,
-    single_sonderpokal: bool,
     single_male: bool,
     single_female: bool,
-    pair_sonderpokal: bool,
     pair: bool,
     partner_id: Option<Uuid>,
     partner_name: Option<String>,
@@ -62,16 +60,20 @@ pub async fn list_starters(
             starter.firstname,
             starter.lastname,
             starter.birthdate,
-            starter.single_sonderpokal,
             starter.single_male,
             starter.single_female,
-            starter.pair_sonderpokal,
             starter.pair,
             starter.partner_id as "partner_id: Uuid",
             starter.partner_name,
             NULLIF(concat_ws(" ", partner.firstname, partner.lastname), '') as "resolved_partner_name: String",
             partner_club.name as resolved_partner_club,
-            starter.age_on_competition
+            COALESCE(
+              (
+                julianday((SELECT determining_day FROM competition ORDER BY start_date DESC LIMIT 1))
+                - julianday(starter.birthdate)
+              ) / 365.2425,
+              0.0
+            ) as "age_on_competition!: f64"
         FROM starter
           LEFT JOIN clubs as club ON club.id = starter.club_id
           LEFT JOIN starter as partner ON partner.id = starter.partner_id

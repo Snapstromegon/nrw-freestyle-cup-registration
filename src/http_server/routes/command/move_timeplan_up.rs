@@ -61,7 +61,7 @@ pub async fn move_timeplan_up(
     if let Some(prev) = prev_entry {
         let prev_id = prev.id;
         let current_id = body.id;
-        
+
         // Use a temporary negative ID to avoid constraint violations
         let temp_id = -999999;
 

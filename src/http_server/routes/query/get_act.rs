@@ -3,6 +3,7 @@ use tracing::instrument;
 use uuid::Uuid;
 
 use crate::{
+    act_type::ActType,
     http_server::{
         ClientError, HttpError,
         extractor::auth::Auth,
@@ -40,9 +41,8 @@ pub async fn get_act(
         song_file: Option<String>,
         description: Option<String>,
         song_file_name: Option<String>,
-        is_pair: Option<bool>,
+        act_type: ActType,
         max_age: Option<f64>,
-        is_sonderpokal: Option<bool>,
         participants: sqlx::types::Json<Vec<ActParticipant>>,
         category: Option<String>,
         song_checked: bool,
@@ -57,9 +57,8 @@ pub async fn get_act(
                 song_file: db_act.song_file,
                 description: db_act.description,
                 song_file_name: db_act.song_file_name,
-                is_pair: db_act.is_pair,
+                act_type: db_act.act_type,
                 max_age: db_act.max_age,
-                is_sonderpokal: db_act.is_sonderpokal,
                 participants: db_act.participants.0,
                 category: db_act.category,
                 song_checked: db_act.song_checked,
@@ -80,9 +79,8 @@ pub async fn get_act(
             song_file,
             view_act.description,
             song_file_name,
-            view_act.is_pair as "is_pair: bool",
+            view_act.act_type as "act_type!: ActType",
             max_age as "max_age: f64",
-            view_act.is_sonderpokal as "is_sonderpokal: bool",
             participants as "participants!: sqlx::types::Json<Vec<ActParticipant>>",
             category,
             song_checked

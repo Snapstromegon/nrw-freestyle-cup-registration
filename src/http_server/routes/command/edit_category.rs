@@ -4,6 +4,7 @@ use tracing::instrument;
 use utoipa::ToSchema;
 
 use crate::{
+    act_type::ActType,
     http_server::{ClientError, HttpError, extractor::auth::Auth},
     reloadable_sqlite::ReloadableSqlite,
 };
@@ -18,8 +19,7 @@ pub struct EditCategoryBody {
     description: Option<String>,
     from_birthday: String, // ISO date string
     to_birthday: String,   // ISO date string
-    is_pair: bool,
-    is_sonderpokal: bool,
+    act_type: ActType,
     is_single_male: bool,
     einfahrzeit_seconds: i32,
     act_duration_seconds: i32,
@@ -55,7 +55,9 @@ pub async fn edit_category(
     // Start a transaction to ensure atomicity
     let mut tx = db.begin().await?;
 
-    sqlx::query!("PRAGMA defer_foreign_keys = ON").execute(&mut *tx).await?;
+    sqlx::query!("PRAGMA defer_foreign_keys = ON")
+        .execute(&mut *tx)
+        .await?;
 
     // Update timeplan table first to maintain foreign key constraint
     if body.new_name != body.name {
@@ -81,20 +83,18 @@ pub async fn edit_category(
             description = $2,
             from_birthday = $3,
             to_birthday = $4,
-            is_pair = $5,
-            is_sonderpokal = $6,
-            is_single_male = $7,
-            einfahrzeit_seconds = $8,
-            act_duration_seconds = $9,
-            judge_duration_seconds = $10
-        WHERE name = $11
+            act_type = $5,
+            is_single_male = $6,
+            einfahrzeit_seconds = $7,
+            act_duration_seconds = $8,
+            judge_duration_seconds = $9
+        WHERE name = $10
         "#,
         body.new_name,
         body.description,
         body.from_birthday,
         body.to_birthday,
-        body.is_pair,
-        body.is_sonderpokal,
+        body.act_type,
         body.is_single_male,
         body.einfahrzeit_seconds,
         body.act_duration_seconds,

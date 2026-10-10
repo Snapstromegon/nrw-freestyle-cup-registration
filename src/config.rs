@@ -1,0 +1,522 @@
+//! Configuration from CLI flags, environment variables and an optional TOML file.
+//!
+//! Precedence: CLI flag > environment variable (including `.env`) > config file >
+//! built-in default. Event specific settings (`[competition]`, `[[categories]]`,
+//! `[[timeplan]]`) only come from the config file; see `config.example.toml`.
+
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+};
+
+use serde::{Deserialize, Deserializer, de::Error as _};
+use time::{
+    Date, OffsetDateTime, format_description::well_known::Rfc3339, macros::format_description,
+};
+use url::Url;
+
+use crate::act_type::ActType;
+
+pub const DEFAULT_CONFIG_PATH: &str = "./config.toml";
+pub const DEFAULT_BASE_URL: &str = "http://localhost:3000";
+pub const DEFAULT_HTTP_ADDRESS: &str = "127.0.0.1:3000";
+pub const DEFAULT_DATABASE_URL: &str = "sqlite://./db.sqlite?mode=rwc";
+pub const DEFAULT_DATA_PATH: &str = "./data";
+pub const DEFAULT_JWT_SECRET: &str = "supersecretsupersecret";
+pub const DEFAULT_RELOAD_DB_TOKEN: &str = "reload_db";
+
+/// CLI flags and environment variables. Every value is optional here, so that
+/// the config file can fill in what's missing.
+#[derive(Debug, Default, clap::Parser)]
+pub struct CliArgs {
+    /// Path to the TOML config file. Defaults to `./config.toml` if it exists.
+    #[clap(long, env = "CONFIG")]
+    pub config: Option<PathBuf>,
+    #[clap(long, env = "BASE_URL")]
+    pub base_url: Option<Url>,
+    #[clap(long, env = "HTTP_ADDRESS")]
+    pub http_address: Option<String>,
+    #[clap(long, env = "SMTP_SERVER")]
+    pub smtp_server: Option<String>,
+    #[clap(long, env = "SMTP_USER")]
+    pub smtp_username: Option<String>,
+    #[clap(long, env = "SMTP_PASSWORD")]
+    pub smtp_password: Option<String>,
+    #[clap(long, env = "DATABASE_URL")]
+    pub db: Option<String>,
+    #[clap(long, env = "DATA_PATH")]
+    pub data: Option<PathBuf>,
+    #[clap(long, env = "JWT_SECRET")]
+    pub jwt_secret: Option<String>,
+    /// JSON object with `name`, `email` and `password`.
+    #[clap(long, env = "ADMIN")]
+    pub admin: Option<AdminConfig>,
+    #[clap(long, env = "INSECURE_COOKIES")]
+    pub insecure_cookies: bool,
+    #[clap(long, env = "RELOAD_DB_TOKEN")]
+    pub reload_db_token: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ConfigFile {
+    pub server: ServerConfig,
+    pub database: DatabaseConfig,
+    pub smtp: SmtpConfig,
+    pub auth: AuthConfig,
+    pub admin: Option<AdminConfig>,
+    pub competition: Option<CompetitionConfig>,
+    pub categories: Vec<CategoryConfig>,
+    pub timeplan: Vec<TimeplanEntryConfig>,
+}
+
+impl ConfigFile {
+    pub fn parse(content: &str) -> Result<Self, String> {
+        toml::from_str(content).map_err(|e| e.to_string())
+    }
+
+    /// Loads the config file from `path`, or from `./config.toml` if no path is
+    /// given and that file exists. Without a file, an empty config is returned.
+    pub fn load(path: Option<&Path>) -> Result<Self, String> {
+        let path = match path {
+            Some(path) => path,
+            None if Path::new(DEFAULT_CONFIG_PATH).exists() => Path::new(DEFAULT_CONFIG_PATH),
+            None => return Ok(Self::default()),
+        };
+        let content = std::fs::read_to_string(path)
+            .map_err(|e| format!("Couldn't read config file {}: {e}", path.display()))?;
+        Self::parse(&content).map_err(|e| format!("Invalid config file {}: {e}", path.display()))
+    }
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ServerConfig {
+    pub base_url: Option<Url>,
+    pub http_address: Option<String>,
+    pub data_path: Option<PathBuf>,
+    pub insecure_cookies: Option<bool>,
+    pub reload_db_token: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct DatabaseConfig {
+    pub url: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct SmtpConfig {
+    pub server: Option<String>,
+    pub user: Option<String>,
+    pub password: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct AuthConfig {
+    pub jwt_secret: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AdminConfig {
+    pub name: String,
+    pub email: String,
+    pub password: String,
+}
+
+impl FromStr for AdminConfig {
+    type Err = serde_json::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        serde_json::from_str(s)
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CompetitionConfig {
+    pub id: String,
+    pub name: String,
+    pub location: String,
+    #[serde(deserialize_with = "toml_date")]
+    pub start_date: Date,
+    #[serde(deserialize_with = "toml_date")]
+    pub end_date: Date,
+    #[serde(deserialize_with = "toml_date")]
+    pub determining_day: Date,
+    #[serde(deserialize_with = "toml_datetime")]
+    pub registration_start: OffsetDateTime,
+    #[serde(deserialize_with = "toml_datetime")]
+    pub registration_end: OffsetDateTime,
+    #[serde(deserialize_with = "toml_datetime")]
+    pub music_upload_end: OffsetDateTime,
+    pub fee_per_start: f64,
+    pub max_fee_per_starter: Option<f64>,
+    #[serde(default)]
+    pub payment: PaymentConfig,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct PaymentConfig {
+    #[serde(deserialize_with = "toml_date_option")]
+    pub deadline: Option<Date>,
+    pub account_holder: Option<String>,
+    pub iban: Option<String>,
+    pub bic: Option<String>,
+    pub reference: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CategoryConfig {
+    pub name: String,
+    pub description: Option<String>,
+    pub act_type: ActType,
+    #[serde(default)]
+    pub single_male: bool,
+    /// Minimum age in years on the determining day (inclusive).
+    pub min_age: Option<f64>,
+    /// Age limit in years on the determining day (exclusive), e.g. 15 for "U15".
+    pub under_age: Option<f64>,
+    /// Explicit lower birthday bound (inclusive); overrides `under_age`.
+    #[serde(default, deserialize_with = "toml_date_option")]
+    pub from_birthday: Option<Date>,
+    /// Explicit upper birthday bound (exclusive); overrides `min_age`.
+    #[serde(default, deserialize_with = "toml_date_option")]
+    pub to_birthday: Option<Date>,
+    #[serde(default)]
+    pub einfahrzeit_minutes: f64,
+    #[serde(default)]
+    pub act_duration_minutes: f64,
+    #[serde(default)]
+    pub judge_duration_minutes: f64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TimeplanEntryConfig {
+    /// Name of the category this entry runs. Leave empty for custom entries.
+    pub category: Option<String>,
+    /// Label of a custom entry, e.g. "Mittagspause".
+    pub label: Option<String>,
+    /// Duration of a custom entry.
+    pub duration_minutes: Option<f64>,
+    #[serde(default, deserialize_with = "toml_datetime_option")]
+    pub earliest_start: Option<OffsetDateTime>,
+}
+
+fn parse_date(value: &str) -> Result<Date, String> {
+    Date::parse(value, format_description!("[year]-[month]-[day]"))
+        .map_err(|e| format!("expected a date like 2027-06-01, got {value}: {e}"))
+}
+
+fn parse_datetime(value: &str) -> Result<OffsetDateTime, String> {
+    OffsetDateTime::parse(value, &Rfc3339).map_err(|e| {
+        format!(
+            "expected a date and time with offset like 2027-06-05T10:00:00+02:00, got {value}: {e}"
+        )
+    })
+}
+
+pub(crate) fn toml_date<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Date, D::Error> {
+    let value = toml::value::Datetime::deserialize(deserializer)?;
+    parse_date(&value.to_string()).map_err(D::Error::custom)
+}
+
+pub(crate) fn toml_date_option<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<Date>, D::Error> {
+    toml_date(deserializer).map(Some)
+}
+
+pub(crate) fn toml_datetime<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<OffsetDateTime, D::Error> {
+    let value = toml::value::Datetime::deserialize(deserializer)?;
+    parse_datetime(&value.to_string()).map_err(D::Error::custom)
+}
+
+pub(crate) fn toml_datetime_option<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<OffsetDateTime>, D::Error> {
+    toml_datetime(deserializer).map(Some)
+}
+
+/// Fully resolved settings the server runs with.
+#[derive(Debug)]
+pub struct Settings {
+    pub base_url: Url,
+    pub http_address: String,
+    pub smtp_server: String,
+    pub smtp_username: String,
+    pub smtp_password: String,
+    pub database_url: String,
+    pub data_path: PathBuf,
+    pub jwt_secret: String,
+    pub admin: Option<AdminConfig>,
+    pub insecure_cookies: bool,
+    pub reload_db_token: String,
+    pub competition: Option<CompetitionConfig>,
+    pub categories: Vec<CategoryConfig>,
+    pub timeplan: Vec<TimeplanEntryConfig>,
+    /// Problems that don't stop the server, e.g. insecure defaults.
+    pub warnings: Vec<String>,
+}
+
+impl Settings {
+    /// Merges CLI/env values, the config file and the defaults. Fails with one message listing every missing required value.
+    ///
+    /// ```
+    /// use nrw_freestyle_cup_registration::config::{CliArgs, ConfigFile, Settings};
+    ///
+    /// let file = ConfigFile::parse(r#"
+    ///     [smtp]
+    ///     server = "smtp.example.org"
+    ///     user = "cup@example.org"
+    ///     password = "from-file"
+    /// "#).unwrap();
+    /// let cli = CliArgs { smtp_password: Some("from-env".into()), ..Default::default() };
+    ///
+    /// let settings = Settings::resolve(cli, file).unwrap();
+    /// assert_eq!(settings.smtp_password, "from-env");
+    /// assert_eq!(settings.smtp_server, "smtp.example.org");
+    /// assert_eq!(settings.http_address, "127.0.0.1:3000");
+    /// ```
+    pub fn resolve(cli: CliArgs, file: ConfigFile) -> Result<Self, String> {
+        let mut missing = Vec::new();
+        let mut warnings = Vec::new();
+        let mut required = |value: Option<String>, name: &str| {
+            value.unwrap_or_else(|| {
+                missing.push(name.to_string());
+                String::new()
+            })
+        };
+
+        let smtp_server = required(
+            cli.smtp_server.or(file.smtp.server),
+            "SMTP server (--smtp-server, SMTP_SERVER or [smtp] server)",
+        );
+        let smtp_username = required(
+            cli.smtp_username.or(file.smtp.user),
+            "SMTP user (--smtp-username, SMTP_USER or [smtp] user)",
+        );
+        let smtp_password = required(
+            cli.smtp_password.or(file.smtp.password),
+            "SMTP password (--smtp-password, SMTP_PASSWORD or [smtp] password)",
+        );
+        if !missing.is_empty() {
+            return Err(format!(
+                "Missing required settings:\n- {}",
+                missing.join("\n- ")
+            ));
+        }
+
+        let database_url = cli
+            .db
+            .or(file.database.url)
+            .unwrap_or_else(|| DEFAULT_DATABASE_URL.to_string());
+        let data_path = cli
+            .data
+            .or(file.server.data_path)
+            .unwrap_or_else(|| PathBuf::from(DEFAULT_DATA_PATH));
+
+        let jwt_secret = cli
+            .jwt_secret
+            .or(file.auth.jwt_secret)
+            .unwrap_or_else(|| DEFAULT_JWT_SECRET.to_string());
+        if jwt_secret == DEFAULT_JWT_SECRET {
+            warnings.push("JWT_SECRET uses the insecure built-in default.".to_string());
+        }
+        let reload_db_token = cli
+            .reload_db_token
+            .or(file.server.reload_db_token)
+            .unwrap_or_else(|| DEFAULT_RELOAD_DB_TOKEN.to_string());
+        if reload_db_token == DEFAULT_RELOAD_DB_TOKEN {
+            warnings.push("RELOAD_DB_TOKEN uses the insecure built-in default.".to_string());
+        }
+
+        Ok(Self {
+            base_url: cli
+                .base_url
+                .or(file.server.base_url)
+                .unwrap_or_else(|| Url::parse(DEFAULT_BASE_URL).expect("valid default URL")),
+            http_address: cli
+                .http_address
+                .or(file.server.http_address)
+                .unwrap_or_else(|| DEFAULT_HTTP_ADDRESS.to_string()),
+            smtp_server,
+            smtp_username,
+            smtp_password,
+            database_url,
+            data_path,
+            jwt_secret,
+            admin: cli.admin.or(file.admin),
+            insecure_cookies: cli.insecure_cookies || file.server.insecure_cookies.unwrap_or(false),
+            reload_db_token,
+            competition: file.competition,
+            categories: file.categories,
+            timeplan: file.timeplan,
+            warnings,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SMTP: &str = r#"
+        [smtp]
+        server = "smtp.example.org"
+        user = "cup@example.org"
+        password = "secret"
+    "#;
+
+    fn resolve(cli: CliArgs, file: &str) -> Result<Settings, String> {
+        Settings::resolve(cli, ConfigFile::parse(file).unwrap())
+    }
+
+    #[test]
+    fn cli_and_env_take_precedence_over_file() {
+        let file = format!(
+            "{SMTP}\n[server]\nhttp_address = \"0.0.0.0:1\"\n[database]\nurl = \"sqlite://file.sqlite\""
+        );
+        let cli = CliArgs {
+            http_address: Some("0.0.0.0:2".into()),
+            ..Default::default()
+        };
+        let settings = resolve(cli, &file).unwrap();
+        assert_eq!(settings.http_address, "0.0.0.0:2");
+        assert_eq!(settings.database_url, "sqlite://file.sqlite");
+    }
+
+    #[test]
+    fn defaults_apply_without_values() {
+        let settings = resolve(CliArgs::default(), SMTP).unwrap();
+        assert_eq!(settings.base_url.as_str(), "http://localhost:3000/");
+        assert_eq!(settings.database_url, DEFAULT_DATABASE_URL);
+        assert_eq!(settings.data_path, PathBuf::from(DEFAULT_DATA_PATH));
+        assert!(!settings.insecure_cookies);
+        assert!(settings.competition.is_none());
+    }
+
+    #[test]
+    fn all_missing_required_values_are_reported() {
+        let err = resolve(CliArgs::default(), "").unwrap_err();
+        assert!(err.contains("SMTP server"), "{err}");
+        assert!(err.contains("SMTP user"), "{err}");
+        assert!(err.contains("SMTP password"), "{err}");
+    }
+
+    #[test]
+    fn insecure_defaults_produce_warnings() {
+        let settings = resolve(CliArgs::default(), SMTP).unwrap();
+        assert!(settings.warnings.iter().any(|w| w.contains("JWT_SECRET")));
+        assert!(
+            settings
+                .warnings
+                .iter()
+                .any(|w| w.contains("RELOAD_DB_TOKEN"))
+        );
+
+        let cli = CliArgs {
+            jwt_secret: Some("a-real-secret".into()),
+            reload_db_token: Some("a-real-token".into()),
+            ..Default::default()
+        };
+        let settings = resolve(cli, SMTP).unwrap();
+        assert!(settings.warnings.is_empty(), "{:?}", settings.warnings);
+    }
+
+    #[test]
+    fn admin_can_come_from_json_or_file() {
+        let admin: AdminConfig = r#"{"name":"A","email":"a@b.c","password":"p"}"#.parse().unwrap();
+        assert_eq!(admin.name, "A");
+
+        let file = format!("{SMTP}\n[admin]\nname = \"B\"\nemail = \"b@c.d\"\npassword = \"q\"");
+        let settings = resolve(CliArgs::default(), &file).unwrap();
+        assert_eq!(settings.admin.unwrap().name, "B");
+    }
+
+    #[test]
+    fn competition_dates_are_parsed() {
+        let file = ConfigFile::parse(
+            r#"
+            [competition]
+            id = "cup-2027"
+            name = "Cup 2027"
+            location = "Halle"
+            start_date = 2027-06-05
+            end_date = 2027-06-06
+            determining_day = 2027-06-01
+            registration_start = 2026-11-01T00:00:00+01:00
+            registration_end = 2027-04-30T23:59:59+02:00
+            music_upload_end = 2027-05-20T23:59:59+02:00
+            fee_per_start = 15
+            max_fee_per_starter = 45
+
+            [competition.payment]
+            deadline = 2027-05-15
+            iban = "DE00"
+            "#,
+        )
+        .unwrap();
+        let competition = file.competition.unwrap();
+        assert_eq!(competition.determining_day.to_string(), "2027-06-01");
+        assert_eq!(competition.registration_start.offset().whole_hours(), 1);
+        assert_eq!(competition.fee_per_start, 15.0);
+        assert_eq!(
+            competition.payment.deadline.unwrap().to_string(),
+            "2027-05-15"
+        );
+        assert_eq!(competition.payment.bic, None);
+    }
+
+    #[test]
+    fn datetime_without_offset_is_rejected() {
+        let err = ConfigFile::parse(
+            r#"
+            [[timeplan]]
+            category = "NEM"
+            earliest_start = 2027-06-05T10:00:00
+            "#,
+        )
+        .unwrap_err();
+        assert!(err.contains("offset"), "{err}");
+    }
+
+    #[test]
+    fn unknown_keys_are_rejected() {
+        let err = ConfigFile::parse("[server]\nbase_ulr = \"http://x\"").unwrap_err();
+        assert!(err.contains("base_ulr"), "{err}");
+    }
+
+    #[test]
+    fn example_config_is_valid() {
+        let content =
+            std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/config.example.toml"))
+                .unwrap();
+        let file = ConfigFile::parse(&content).unwrap();
+        let competition = file
+            .competition
+            .as_ref()
+            .expect("example has a competition");
+        let categories =
+            crate::seed::resolve_categories(&file.categories, competition.determining_day).unwrap();
+        let warnings = crate::seed::coverage_warnings(&categories);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        crate::seed::validate_timeplan(
+            &file.timeplan,
+            &file
+                .categories
+                .iter()
+                .map(|c| c.name.clone())
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+    }
+}
