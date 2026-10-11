@@ -193,5 +193,6 @@ export default class CupContextUser extends LitElement {
     this.user = user;
     this.error = undefined;
     this.requestUpdate();
+    console.log("User context updated", this.user);
   }
 }

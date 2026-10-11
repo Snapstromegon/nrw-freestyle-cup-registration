@@ -36,8 +36,8 @@
 # password = "…"
 
 [competition]
-id = "nrw-freestyle-cup-2027"
-name = "NRW Freestyle Cup 2027"
+id = "einradevnet-demo-2027"
+name = "Einradevent Demo 2027"
 location = "SSV Nümbrecht"
 # Example dates: replace them with the real ones.
 start_date = 2027-06-05
@@ -65,8 +65,10 @@ reference = "Startgeld"
 # Ages are in years on the determining day: min_age is inclusive, under_age is
 # exclusive ("U15" = under_age 15). A missing bound means open-ended. Explicit
 # from_birthday (inclusive) / to_birthday (exclusive) dates override the ages.
-# act_type is "single" or "pair". single_male = true marks the male single
-# categories; the other single categories are for female riders.
+# act_type is "single", "pair", "group_small" (Kleingruppe, 3 to 8 riders) or
+# "group_large" (Großgruppe, more than 8 riders). single_male = true marks the
+# male single categories; the other single categories are for female riders.
+# A group's age is that of its oldest rider, replacement riders included.
 
 [[categories]]
 name = "EMU11"
@@ -434,13 +436,41 @@ einfahrzeit_minutes = 10
 act_duration_minutes = 3
 judge_duration_minutes = 3
 
-# Example configuration. Copy to config.toml (ignored by git) and adjust.
-#
-# Every setting in [server], [database], [smtp], [auth] and [admin] can also be
-# set by a CLI flag or environment variable (including .env), which take
-# precedence over this file. Secrets are better kept in environment variables.
-#
-# [competition], [[categories]] and 
+[[categories]]
+name = "KGU15"
+description = "Kleingruppe U15"
+act_type = "group_small"
+under_age = 15
+einfahrzeit_minutes = 10
+act_duration_minutes = 5
+judge_duration_minutes = 3
+
+[[categories]]
+name = "KG15+"
+description = "Kleingruppe 15+"
+act_type = "group_small"
+min_age = 15
+einfahrzeit_minutes = 10
+act_duration_minutes = 5
+judge_duration_minutes = 3
+
+[[categories]]
+name = "GGU15"
+description = "Großgruppe U15"
+act_type = "group_large"
+under_age = 15
+einfahrzeit_minutes = 10
+act_duration_minutes = 5
+judge_duration_minutes = 3
+
+[[categories]]
+name = "GG15+"
+description = "Großgruppe 15+"
+act_type = "group_large"
+min_age = 15
+einfahrzeit_minutes = 10
+act_duration_minutes = 5
+judge_duration_minutes = 3
 
 # Timeplan in order. An entry either runs a category (its duration comes from
 # the category and its acts) or is a custom entry with a label and duration.
@@ -558,6 +588,18 @@ category = "PU70"
 
 [[timeplan]]
 category = "P70+"
+
+[[timeplan]]
+category = "KGU15"
+
+[[timeplan]]
+category = "KG15+"
+
+[[timeplan]]
+category = "GGU15"
+
+[[timeplan]]
+category = "GG15+"
 
 [[timeplan]]
 label = "Siegerehrung"

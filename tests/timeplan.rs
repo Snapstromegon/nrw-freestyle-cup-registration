@@ -348,7 +348,6 @@ async fn timeplan_forward_and_backward_walk_through_acts(db: SqlitePool) {
 }
 
 #[sqlx::test]
-#[ignore = "known bug: starting a custom entry returns 500 because it looks up a NULL category"]
 async fn timeplan_forward_starts_custom_entry(db: SqlitePool) {
     let app = TestApp::new(db).await;
     let admin = app.create_admin().await;
@@ -377,7 +376,6 @@ async fn timeplan_backward_without_progress_does_nothing(db: SqlitePool) {
 }
 
 #[sqlx::test]
-#[ignore = "known bug: timeplan_forward cannot leave a started category without acts"]
 async fn timeplan_forward_finishes_category_without_acts(db: SqlitePool) {
     let app = TestApp::new(db).await;
     let admin = app.create_admin().await;

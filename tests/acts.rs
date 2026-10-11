@@ -9,8 +9,12 @@ use sqlx::SqlitePool;
 use uuid::Uuid;
 
 async fn get_act(app: &TestApp, act_id: Uuid) -> Value {
+    get_act_as(app, None, act_id).await
+}
+
+async fn get_act_as(app: &TestApp, cookie: Option<&str>, act_id: Uuid) -> Value {
     let response = app
-        .get(&format!("/api/query/get_act?act_id={act_id}"), None)
+        .get(&format!("/api/query/get_act?act_id={act_id}"), cookie)
         .await;
     assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
     response.body
@@ -40,8 +44,9 @@ async fn club_with_acts(app: &TestApp) -> (String, Uuid, Uuid) {
 async fn get_act_returns_category_and_participants(db: SqlitePool) {
     let app = TestApp::new(db).await;
     let (_, single, pair) = club_with_acts(&app).await;
+    let admin = app.create_admin().await;
 
-    let act = get_act(&app, single).await;
+    let act = get_act_as(&app, Some(&admin), single).await;
     assert_eq!(act["id"], single.to_string());
     assert_eq!(act["act_type"], "single");
     assert_eq!(act["category"], "EWU13");
@@ -51,6 +56,7 @@ async fn get_act_returns_category_and_participants(db: SqlitePool) {
     assert_eq!(participants.len(), 1);
     assert_eq!(participants[0]["firstname"], "Anna");
     assert_eq!(participants[0]["club_name"], "RSV");
+    assert_eq!(act["type_conflict"], false);
     // Born 2015-05-01, determining day 2027-06-01.
     let max_age = act["max_age"].as_f64().unwrap();
     assert!((12.0..12.1).contains(&max_age), "{max_age}");
@@ -228,8 +234,19 @@ async fn save_act_song_replaces_previous_upload(db: SqlitePool) {
     let (cookie, single, _) = club_with_acts(&app).await;
     let uri = format!("/api/command/save_act_song?act_id={single}");
 
+    let admin = app.create_admin().await;
+
     app.post_file(&uri, "first.mp3", b"first", Some(&cookie))
         .await;
+    let response = app
+        .post(
+            "/api/command/set_song_checked",
+            json!({ "act_id": single, "checked": true }),
+            Some(&admin),
+        )
+        .await;
+    assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+    assert_eq!(get_act(&app, single).await["song_checked"], true);
     app.post_file(&uri, "second.mp3", b"second", Some(&cookie))
         .await;
 
@@ -237,7 +254,123 @@ async fn save_act_song_replaces_previous_upload(db: SqlitePool) {
         std::fs::read(app.data_path().join(format!("{single}.mp3"))).unwrap(),
         b"second"
     );
-    assert_eq!(get_act(&app, single).await["song_file_name"], "second.mp3");
+    let act = get_act(&app, single).await;
+    assert_eq!(act["song_file_name"], "second.mp3");
+    // Nobody has listened to the new file yet.
+    assert_eq!(act["song_checked"], false);
+}
+
+#[sqlx::test]
+async fn only_the_acts_clubs_and_admins_edit_an_act(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let (_, single, _) = club_with_acts(&app).await;
+    let (intruder, _) = app.create_club_owner("Intruder", "ESV").await;
+    let loner = app.cookie_for(app.create_user("Loner", false).await);
+    let admin = app.create_admin().await;
+    let song_uri = format!("/api/command/save_act_song?act_id={single}");
+
+    for cookie in [&intruder, &loner] {
+        let response = app
+            .post(
+                "/api/command/edit_club_act",
+                json!({ "id": single, "name": "Gekapert", "description": null }),
+                Some(cookie),
+            )
+            .await;
+        assert_eq!(
+            response.status,
+            StatusCode::FORBIDDEN,
+            "{:?}",
+            response.body
+        );
+        let response = app
+            .post_file(&song_uri, "fremd.mp3", b"fremd", Some(cookie))
+            .await;
+        assert_eq!(
+            response.status,
+            StatusCode::FORBIDDEN,
+            "{:?}",
+            response.body
+        );
+    }
+    let act = get_act(&app, single).await;
+    assert_eq!(act["name"], "");
+    assert_eq!(act["song_file"], Value::Null);
+    // The file wasn't written either.
+    assert_eq!(std::fs::read_dir(app.data_path()).unwrap().count(), 0);
+
+    // Unknown acts.
+    let unknown = Uuid::now_v7();
+    let response = app
+        .post(
+            "/api/command/edit_club_act",
+            json!({ "id": unknown, "name": "X", "description": null }),
+            Some(&admin),
+        )
+        .await;
+    assert_eq!(response.status, StatusCode::NOT_FOUND);
+    let response = app
+        .post_file(
+            &format!("/api/command/save_act_song?act_id={unknown}"),
+            "x.mp3",
+            b"x",
+            Some(&admin),
+        )
+        .await;
+    assert_eq!(response.status, StatusCode::NOT_FOUND);
+
+    // Admins can edit every act.
+    let response = app
+        .post(
+            "/api/command/edit_club_act",
+            json!({ "id": single, "name": "Vom Admin", "description": null }),
+            Some(&admin),
+        )
+        .await;
+    assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+    let response = app
+        .post_file(&song_uri, "admin.mp3", b"admin", Some(&admin))
+        .await;
+    assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+    let act = get_act(&app, single).await;
+    assert_eq!(act["name"], "Vom Admin");
+    assert_eq!(act["song_file_name"], "admin.mp3");
+}
+
+#[sqlx::test]
+async fn ages_are_only_shown_to_admins(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let (owner, single, pair) = club_with_acts(&app).await;
+    let admin = app.create_admin().await;
+
+    // The exact age would give away the rider's birthdate.
+    for cookie in [None, Some(owner.as_str())] {
+        let response = app.get("/api/query/list_acts", cookie).await;
+        assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+        for act in response.body.as_array().unwrap() {
+            assert_eq!(act["max_age"], Value::Null, "{act}");
+        }
+        for act_id in [single, pair] {
+            assert_eq!(
+                get_act_as(&app, cookie, act_id).await["max_age"],
+                Value::Null
+            );
+        }
+    }
+    let response = app.get("/api/query/startlist", None).await;
+    assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+    for act in response.body.as_array().unwrap() {
+        assert!(act.get("max_age").is_none(), "{act}");
+        for participant in act["participants"].as_array().unwrap() {
+            assert!(participant.get("club_id").is_none(), "{participant}");
+        }
+    }
+
+    let response = app.get("/api/query/list_acts", Some(&admin)).await;
+    assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+    for act in response.body.as_array().unwrap() {
+        assert!(act["max_age"].as_f64().unwrap() > 12.0, "{act}");
+    }
 }
 
 #[sqlx::test]

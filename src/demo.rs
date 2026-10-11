@@ -2,9 +2,9 @@
 //!
 //! A demo file (see `demo-data.toml`) describes a complete event: the
 //! competition, categories and timeplan in the same format as the config file,
-//! plus users, clubs, starters and act details. [`DemoData::apply`] writes it
-//! into an empty, migrated database; the `seed_demo` binary recreates the
-//! database before doing so.
+//! plus users, clubs, starters, groups and act details. [`DemoData::apply`]
+//! writes it into an empty, migrated database; the `seed_demo` binary
+//! recreates the database before doing so.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -22,7 +22,7 @@ use crate::{
     config::{
         CategoryConfig, CompetitionConfig, TimeplanEntryConfig, toml_date, toml_datetime_option,
     },
-    seed, utils,
+    groups, seed, utils,
 };
 
 #[derive(Debug, Deserialize)]
@@ -37,6 +37,8 @@ pub struct DemoData {
     pub users: Vec<DemoUser>,
     #[serde(default)]
     pub clubs: Vec<DemoClub>,
+    #[serde(default)]
+    pub groups: Vec<DemoGroup>,
     #[serde(default)]
     pub acts: Vec<DemoAct>,
     /// Directory that relative `song_source` paths are resolved against.
@@ -113,6 +115,9 @@ pub struct DemoStarter {
     pub partner: Option<String>,
     /// Name of a pair partner that isn't registered (yet).
     pub partner_name: Option<String>,
+    /// When the starter checked in on competition day.
+    #[serde(default, deserialize_with = "toml_datetime_option")]
+    pub checked_in_at: Option<OffsetDateTime>,
 }
 
 impl DemoStarter {
@@ -121,14 +126,35 @@ impl DemoStarter {
     }
 }
 
-/// Details of an act. Acts themselves are created for every single starter and
-/// linked pair; this selects one by a participant and sets its fields.
+/// A group act (Kleingruppe / Großgruppe) with riders from any club. Like in
+/// the app, its type follows from the number of regular riders and a rider can
+/// be in only one group of each type.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DemoGroup {
+    /// The group's name, unique across the competition.
+    pub name: String,
+    /// Name of the club that created the group.
+    pub owner: String,
+    /// Full names of the regular riders.
+    #[serde(default)]
+    pub members: Vec<String>,
+    /// Full names of the replacement riders (Ersatzfahrer).
+    #[serde(default)]
+    pub replacements: Vec<String>,
+}
+
+/// Details of an act. Acts themselves are created for every single starter,
+/// linked pair and group; this selects one, either by a participant and the
+/// act type or by the group name, and sets its fields.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DemoAct {
-    /// Full name of a participant.
-    pub starter: String,
-    pub act_type: ActType,
+    /// Full name of a participant, together with `act_type`.
+    pub starter: Option<String>,
+    pub act_type: Option<ActType>,
+    /// Name of a group, instead of `starter` and `act_type`.
+    pub group: Option<String>,
     pub name: Option<String>,
     pub description: Option<String>,
     /// File name of the song as shown in the UI. Without `song_source`, a short
@@ -200,13 +226,16 @@ impl DemoData {
         self.link_partners(db, &starters).await?;
 
         utils::initialize_acts(db).await?;
-        self.update_acts(db, &starters, data_path).await?;
+        let group_ids = self.insert_groups(db, &starters).await?;
+        self.update_acts(db, &starters, &group_ids, data_path)
+            .await?;
 
         info!(
-            "Seeded {} users, {} clubs and {} starters from the demo data",
+            "Seeded {} users, {} clubs, {} starters and {} groups from the demo data",
             self.users.len(),
             self.clubs.len(),
-            starters.len()
+            starters.len(),
+            group_ids.len()
         );
         Ok(())
     }
@@ -315,12 +344,13 @@ impl DemoData {
                 let birthdate = starter.birthdate.midnight().assume_utc();
                 let single_male = starter.single == Some(Single::Male);
                 let single_female = starter.single == Some(Single::Female);
+                let checked_in_at = starter.checked_in_at.map(utc);
                 sqlx::query!(
                     r#"
                     INSERT INTO starter (
                         id, club_id, firstname, lastname, birthdate,
-                        single_male, single_female, pair, partner_name
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        single_male, single_female, pair, partner_name, checked_in_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     "#,
                     id,
                     club_id,
@@ -331,6 +361,7 @@ impl DemoData {
                     single_female,
                     starter.pair,
                     starter.partner_name,
+                    checked_in_at,
                 )
                 .execute(db)
                 .await
@@ -397,30 +428,121 @@ impl DemoData {
         Ok(())
     }
 
+    /// Creates the groups with their riders and sets their act type. Returns
+    /// the act ids by group name.
+    async fn insert_groups(
+        &self,
+        db: &sqlx::SqlitePool,
+        starters: &StarterIds<'_>,
+    ) -> Result<HashMap<String, Uuid>, String> {
+        let db_error = |e: sqlx::Error| format!("Database error while seeding groups: {e}");
+        let mut connection = db.acquire().await.map_err(db_error)?;
+        let mut ids = HashMap::new();
+        for group in &self.groups {
+            let referenced_by = format!("Group {}", group.name);
+            let group_name = groups::normalize_group_name(&group.name)
+                .map_err(|e| format!("{referenced_by}: {e}"))?;
+            let owner_club_id = sqlx::query_scalar!(
+                r#"SELECT id as "id!: Uuid" FROM clubs WHERE name = ?"#,
+                group.owner
+            )
+            .fetch_optional(&mut *connection)
+            .await
+            .map_err(db_error)?
+            .ok_or_else(|| format!("{referenced_by}: owner {} is not a demo club.", group.owner))?;
+
+            let act_id = Uuid::now_v7();
+            sqlx::query!(
+                r#"
+                INSERT INTO acts (id, name, act_type, group_name, owner_club_id)
+                VALUES (?, '', ?, ?, ?)
+                "#,
+                act_id,
+                ActType::GroupSmall,
+                group_name,
+                owner_club_id,
+            )
+            .execute(&mut *connection)
+            .await
+            .map_err(|e| format!("Couldn't insert group {}: {e}", group.name))?;
+
+            let mut seen = HashSet::new();
+            let riders = group
+                .members
+                .iter()
+                .map(|name| (name, false))
+                .chain(group.replacements.iter().map(|name| (name, true)));
+            for (name, is_replacement) in riders {
+                let starter_id = starters.id(name, &referenced_by)?;
+                if !seen.insert(starter_id) {
+                    return Err(format!("{referenced_by}: {name} is listed twice."));
+                }
+                sqlx::query!(
+                    r#"
+                    INSERT INTO act_participants (act_id, starter_id, is_replacement)
+                    VALUES (?, ?, ?)
+                    "#,
+                    act_id,
+                    starter_id,
+                    is_replacement,
+                )
+                .execute(&mut *connection)
+                .await
+                .map_err(db_error)?;
+            }
+            groups::refresh_group_act_type(&mut connection, act_id)
+                .await
+                .map_err(db_error)?;
+            // The API only warns about such conflicts; demo groups must not
+            // have any.
+            if let Some(conflict) = groups::type_conflict_message(&mut connection, act_id, None)
+                .await
+                .map_err(db_error)?
+            {
+                return Err(format!("{referenced_by}: {conflict}"));
+            }
+            ids.insert(group.name.clone(), act_id);
+        }
+        Ok(ids)
+    }
+
     async fn update_acts(
         &self,
         db: &sqlx::SqlitePool,
         starters: &StarterIds<'_>,
+        group_ids: &HashMap<String, Uuid>,
         data_path: &Path,
     ) -> Result<(), String> {
         let mut seen = HashSet::new();
         for (index, act) in self.acts.iter().enumerate() {
-            let starter_id = starters.id(&act.starter, "[[acts]]")?;
-            let act_id = utils::get_act_id_for_starter_id(db, starter_id, act.act_type)
-                .await?
-                .ok_or_else(|| {
-                    format!(
-                        "[[acts]]: {} has no {} act. Singles need `single`, pairs a linked `partner`.",
-                        act.starter,
-                        act.act_type.as_str()
-                    )
-                })?;
+            let (act_id, label) = match (&act.group, &act.starter, act.act_type) {
+                (Some(group), None, None) => {
+                    let act_id = *group_ids
+                        .get(group)
+                        .ok_or_else(|| format!("[[acts]]: group {group} doesn't exist."))?;
+                    (act_id, format!("group {group}"))
+                }
+                (None, Some(starter), Some(act_type)) => {
+                    let starter_id = starters.id(starter, "[[acts]]")?;
+                    let act_id = utils::get_act_id_for_starter_id(db, starter_id, act_type)
+                        .await?
+                        .ok_or_else(|| {
+                            format!(
+                                "[[acts]]: {starter} has no {} act. Singles need `single`, pairs a linked `partner`.",
+                                act_type.as_str()
+                            )
+                        })?;
+                    (act_id, format!("{} act of {starter}", act_type.as_str()))
+                }
+                _ => {
+                    return Err(
+                        "[[acts]]: select an act either by starter and act_type, or by group."
+                            .to_string(),
+                    );
+                }
+            };
             if !seen.insert(act_id) {
-                return Err(format!(
-                    "[[acts]]: the {} act of {} is described twice.",
-                    act.act_type.as_str(),
-                    act.starter
-                ));
+                return Err(format!("[[acts]]: the {label} is described twice."));
             }
 
             let (song_file, song_file_name) = match (&act.song, &act.song_source) {
@@ -479,7 +601,7 @@ impl DemoData {
             )
             .execute(db)
             .await
-            .map_err(|e| format!("Couldn't update the act of {}: {e}", act.starter))?;
+            .map_err(|e| format!("Couldn't update the {label}: {e}"))?;
         }
         Ok(())
     }
@@ -599,11 +721,48 @@ mod tests {
             assert!(count(&db, sql).await > 0, "{table} is empty");
         }
 
-        // Every act lands in a category, so it shows up in the startlist.
+        // Every act lands in a category, so it shows up in the startlist,
+        // except for one group that doesn't have enough riders yet.
         assert_eq!(
-            count(&db, "SELECT COUNT(*) FROM view_act WHERE category IS NULL").await,
+            count(
+                &db,
+                "SELECT COUNT(*) FROM view_act WHERE category IS NULL AND NOT (group_name IS NOT NULL AND regular_count < 3)"
+            )
+            .await,
             0
         );
+        assert_eq!(
+            count(&db, "SELECT COUNT(*) FROM view_act WHERE category IS NULL").await,
+            1
+        );
+        for (what, sql) in [
+            (
+                "small group",
+                "SELECT COUNT(*) FROM view_act WHERE act_type = 'group_small' AND category IS NOT NULL",
+            ),
+            (
+                "large group",
+                "SELECT COUNT(*) FROM view_act WHERE act_type = 'group_large' AND category IS NOT NULL",
+            ),
+            (
+                "group across clubs",
+                "SELECT COUNT(*) FROM view_act WHERE group_name IS NOT NULL AND (SELECT COUNT(DISTINCT s.club_id) FROM act_participants p JOIN starter s ON s.id = p.starter_id WHERE p.act_id = view_act.id) > 1",
+            ),
+            (
+                "replacement rider",
+                "SELECT COUNT(*) FROM act_participants WHERE is_replacement",
+            ),
+            (
+                "checked-in starter",
+                "SELECT COUNT(*) FROM starter WHERE checked_in_at IS NOT NULL",
+            ),
+            (
+                "starter not checked in",
+                "SELECT COUNT(*) FROM starter WHERE checked_in_at IS NULL",
+            ),
+        ] {
+            assert!(count(&db, sql).await > 0, "no {what}");
+        }
         // Partner links are symmetric.
         assert_eq!(
             count(
@@ -634,6 +793,20 @@ mod tests {
         starter.partner_name = None;
         let err = data.apply(&db, &data_dir()).await.unwrap_err();
         assert!(err.contains("Niemand Unbekannt"), "{err}");
+    }
+
+    #[sqlx::test]
+    async fn demo_groups_follow_the_group_rules(db: sqlx::SqlitePool) {
+        let mut data = DemoData::parse(DEMO).unwrap();
+        // Emma Wagner already rides in a small group.
+        let incomplete = data
+            .groups
+            .iter_mut()
+            .find(|group| group.members.len() < 3)
+            .unwrap();
+        incomplete.members.push("Emma Wagner".into());
+        let err = data.apply(&db, &data_dir()).await.unwrap_err();
+        assert!(err.contains("„Emma Wagner“"), "{err}");
     }
 
     #[test]

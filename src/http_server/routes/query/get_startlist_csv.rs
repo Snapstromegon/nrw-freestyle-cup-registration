@@ -12,6 +12,19 @@ use crate::{
 static TIME_FORMAT: StaticFormatDescription =
     time::macros::format_description!("[year]-[month]-[day] [hour]:[minute]");
 
+/// Makes user-entered text (act titles, group names, …) safe for one field of
+/// the ';'-separated export, which is written without quoting: ';' would start
+/// a new column and a line break a new row. A leading '=', '+', '-' or '@'
+/// would make spreadsheets read the field as a formula, so it gets a '\''.
+fn csv_field(value: &str) -> String {
+    let value = value.replace(';', ",").replace(['\r', '\n'], " ");
+    if value.starts_with(['=', '+', '-', '@']) {
+        format!("'{value}")
+    } else {
+        value
+    }
+}
+
 #[derive(Debug, serde::Serialize)]
 pub struct TimeplanAct {
     status: TimeplanItemStatus,
@@ -30,6 +43,7 @@ pub struct TimeplanAct {
     #[serde(with = "time::serde::iso8601")]
     planned_end: time::OffsetDateTime,
     act_type: ActType,
+    group_name: Option<String>,
     participants: sqlx::types::Json<Vec<ActParticipant>>,
 }
 
@@ -96,7 +110,7 @@ pub struct Timeplan {
     items: Vec<TimeplanItem>,
 }
 
-/// List all users.
+/// The startlist as CSV, one section per timeplan entry.
 #[utoipa::path(
     get,
     tags=["query", "timeplan"],
@@ -198,6 +212,7 @@ pub async fn get_startlist_csv(
                         started_at,
                         ended_at,
                         act_type as "act_type!: ActType",
+                        group_name,
                         participants as "participants!: sqlx::types::Json<Vec<ActParticipant>>"
                     FROM
                         view_act
@@ -237,6 +252,7 @@ pub async fn get_startlist_csv(
                     timeplan_acts.push(TimeplanAct {
                         id: act.id,
                         act_type: act.act_type,
+                        group_name: act.group_name,
                         name: act.name,
                         participants: act.participants,
                         started_at: act.started_at,
@@ -352,33 +368,40 @@ pub async fn get_startlist_csv(
                         .to_offset(time::UtcOffset::from_hms(1, 0, 0).expect("Invalid Offset"))
                         .format(&TIME_FORMAT)
                         .unwrap(),
-                    description
+                    csv_field(&description)
                 ));
                 for act in acts {
-                    let names = act
+                    // Groups are listed by their name instead of all riders.
+                    let names = match &act.group_name {
+                        Some(group_name) => group_name.clone(),
+                        None => act
+                            .participants
+                            .iter()
+                            .map(|p| format!("{} {}", p.firstname, p.lastname))
+                            .collect::<Vec<String>>()
+                            .join(" & "),
+                    };
+                    let mut clubs: Vec<&str> = vec![];
+                    for participant in act.participants.iter() {
+                        if !clubs.contains(&participant.club_name.as_str()) {
+                            clubs.push(&participant.club_name);
+                        }
+                    }
+                    // Replacement riders don't count as starting riders.
+                    let rider_count = act
                         .participants
                         .iter()
-                        .map(|p| format!("{} {}", p.firstname, p.lastname))
-                        .collect::<Vec<String>>()
-                        .join(" & ");
-                    let clubs = if act.participants.len() == 1
-                        || act.participants[0].club_name == act.participants[1].club_name
-                    {
-                        act.participants[0].club_name.clone()
-                    } else {
-                        act.participants[0].club_name.clone()
-                            + " & "
-                            + &act.participants[1].club_name
-                    };
+                        .filter(|p| !p.is_replacement)
+                        .count();
                     csv.push_str(&format!(
                         "{};{};{};{};{};{};{};{}\n",
-                        description,
-                        act.participants.len(),
+                        csv_field(&description),
+                        rider_count,
                         counter,
                         "Deutschland",
-                        act.name,
-                        names,
-                        clubs,
+                        csv_field(&act.name),
+                        csv_field(&names),
+                        csv_field(&clubs.join(" & ")),
                         act.predicted_start
                             .to_offset(time::UtcOffset::from_hms(1, 0, 0).expect("Invalid Offset"))
                             .format(&TIME_FORMAT)
@@ -395,11 +418,26 @@ pub async fn get_startlist_csv(
                         .to_offset(time::UtcOffset::from_hms(1, 0, 0).expect("Invalid Offset"))
                         .format(&TIME_FORMAT)
                         .unwrap(),
-                    label
+                    csv_field(&label)
                 ));
             }
         }
     }
 
     Ok(csv)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::csv_field;
+
+    #[test]
+    fn csv_fields_stay_one_field_and_are_no_formulas() {
+        assert_eq!(csv_field("Wind;Wetter"), "Wind,Wetter");
+        assert_eq!(csv_field("Zeile\r\nZwei"), "Zeile  Zwei");
+        assert_eq!(csv_field("=HYPERLINK(1)"), "'=HYPERLINK(1)");
+        assert_eq!(csv_field("-1"), "'-1");
+        assert_eq!(csv_field("Anna & Berta"), "Anna & Berta");
+        assert_eq!(csv_field("Einzel U15 - weiblich"), "Einzel U15 - weiblich");
+    }
 }

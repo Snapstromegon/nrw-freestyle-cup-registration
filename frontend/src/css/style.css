@@ -4,6 +4,22 @@
   box-sizing: border-box;
 }
 
+/* Design tokens. Custom properties inherit into the components' shadow DOM. */
+:root {
+  --cup-blue: #002d56;
+  --cup-blue-2: #99add7;
+  --cup-green: #009036;
+  --cup-red: #e2001a;
+  --cup-amber: #b26a00;
+  --cup-border: #d6dbe3;
+  --cup-surface: #fff;
+  --cup-surface-2: #f3f5f8;
+  --cup-text: #1b1f24;
+  --cup-muted: #5f6b7a;
+  /* Height of the admin shell's top bar (one row). */
+  --admin-bar-h: 2.25rem;
+}
+
 @font-face {
   font-family: "Material Symbols Outlined";
   font-style: normal;

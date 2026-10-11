@@ -6,12 +6,16 @@ use crate::{
     act_type::ActType,
     http_server::{
         ClientError, HttpError,
-        routes::http_types::{Act, ActParticipant},
+        extractor::auth::Auth,
+        routes::http_types::{Act, ActParticipant, DBAct},
     },
     reloadable_sqlite::ReloadableSqlite,
 };
 
-/// List all users.
+/// List all acts.
+///
+/// Sorted by category and act order. Acts without a category (e.g. groups
+/// with fewer than 3 riders) come last. `max_age` is only filled for admins.
 #[utoipa::path(
     get,
     tags=["query", "acts"],
@@ -25,61 +29,47 @@ use crate::{
 #[instrument(skip(db))]
 pub async fn list_acts(
     Extension(db): Extension<ReloadableSqlite>,
+    auth: Option<Auth>,
 ) -> Result<Json<Vec<Act>>, HttpError> {
-    pub struct DBAct {
-        id: Uuid,
-        name: String,
-        song_file: Option<String>,
-        description: Option<String>,
-        song_file_name: Option<String>,
-        act_type: ActType,
-        max_age: Option<f64>,
-        participants: sqlx::types::Json<Vec<ActParticipant>>,
-        category: Option<String>,
-        song_checked: bool,
-        act_order: Option<i64>,
-        category_order: Option<i64>,
-    }
-    impl From<DBAct> for Act {
-        fn from(db_act: DBAct) -> Self {
-            Act {
-                id: db_act.id,
-                name: db_act.name,
-                song_file: db_act.song_file,
-                description: db_act.description,
-                song_file_name: db_act.song_file_name,
-                act_type: db_act.act_type,
-                max_age: db_act.max_age,
-                participants: db_act.participants.0,
-                category: db_act.category,
-                song_checked: db_act.song_checked,
-                act_order: db_act.act_order,
-                category_order: db_act.category_order,
-            }
-        }
-    }
     let db = db.get().await.clone();
     let acts = sqlx::query_as!(
         DBAct,
         r#"
         SELECT
-            id as "id!: Uuid",
+            view_act.id as "id!: Uuid",
             view_act."order" as "act_order",
-            categories."order" as "category_order",
+            categories."order" as "category_order?",
             view_act.name,
-            song_file,
+            view_act.group_name,
+            view_act.owner_club_id as "owner_club_id: Uuid",
+            view_act.song_file,
             view_act.description,
-            song_file_name,
+            view_act.song_file_name,
             view_act.act_type as "act_type!: ActType",
-            max_age,
-            participants as "participants!: sqlx::types::Json<Vec<ActParticipant>>",
-            category,
-            song_checked
-        FROM view_act JOIN categories ON view_act.category = categories.name
-        ORDER BY categories."order", view_act."order" ASC
+            view_act.max_age,
+            view_act.participants as "participants!: sqlx::types::Json<Vec<ActParticipant>>",
+            view_act.category,
+            (
+                view_act.act_type IN ('group_small', 'group_large')
+                AND EXISTS (
+                    SELECT 1 FROM act_participants own
+                    JOIN act_participants theirs
+                        ON theirs.starter_id = own.starter_id AND theirs.act_id != own.act_id
+                    JOIN acts other ON other.id = theirs.act_id AND other.act_type = view_act.act_type
+                    WHERE own.act_id = view_act.id
+                )
+            ) as "type_conflict!: bool",
+            view_act.song_checked
+        FROM view_act LEFT JOIN categories ON view_act.category = categories.name
+        ORDER BY categories."order" IS NULL, categories."order", view_act."order" ASC
         "#
     )
     .fetch_all(&db)
     .await?;
-    Ok(Json(acts.into_iter().map(|a| a.into()).collect()))
+    let is_admin = auth.is_some_and(|auth| auth.is_admin());
+    Ok(Json(
+        acts.into_iter()
+            .map(|act| Act::from(act).for_viewer(is_admin))
+            .collect(),
+    ))
 }

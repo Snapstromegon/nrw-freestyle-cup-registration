@@ -78,10 +78,23 @@ pub async fn timeplan_forward(
                     category
                 ).fetch_all(&db).await?;
                 info!("Upcoming starts: {upcoming_starts:?}");
-                sqlx::query!(
-                    "UPDATE acts SET started_at = datetime('now') WHERE id = (SELECT id FROM view_act WHERE category = ? AND started_at IS NULL ORDER BY `order` LIMIT 1)",
-                    category
-                ).execute(&db).await?;
+                if let Some(next_act) = upcoming_starts.first() {
+                    sqlx::query!(
+                        "UPDATE acts SET started_at = datetime('now') WHERE id = ?",
+                        next_act.id
+                    )
+                    .execute(&db)
+                    .await?;
+                } else {
+                    // Nothing (left) to start, e.g. a category without acts:
+                    // end it so the timeplan can move on.
+                    sqlx::query!(
+                        "UPDATE timeplan SET ended_at = datetime('now') WHERE id = ?",
+                        id
+                    )
+                    .execute(&db)
+                    .await?;
+                }
             }
         }
         Some((id, None)) => {
@@ -110,7 +123,7 @@ async fn start_next_timeplan_entry(db: &sqlx::SqlitePool) -> Result<(), sqlx::Er
         sqlx::query!("SELECT id, category FROM timeplan WHERE started_at IS NOT NULL AND ended_at IS NULL ORDER BY id LIMIT 1")
             .fetch_optional(db)
             .await?
-            .map(|row| row.category);
+            .and_then(|row| row.category);
 
     if let Some(category) = category {
         let einfahrzeit_seconds = sqlx::query!(

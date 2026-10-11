@@ -5,7 +5,7 @@ use utoipa::ToSchema;
 
 use crate::{
     http_server::{ClientError, HttpError, extractor::auth::Auth},
-    reloadable_sqlite::ReloadableSqlite,
+    reloadable_sqlite::{ReloadableSqlite, begin_write},
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -43,7 +43,7 @@ pub async fn move_category_up(
     let db = db.get().await.clone();
 
     // Start a transaction
-    let mut tx = db.begin().await?;
+    let mut tx = begin_write(&db).await?;
 
     // Get current category's order
     let current = sqlx::query!(

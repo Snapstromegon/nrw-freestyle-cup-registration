@@ -1,7 +1,9 @@
 import { consume } from "@lit/context";
-import { Task } from "@lit/task";
+import { Task, TaskStatus } from "@lit/task";
 import { css, html, LitElement, nothing } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
+import { customElement, property, query, state } from "lit/decorators.js";
+import { repeat } from "lit/directives/repeat.js";
+import { errorMessage, unwrap } from "../../api";
 import { client, type components } from "../../apiClient";
 import { type Club, clubContext } from "../../contexts/club";
 import {
@@ -9,7 +11,15 @@ import {
   systemStatusContext,
 } from "../../contexts/systemStatus";
 import { type User, userContext } from "../../contexts/user";
-import { getStarterPrice } from "../../utils";
+import { iconStyles, resetStyles } from "../../styles/base";
+import { clubManagerStyles } from "../../styles/club-manager";
+import {
+  type ActType,
+  actTypeLabels,
+  actTypeShort,
+  formatMoney,
+  getStarterPrice,
+} from "../../utils";
 
 type Starter = { birthdate: Date } & Omit<
   components["schemas"]["ClubStarter"],
@@ -18,165 +28,68 @@ type Starter = { birthdate: Date } & Omit<
 
 type MaybeNewStarter = Omit<Omit<Starter, "id">, "club_id">;
 
+/** A starter's membership in a group. */
+interface GroupMembership {
+  id: string;
+  group_name: string;
+  act_type: ActType;
+  is_replacement: boolean;
+}
+
+const emptyStarter = (): MaybeNewStarter => ({
+  firstname: "",
+  lastname: "",
+  birthdate: new Date(),
+  single_male: false,
+  single_female: false,
+  pair: false,
+  partner_name: "",
+  group_count: 0,
+});
+
+/** The value of a date input; "" for an invalid date (a cleared input). */
+const dateInputValue = (date: Date) =>
+  Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Parses the paid amount like the payments view (cup-view-admin-payments)
+ * does, so both screens store the same amount for the same text: at most two
+ * decimals, "," or "." as decimal separator ("120", "120,5", "120.50",
+ * "1.505,00 €"); `null` if invalid. A separator followed by three digits is
+ * only accepted as German thousands separator ("1.505", not "1,505").
+ */
+const parseAmount = (text: string) => {
+  const t = text.replace(/[\s\u00a0€]/g, "");
+  const german = /^(\d{1,3}(?:\.\d{3})+)(?:,(\d{1,2}))?$/.exec(t);
+  const plain = /^(\d+)(?:[.,](\d{1,2}))?$/.exec(t);
+  const match = german ?? plain;
+  if (!match) {
+    return null;
+  }
+  const value = Number(`${match[1].replaceAll(".", "")}.${match[2] ?? "0"}`);
+  return Number.isFinite(value) ? Math.round(value * 100) / 100 : null;
+};
+
 @customElement("cup-club-starter-manager")
 export default class CupClubStarterManager extends LitElement {
-  static override styles = css`
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    .material-icon {
-      font-family: "Material Symbols Outlined";
-      font-weight: normal;
-      font-style: normal;
-      font-size: 24px;
-      line-height: 1;
-      letter-spacing: normal;
-      text-transform: none;
-      display: inline-block;
-      white-space: nowrap;
-      word-wrap: normal;
-      direction: ltr;
-      font-feature-settings: "liga";
-      -webkit-font-smoothing: antialiased;
-    }
-
-    h3 {
-      margin-bottom: 0.5em;
-    }
-    h4,
-    h5,
-    p {
-      margin-top: 1em;
-      margin-bottom: 0.5em;
-    }
-
-    .blue {
-      background: #002d56;
-      color: #fff;
-    }
-
-    .green {
-      background: #009036;
-      color: #fff;
-    }
-
-    .red {
-      background: #e2001a;
-      color: #fff;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-
-    #summary {
-      width: auto;
-    }
-
-    #summary th {
-      text-align: left;
-    }
-
-    tr {
-      border: 0.1rem solid #ddd;
-      border-radius: 0.5rem;
-    }
-
-    tbody tr:nth-child(odd) {
-      background: #f8f8f8;
-    }
-
-    tbody tr:hover {
-      background: #eee;
-    }
-
-    th,
-    td {
-      padding: 0.25rem;
-      height: 100%;
-      border: 0.1rem solid #ddd;
-    }
-
-    label {
-      display: flex;
-      flex-direction: column;
-
-      & span {
-        display: none;
-      }
-    }
-
-    input,
-    select,
-    button {
-      padding: 0.25rem;
-    }
-
-    button {
-      border-radius: 0.5rem;
-      cursor: pointer;
-      padding: 0.25rem 0.75rem;
-      border: none;
-      border-radius: 100vh;
-    }
-
-    #addStarterButton {
-      width: 100%;
-      height: 100%;
-      border-radius: 0;
-    }
-
-    /* If screen narrower than 1200px */
-    @media screen and (max-width: 1200px) {
-      table {
-        display: block;
-      }
-      tbody {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
-        gap: 1rem;
+  static override styles = [
+    resetStyles,
+    iconStyles,
+    clubManagerStyles,
+    css`
+      ul.groups {
+        list-style: none;
       }
 
-      thead {
-        display: none;
+      .payment input {
+        width: 6em;
+        text-align: right;
       }
-
-      tr {
-        display: flex;
-        flex-direction: column;
-        padding: 0.5rem;
-      }
-
-      tbody tr:nth-child(odd) {
-        background: none;
-      }
-
-      tbody tr:hover {
-        background: none;
-      }
-
-      th,
-      td {
-        border: none;
-      }
-
-      label span {
-        display: block;
-        font-size: 0.8rem;
-      }
-    }
-
-    @media print {
-      #addStarterRow,
-      .actionCol {
-        display: none;
-      }
-    }
-  `;
+    `,
+  ];
 
   @consume({ context: clubContext, subscribe: true }) club: Club | null = null;
 
@@ -186,44 +99,84 @@ export default class CupClubStarterManager extends LitElement {
 
   @property({ type: Boolean, attribute: "admin-mode" }) adminMode = false;
 
+  /** Bumped by cup-club-manager to reload after changes in other managers. */
+  @property({ attribute: false }) refresh = 0;
+
   starters = new Task(this, {
     task: async ([clubId]) => {
       if (!clubId) {
         return [];
       }
-      const resp = await client.GET("/api/query/list_club_starters", {
-        params: { query: { club_id: clubId } },
-      });
-      if (resp.error) {
-        throw new Error((resp.error as any).message);
-      }
-      return resp.data.map((starter) => {
+      const starters = unwrap(
+        await client.GET("/api/query/list_club_starters", {
+          params: { query: { club_id: clubId } },
+        }),
+      );
+      return starters.map((starter) => {
         const birthdate = new Date(starter.birthdate);
         return { ...starter, birthdate };
       });
     },
-    args: () => [this.club?.id],
+    args: () => [this.club?.id, this.refresh],
+  });
+
+  /** The groups of each starter: starter id → memberships. */
+  groups = new Task(this, {
+    task: async ([clubId]) => {
+      const memberships = new Map<string, GroupMembership[]>();
+      if (!clubId) {
+        return memberships;
+      }
+      const groups = unwrap(
+        await client.GET("/api/query/list_club_groups", {
+          params: { query: { club_id: clubId } },
+        }),
+      );
+      for (const group of groups) {
+        for (const member of group.members) {
+          memberships.set(member.starter_id, [
+            ...(memberships.get(member.starter_id) ?? []),
+            {
+              id: group.id,
+              group_name: group.group_name,
+              act_type: group.act_type,
+              is_replacement: member.is_replacement,
+            },
+          ]);
+        }
+      }
+      return memberships;
+    },
+    args: () => [this.club?.id, this.refresh],
   });
 
   @state() starterEdits = new Map<string, Starter>();
-  @state() addStarter: MaybeNewStarter = {
-    firstname: "",
-    lastname: "",
-    birthdate: new Date(),
-    single_male: false,
-    single_female: false,
-    pair: false,
-    partner_name: "",
-  };
+  @state() addStarter: MaybeNewStarter = emptyStarter();
 
   @state() addStarterMode = false;
+  @state() error: string | null = null;
+  /** The amount an admin is entering as paid; `null` while not editing. */
+  @state() paymentInput: string | null = null;
+
+  @query("#error") errorBanner?: HTMLElement;
+
+  get canEdit() {
+    return !!(this.systemStatus?.can_register_starter || this.user?.is_admin);
+  }
+
+  get columnCount() {
+    return this.adminMode ? 12 : 10;
+  }
 
   override render() {
+    const starters = this.starters.value ?? [];
     return html`<h4>Starter</h4>
       <h5>Zusammenfassung</h5>
 
       <datalist id="clubStarters">
-        ${this.starters.value?.map(
+        ${repeat(
+          starters,
+          (starter) => starter.id,
           (starter) =>
             html`<option
               value="${starter.firstname} ${starter.lastname}"
@@ -239,29 +192,39 @@ export default class CupClubStarterManager extends LitElement {
         <tr>
           <th>Gesamtstartgebühr</th>
           <td>
-            ${(this.starters.value || []).reduce(
-              (acc, starter) =>
-                acc + getStarterPrice(starter, this.systemStatus?.competition),
-              0,
-            )}€
+            ${formatMoney(
+              starters.reduce(
+                (acc, starter) =>
+                  acc +
+                  getStarterPrice(starter, this.systemStatus?.competition),
+                0,
+              ),
+            )}
           </td>
         </tr>
         <tr>
           <th>Bezahlt</th>
-          <td>
-            ${
-              this.club?.payment?.toFixed(2).toString().replace(".", ",") || 0
-            }€${
-              this.adminMode
-                ? html` <button @click=${this.pay}>Betrag aktualisieren</button>`
-                : nothing
-            }
-          </td>
+          <td class="payment">${this.renderPayment()}</td>
         </tr>
       </table>
 
       <h5>Starter</h5>
-      <table>
+      ${
+        this.error
+          ? html`<p id="error" class="error-banner" role="alert">
+            ${this.error}
+            <button
+              class="material-icon"
+              title="Schließen"
+              aria-label="Schließen"
+              @click=${this.clearError}
+            >
+              close
+            </button>
+          </p>`
+          : nothing
+      }
+      <table class="items">
         <thead>
           <tr>
             ${this.adminMode ? html`<th>ID</th>` : nothing}
@@ -273,124 +236,22 @@ export default class CupClubStarterManager extends LitElement {
             <th>Paar</th>
             <th>Partner</th>
             ${this.adminMode ? html`<th>Partner ID</th>` : nothing}
+            <th>Gruppen</th>
             <th>Startgeld</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
           ${
-            this.systemStatus?.can_register_starter || this.user?.is_admin
+            this.canEdit
               ? this.addStarterMode
-                ? html`<tr id="addStarterRow">
-                  ${this.adminMode ? html`<td></td>` : nothing}
-                  <td>
-                    <label
-                      ><span>Vorname</span
-                      ><input
-                        type="text"
-                        .value=${this.addStarter.firstname}
-                        @input=${this.updateAddStarterFirstname}
-                        placeholder="Vorname"
-                    /></label>
-                  </td>
-                  <td>
-                    <label
-                      ><span>Nachname</span
-                      ><input
-                        type="text"
-                        .value=${this.addStarter.lastname}
-                        @input=${this.updateAddStarterLastname}
-                        placeholder="Nachname"
-                    /></label>
-                  </td>
-                  <td>
-                    <label
-                      ><span>Geburtstag</span
-                      ><input
-                        type="date"
-                        .value=${this.addStarter.birthdate
-                          .toISOString()
-                          .slice(0, 10)}
-                        @input=${this.updateAddStarterBirthdate}
-                    /></label>
-                  </td>
-                  <td>
-                    <label
-                      ><span>Einzel Männlich</span
-                      ><input
-                        type="checkbox"
-                        .checked=${this.addStarter.single_male}
-                        @input=${this.updateAddStarterSingleMale}
-                    /></label>
-                  </td>
-                  <td>
-                    <label
-                      ><span>Einzel Weiblich</span
-                      ><input
-                        type="checkbox"
-                        .checked=${this.addStarter.single_female}
-                        @input=${this.updateAddStarterSingleFemale}
-                    /></label>
-                  </td>
-                  <td>
-                    <label
-                      ><span>Paar</span
-                      ><input
-                        type="checkbox"
-                        .checked=${this.addStarter.pair}
-                        @input=${this.updateAddStarterPair}
-                    /></label>
-                  </td>
-                  <td>
-                    <label
-                      ><span>Partner Name</span>
-                      <input
-                        type="text"
-                        .value=${this.addStarter.partner_name || ""}
-                        @input=${this.updateAddStarterPartnerName}
-                        placeholder="Partner Name"
-                        list="clubStarters"
-                        ?disabled=${!this.addStarter.pair}
-                    /></label>
-                  </td>
-                  <td>
-                    <label
-                      ><span>Partner ID</span>
-                      <input
-                        type="text"
-                        .value=${this.addStarter.partner_id || ""}
-                        @input=${this.updateAddStarterPartnerId}
-                        placeholder="Partner ID"
-                        list="clubStarters"
-                        ?disabled=${!this.addStarter.pair}
-                    /></label>
-                  </td>
-                  <td>
-                    <label><span>Startgebühr</span></label> ${getStarterPrice(
-                      this.addStarter,
-                      this.systemStatus?.competition,
-                    )}€
-                  </td>
-                  <td class="actionCol">
+                ? this.renderAddRow()
+                : html`<tr class="addRow fullRow">
+                  <td colspan=${this.columnCount}>
                     <button
-                      class="green material-icon"
-                      @click=${this.commitAddStarter}
-                    >
-                      save
-                    </button>
-                    <button
-                      class="red material-icon"
-                      @click=${this.resetAddStarter}
-                    >
-                      cancel
-                    </button>
-                  </td>
-                </tr>`
-                : html`<tr id="addStarterRow">
-                  <td colspan=${this.adminMode ? 13 : 11}>
-                    <button
-                      id="addStarterButton"
-                      class="material-icon"
+                      class="addButton material-icon"
+                      title="Starter hinzufügen"
+                      aria-label="Starter hinzufügen"
                       @click=${this.enterAddStarterMode}
                     >
                       add
@@ -399,245 +260,29 @@ export default class CupClubStarterManager extends LitElement {
                 </tr>`
               : nothing
           }
-          ${this.starters.render({
-            complete: (starters) =>
-              starters.map((starter) => {
-                const editStarter = this.starterEdits.get(starter.id);
-                return editStarter
-                  ? html`<tr>
-                      ${this.adminMode ? html`<td>${starter.id}</td>` : nothing}
-                      <td>
-                        <label
-                          ><span>Vorname</span
-                          ><input
-                            type="text"
-                            .value=${editStarter.firstname}
-                            @input=${
-                              // eslint-disable-next-line lit/no-template-arrow
-                              (e: InputEvent) =>
-                                this.updateEditStarterFirstname(editStarter, e)
-                            }
-                            placeholder="Vorname"
-                        /></label>
-                      </td>
-                      <td>
-                        <label
-                          ><span>Nachname</span
-                          ><input
-                            type="text"
-                            .value=${editStarter.lastname}
-                            @input=${
-                              // eslint-disable-next-line lit/no-template-arrow
-                              (e: InputEvent) =>
-                                this.updateEditStarterLastname(editStarter, e)
-                            }
-                            placeholder="Nachname"
-                        /></label>
-                      </td>
-                      <td>
-                        <label
-                          ><span>Geburtstag</span
-                          ><input
-                            type="date"
-                            .value=${editStarter.birthdate
-                              .toISOString()
-                              .slice(0, 10)}
-                            @input=${
-                              // eslint-disable-next-line lit/no-template-arrow
-                              (e: InputEvent) =>
-                                this.updateEditStarterBirthdate(editStarter, e)
-                            }
-                        /></label>
-                      </td>
-                      <td>
-                        <label
-                          ><span>Einzel Männlich</span
-                          ><input
-                            type="checkbox"
-                            ?checked=${editStarter.single_male}
-                            @input=${
-                              // eslint-disable-next-line lit/no-template-arrow
-                              (e: InputEvent) =>
-                                this.updateEditStarterSingleMale(editStarter, e)
-                            }
-                        /></label>
-                      </td>
-                      <td>
-                        <label
-                          ><span>Einzel Weiblich</span
-                          ><input
-                            type="checkbox"
-                            ?checked=${editStarter.single_female}
-                            @input=${
-                              // eslint-disable-next-line lit/no-template-arrow
-                              (e: InputEvent) =>
-                                this.updateEditStarterSingleFemale(
-                                  editStarter,
-                                  e,
-                                )
-                            }
-                        /></label>
-                      </td>
-                      <td>
-                        <label
-                          ><span>Paar</span
-                          ><input
-                            type="checkbox"
-                            ?checked=${editStarter.pair}
-                            @input=${
-                              // eslint-disable-next-line lit/no-template-arrow
-                              (e: InputEvent) =>
-                                this.updateEditStarterPair(editStarter, e)
-                            }
-                        /></label>
-                      </td>
-                      <td>
-                        <label
-                          ><span>Partner Name</span
-                          ><input
-                            type="text"
-                            .value=${editStarter.partner_name || ""}
-                            @input=${
-                              // eslint-disable-next-line lit/no-template-arrow
-                              (e: InputEvent) =>
-                                this.updateEditStarterPartnerName(
-                                  editStarter,
-                                  e,
-                                )
-                            }
-                            placeholder="Partner Name"
-                            list="clubStarters"
-                            ?disabled=${!editStarter.pair}
-                        /></label>
-                      </td>
-                      ${
-                        this.adminMode
-                          ? html`<td>
-                            <label
-                              ><span>Partner ID</span
-                              ><input
-                                type="text"
-                                .value=${editStarter.partner_id || ""}
-                                @input=${
-                                  // eslint-disable-next-line lit/no-template-arrow
-                                  (e: InputEvent) =>
-                                    this.updateEditStarterPartnerId(
-                                      editStarter,
-                                      e,
-                                    )
-                                }
-                                placeholder="Partner ID"
-                                list="clubStarters"
-                                ?disabled=${!editStarter.pair}
-                            /></label>
-                          </td>`
-                          : nothing
-                      }
-                      <td>
-                        <label><span>Startgebühr</span></label>
-                        ${getStarterPrice(editStarter, this.systemStatus?.competition)}€
-                      </td>
-                      <td class="actionCol">
-                        <button
-                          class="green material-icon"
-                          @click=${
-                            // eslint-disable-next-line lit/no-template-arrow
-                            () => this.commitStarterEdit(editStarter)
-                          }
-                        >
-                          save
-                        </button>
-                        <button
-                          class="red material-icon"
-                          @click=${
-                            // eslint-disable-next-line lit/no-template-arrow
-                            () => this.disableStarterEdit(editStarter)
-                          }
-                        >
-                          cancel
-                        </button>
-                      </td>
-                    </tr>`
-                  : html`<tr>
-                      ${this.adminMode ? html`<td>${starter.id}</td>` : nothing}
-                      <td>
-                        <label><span>Vorname</span></label> ${starter.firstname}
-                      </td>
-                      <td>
-                        <label><span>Nachname</span></label> ${starter.lastname}
-                      </td>
-                      <td>
-                        <label><span>Geburtstag</span></label>
-                        ${starter.birthdate.toLocaleDateString()}
-                      </td>
-                      <td>
-                        <label><span>Einzel Männlich</span></label>
-                        ${starter.single_male ? "✔️" : "-"}
-                      </td>
-                      <td>
-                        <label><span>Einzel Weiblich</span></label>
-                        ${starter.single_female ? "✔️" : "-"}
-                      </td>
-                      <td>
-                        <label><span>Paar</span></label> ${
-                          starter.pair ? "✔️" : "-"
-                        }
-                      </td>
-                      <td>
-                        <label><span>Partner</span></label> ${
-                          starter.pair && starter.partner_name
-                            ? starter.resolved_partner_name
-                              ? `✔️ ${starter.resolved_partner_name} (${starter.resolved_partner_club})`
-                              : `⌛ ${starter.partner_name}`
-                            : nothing
-                        }
-                      </td>
-                      ${
-                        this.adminMode
-                          ? html`<td>
-                            <label><span>Partner ID</span></label>
-                            ${
-                              starter.pair && starter.partner_id
-                                ? starter.partner_id
-                                : nothing
-                            }
-                          </td>`
-                          : nothing
-                      }
-                      <td>
-                        <label><span>Startgebühr</span></label>
-                        ${getStarterPrice(starter, this.systemStatus?.competition)}€
-                      </td>
-                      <td class="actionCol">
-                        ${
-                          this.systemStatus?.can_register_starter ||
-                          this.user?.is_admin
-                            ? html` <button
-                                @click=${
-                                  // eslint-disable-next-line lit/no-template-arrow
-                                  () => this.enableStarterEdit(starter)
-                                }
-                                class="blue material-icon"
-                              >
-                                edit
-                              </button>
-                              <button
-                                @click=${
-                                  // eslint-disable-next-line lit/no-template-arrow
-                                  () => this.deleteStarter(starter)
-                                }
-                                class="red material-icon"
-                              >
-                                delete
-                              </button>`
-                            : nothing
-                        }
-                      </td>
-                    </tr>`;
-              }),
-            error: (error) => html`<p>${error}</p>`,
-            pending: () => html`<p>Lädt Starter...</p>`,
-          })}
+          ${
+            this.starters.status === TaskStatus.ERROR
+              ? html`<tr class="fullRow">
+                <td colspan=${this.columnCount}>
+                  ${errorMessage(this.starters.error)}
+                </td>
+              </tr>`
+              : this.starters.value === undefined
+                ? html`<tr class="fullRow">
+                  <td colspan=${this.columnCount}>Lädt Starter...</td>
+                </tr>`
+                : nothing
+          }
+          ${repeat(
+            starters,
+            (starter) => starter.id,
+            (starter) => {
+              const editStarter = this.starterEdits.get(starter.id);
+              return editStarter
+                ? this.renderEditRow(editStarter)
+                : this.renderStarterRow(starter);
+            },
+          )}
         </tbody>
       </table>
       ${
@@ -654,6 +299,412 @@ export default class CupClubStarterManager extends LitElement {
       }`;
   }
 
+  renderPayment() {
+    if (this.paymentInput === null) {
+      return html`${formatMoney(this.club?.payment)}${
+        this.adminMode
+          ? html` <button class="blue" @click=${this.editPayment}>
+              Betrag aktualisieren
+            </button>`
+          : nothing
+      }`;
+    }
+    return html`<input
+        type="text"
+        inputmode="decimal"
+        aria-label="Bezahlter Betrag in Euro"
+        .value=${this.paymentInput}
+        @input=${this.updatePaymentInput}
+        @keydown=${this.paymentKeydown}
+      />
+      €
+      <button
+        class="green material-icon"
+        title="Speichern"
+        aria-label="Speichern"
+        @click=${this.savePayment}
+      >
+        save
+      </button>
+      <button
+        class="red material-icon"
+        title="Abbrechen"
+        aria-label="Abbrechen"
+        @click=${this.cancelPayment}
+      >
+        cancel
+      </button>`;
+  }
+
+  renderAddRow() {
+    return html`<tr class="addRow">
+      ${this.adminMode ? html`<td></td>` : nothing}
+      <td>
+        <label
+          ><span>Vorname</span
+          ><input
+            type="text"
+            .value=${this.addStarter.firstname}
+            @input=${this.updateAddStarterFirstname}
+            placeholder="Vorname"
+        /></label>
+      </td>
+      <td>
+        <label
+          ><span>Nachname</span
+          ><input
+            type="text"
+            .value=${this.addStarter.lastname}
+            @input=${this.updateAddStarterLastname}
+            placeholder="Nachname"
+        /></label>
+      </td>
+      <td>
+        <label
+          ><span>Geburtstag</span
+          ><input
+            type="date"
+            .value=${dateInputValue(this.addStarter.birthdate)}
+            @input=${this.updateAddStarterBirthdate}
+        /></label>
+      </td>
+      <td>
+        <label
+          ><span>Einzel Männlich</span
+          ><input
+            type="checkbox"
+            .checked=${this.addStarter.single_male}
+            @input=${this.updateAddStarterSingleMale}
+        /></label>
+      </td>
+      <td>
+        <label
+          ><span>Einzel Weiblich</span
+          ><input
+            type="checkbox"
+            .checked=${this.addStarter.single_female}
+            @input=${this.updateAddStarterSingleFemale}
+        /></label>
+      </td>
+      <td>
+        <label
+          ><span>Paar</span
+          ><input
+            type="checkbox"
+            .checked=${this.addStarter.pair}
+            @input=${this.updateAddStarterPair}
+        /></label>
+      </td>
+      <td>
+        <label
+          ><span>Partner Name</span>
+          <input
+            type="text"
+            .value=${this.addStarter.partner_name || ""}
+            @input=${this.updateAddStarterPartnerName}
+            placeholder="Partner Name"
+            list="clubStarters"
+            ?disabled=${!this.addStarter.pair}
+        /></label>
+      </td>
+      ${
+        this.adminMode
+          ? html`<td>
+            <label
+              ><span>Partner ID</span>
+              <input
+                type="text"
+                .value=${this.addStarter.partner_id || ""}
+                @input=${this.updateAddStarterPartnerId}
+                placeholder="Partner ID"
+                ?disabled=${!this.addStarter.pair}
+            /></label>
+          </td>`
+          : nothing
+      }
+      <td><label><span>Gruppen</span></label> -</td>
+      <td>
+        <label><span>Startgebühr</span></label>
+        ${formatMoney(
+          getStarterPrice(this.addStarter, this.systemStatus?.competition),
+        )}
+      </td>
+      <td class="actionCol">
+        <button
+          class="green material-icon"
+          title="Speichern"
+          aria-label="Speichern"
+          @click=${this.commitAddStarter}
+        >
+          save
+        </button>
+        <button
+          class="red material-icon"
+          title="Abbrechen"
+          aria-label="Abbrechen"
+          @click=${this.resetAddStarter}
+        >
+          cancel
+        </button>
+      </td>
+    </tr>`;
+  }
+
+  renderEditRow(editStarter: Starter) {
+    return html`<tr>
+      ${this.adminMode ? html`<td>${editStarter.id}</td>` : nothing}
+      <td>
+        <label
+          ><span>Vorname</span
+          ><input
+            type="text"
+            .value=${editStarter.firstname}
+            @input=${
+              // eslint-disable-next-line lit/no-template-arrow
+              (e: InputEvent) => this.updateEditStarterFirstname(editStarter, e)
+            }
+            placeholder="Vorname"
+        /></label>
+      </td>
+      <td>
+        <label
+          ><span>Nachname</span
+          ><input
+            type="text"
+            .value=${editStarter.lastname}
+            @input=${
+              // eslint-disable-next-line lit/no-template-arrow
+              (e: InputEvent) => this.updateEditStarterLastname(editStarter, e)
+            }
+            placeholder="Nachname"
+        /></label>
+      </td>
+      <td>
+        <label
+          ><span>Geburtstag</span
+          ><input
+            type="date"
+            .value=${dateInputValue(editStarter.birthdate)}
+            @input=${
+              // eslint-disable-next-line lit/no-template-arrow
+              (e: InputEvent) => this.updateEditStarterBirthdate(editStarter, e)
+            }
+        /></label>
+      </td>
+      <td>
+        <label
+          ><span>Einzel Männlich</span
+          ><input
+            type="checkbox"
+            .checked=${editStarter.single_male}
+            @input=${
+              // eslint-disable-next-line lit/no-template-arrow
+              (e: InputEvent) =>
+                this.updateEditStarterSingleMale(editStarter, e)
+            }
+        /></label>
+      </td>
+      <td>
+        <label
+          ><span>Einzel Weiblich</span
+          ><input
+            type="checkbox"
+            .checked=${editStarter.single_female}
+            @input=${
+              // eslint-disable-next-line lit/no-template-arrow
+              (e: InputEvent) =>
+                this.updateEditStarterSingleFemale(editStarter, e)
+            }
+        /></label>
+      </td>
+      <td>
+        <label
+          ><span>Paar</span
+          ><input
+            type="checkbox"
+            .checked=${editStarter.pair}
+            @input=${
+              // eslint-disable-next-line lit/no-template-arrow
+              (e: InputEvent) => this.updateEditStarterPair(editStarter, e)
+            }
+        /></label>
+      </td>
+      <td>
+        <label
+          ><span>Partner Name</span
+          ><input
+            type="text"
+            .value=${editStarter.partner_name || ""}
+            @input=${
+              // eslint-disable-next-line lit/no-template-arrow
+              (e: InputEvent) =>
+                this.updateEditStarterPartnerName(editStarter, e)
+            }
+            placeholder="Partner Name"
+            list="clubStarters"
+            ?disabled=${!editStarter.pair}
+        /></label>
+      </td>
+      ${
+        this.adminMode
+          ? html`<td>
+            <label
+              ><span>Partner ID</span
+              ><input
+                type="text"
+                .value=${editStarter.partner_id || ""}
+                @input=${
+                  // eslint-disable-next-line lit/no-template-arrow
+                  (e: InputEvent) =>
+                    this.updateEditStarterPartnerId(editStarter, e)
+                }
+                placeholder="Partner ID"
+                ?disabled=${!editStarter.pair}
+            /></label>
+          </td>`
+          : nothing
+      }
+      <td>
+        <label><span>Gruppen</span></label>
+        ${this.renderGroups(editStarter)}
+      </td>
+      <td>
+        <label><span>Startgebühr</span></label>
+        ${formatMoney(
+          getStarterPrice(editStarter, this.systemStatus?.competition),
+        )}
+      </td>
+      <td class="actionCol">
+        <button
+          class="green material-icon"
+          title="Speichern"
+          aria-label="Speichern"
+          @click=${
+            // eslint-disable-next-line lit/no-template-arrow
+            () => this.commitStarterEdit(editStarter)
+          }
+        >
+          save
+        </button>
+        <button
+          class="red material-icon"
+          title="Abbrechen"
+          aria-label="Abbrechen"
+          @click=${
+            // eslint-disable-next-line lit/no-template-arrow
+            () => this.disableStarterEdit(editStarter)
+          }
+        >
+          cancel
+        </button>
+      </td>
+    </tr>`;
+  }
+
+  renderStarterRow(starter: Starter) {
+    return html`<tr>
+      ${this.adminMode ? html`<td>${starter.id}</td>` : nothing}
+      <td><label><span>Vorname</span></label> ${starter.firstname}</td>
+      <td><label><span>Nachname</span></label> ${starter.lastname}</td>
+      <td>
+        <label><span>Geburtstag</span></label>
+        ${starter.birthdate.toLocaleDateString("de-DE")}
+      </td>
+      <td>
+        <label><span>Einzel Männlich</span></label>
+        ${starter.single_male ? "✔️" : "-"}
+      </td>
+      <td>
+        <label><span>Einzel Weiblich</span></label>
+        ${starter.single_female ? "✔️" : "-"}
+      </td>
+      <td>
+        <label><span>Paar</span></label> ${starter.pair ? "✔️" : "-"}
+      </td>
+      <td>
+        <label><span>Partner</span></label> ${
+          starter.pair && starter.partner_name
+            ? starter.resolved_partner_name
+              ? `✔️ ${starter.resolved_partner_name} (${starter.resolved_partner_club})`
+              : `⌛ ${starter.partner_name}`
+            : nothing
+        }
+      </td>
+      ${
+        this.adminMode
+          ? html`<td>
+            <label><span>Partner ID</span></label>
+            ${starter.pair && starter.partner_id ? starter.partner_id : nothing}
+          </td>`
+          : nothing
+      }
+      <td>
+        <label><span>Gruppen</span></label>
+        ${this.renderGroups(starter)}
+      </td>
+      <td>
+        <label><span>Startgebühr</span></label>
+        ${formatMoney(getStarterPrice(starter, this.systemStatus?.competition))}
+      </td>
+      <td class="actionCol">
+        ${
+          this.canEdit
+            ? html`<button
+                @click=${
+                  // eslint-disable-next-line lit/no-template-arrow
+                  () => this.enableStarterEdit(starter)
+                }
+                class="blue material-icon"
+                title="Bearbeiten"
+                aria-label="Bearbeiten"
+              >
+                edit
+              </button>
+              <button
+                @click=${
+                  // eslint-disable-next-line lit/no-template-arrow
+                  () => this.deleteStarter(starter)
+                }
+                class="red material-icon"
+                title="Löschen"
+                aria-label="Löschen"
+              >
+                delete
+              </button>`
+            : nothing
+        }
+      </td>
+    </tr>`;
+  }
+
+  /** The starter's groups ("KG Wirbelwind"); groups are edited below. */
+  renderGroups(starter: Starter) {
+    const memberships = this.groups.value?.get(starter.id);
+    if (!memberships?.length) {
+      // Without the group list (still loading or failed) only the count.
+      return starter.group_count ? String(starter.group_count) : "-";
+    }
+    return html`<ul class="groups">
+      ${repeat(
+        memberships,
+        (membership) => membership.id,
+        (membership) =>
+          html`<li
+            title="${actTypeLabels[membership.act_type]} „${membership.group_name}“${
+              membership.is_replacement ? " (Ersatz)" : ""
+            }"
+          >
+            <span class="badge">${actTypeShort[membership.act_type]}</span>
+            ${membership.group_name}${
+              membership.is_replacement
+                ? html` <span class="badge muted">Ersatz</span>`
+                : nothing
+            }
+          </li>`,
+      )}
+    </ul>`;
+  }
+
   enableStarterEdit(starter: Starter) {
     this.starterEdits.set(starter.id, { ...starter });
     this.requestUpdate();
@@ -665,45 +716,62 @@ export default class CupClubStarterManager extends LitElement {
   }
 
   async commitStarterEdit(starter: Starter) {
-    if (!validateStarter(starter)) {
-      return;
+    const invalid = validateStarter(starter);
+    if (invalid) {
+      return this.showError(invalid);
     }
 
-    const resp = await client.POST("/api/command/edit_club_starter", {
-      body: {
-        ...starter,
-        starter_id: starter.id,
-        birthdate: starter.birthdate.toISOString(),
-        partner_name: starter.partner_name ? starter.partner_name : null,
-      },
-    });
-    if (resp.error) {
-      alert(
-        "Fehler beim Speichern: " + (resp.error as { message: string }).message,
+    try {
+      unwrap(
+        await client.POST("/api/command/edit_club_starter", {
+          body: {
+            ...starter,
+            starter_id: starter.id,
+            birthdate: starter.birthdate.toISOString(),
+            partner_name: starter.partner_name ? starter.partner_name : null,
+            // A cleared "Partner ID" field is "", which isn't a UUID.
+            partner_id: (starter.pair && starter.partner_id?.trim()) || null,
+          },
+        }),
       );
-      return;
+    } catch (error) {
+      return this.showError(`Fehler beim Speichern: ${errorMessage(error)}`);
     }
     this.starterEdits.delete(starter.id);
-    this.starters.run();
+    this.clearError();
+    this.dataChanged();
   }
 
   async deleteStarter(starter: Starter) {
-    if (
-      !confirm(
-        `Sicher, dass du ${starter.firstname} ${starter.lastname} löschen willst? Gib 'Ja' ein:`,
-      )
-    ) {
+    const name = `${starter.firstname} ${starter.lastname}`;
+    const groups = starter.group_count
+      ? `\n${name} wird dabei auch aus ${
+          starter.group_count === 1
+            ? "einer Gruppe"
+            : `${starter.group_count} Gruppen`
+        } entfernt.`
+      : "";
+    if (!confirm(`Sicher, dass du ${name} löschen willst?${groups}`)) {
       return;
     }
-    const resp = await client.POST("/api/command/delete_club_starter", {
-      body: { starter_id: starter.id },
-    });
-    if (resp.error) {
-      alert("Fehler beim Löschen: " + resp.error);
-      return;
+    let warnings: string[];
+    try {
+      ({ warnings } = unwrap(
+        await client.POST("/api/command/delete_club_starter", {
+          body: { starter_id: starter.id },
+        }),
+      ));
+    } catch (error) {
+      return this.showError(`Fehler beim Löschen: ${errorMessage(error)}`);
     }
     this.starterEdits.delete(starter.id);
-    this.starters.run();
+    // Deleted, but a group the starter left may now clash with another one.
+    if (warnings.length) {
+      this.showError(warnings.join("\n"));
+    } else {
+      this.clearError();
+    }
+    this.dataChanged();
   }
 
   updateEditStarterFirstname(starter: Starter, e: InputEvent) {
@@ -800,39 +868,40 @@ export default class CupClubStarterManager extends LitElement {
   }
 
   async commitAddStarter() {
-    if (!this.club || !validateStarter(this.addStarter)) {
+    if (!this.club) {
       return;
     }
-
-    const resp = await client.POST("/api/command/add_club_starter", {
-      body: {
-        ...this.addStarter,
-        club_id: this.club?.id,
-        birthdate: this.addStarter.birthdate.toISOString(),
-        partner_name: this.addStarter.partner_name
-          ? this.addStarter.partner_name
-          : null,
-      },
-    });
-
-    if (resp.error) {
-      alert("Fehler beim Speichern: " + resp.error);
-      return;
+    const invalid = validateStarter(this.addStarter);
+    if (invalid) {
+      return this.showError(invalid);
     }
-    this.starters.run();
+
+    try {
+      unwrap(
+        await client.POST("/api/command/add_club_starter", {
+          body: {
+            ...this.addStarter,
+            club_id: this.club.id,
+            birthdate: this.addStarter.birthdate.toISOString(),
+            partner_name: this.addStarter.partner_name
+              ? this.addStarter.partner_name
+              : null,
+            partner_id:
+              (this.addStarter.pair && this.addStarter.partner_id?.trim()) ||
+              null,
+          },
+        }),
+      );
+    } catch (error) {
+      return this.showError(`Fehler beim Speichern: ${errorMessage(error)}`);
+    }
     this.resetAddStarter();
+    this.clearError();
+    this.dataChanged();
   }
 
   resetAddStarter() {
-    this.addStarter = {
-      firstname: "",
-      lastname: "",
-      birthdate: new Date(),
-      single_male: false,
-      single_female: false,
-      pair: false,
-      partner_name: "",
-    };
+    this.addStarter = emptyStarter();
     this.addStarterMode = false;
   }
 
@@ -840,43 +909,99 @@ export default class CupClubStarterManager extends LitElement {
     this.addStarterMode = true;
   }
 
-  async pay() {
-    if (!this.club) {
+  editPayment() {
+    this.paymentInput = (this.club?.payment ?? 0).toFixed(2).replace(".", ",");
+  }
+
+  cancelPayment() {
+    this.paymentInput = null;
+  }
+
+  updatePaymentInput(e: InputEvent) {
+    this.paymentInput = (e.target as HTMLInputElement).value;
+  }
+
+  paymentKeydown(e: KeyboardEvent) {
+    if (e.key === "Enter") {
+      this.savePayment();
+    } else if (e.key === "Escape") {
+      this.cancelPayment();
+    }
+  }
+
+  async savePayment() {
+    if (!this.club || this.paymentInput === null) {
       return;
     }
-    const amount = parseFloat(
-      prompt("Betrag in Euro:")?.replace(",", ".") || "0",
-    );
-    if (!amount) {
-      alert("Ungültiger Betrag.");
-      return;
+    const amount = parseAmount(this.paymentInput);
+    if (amount === null) {
+      return this.showError(
+        "Ungültiger Betrag. Bitte den bezahlten Betrag in Euro angeben, z. B. 45,00 oder 1.350,00.",
+      );
     }
-    const resp = await client.POST("/api/command/set_payment", {
-      body: { club_id: this.club?.id, amount },
-    });
-    if (resp.error) {
-      alert("Fehler beim Speichern: " + resp.error);
-      return;
+    try {
+      unwrap(
+        await client.POST("/api/command/set_payment", {
+          body: { club_id: this.club.id, amount },
+        }),
+      );
+    } catch (error) {
+      return this.showError(`Fehler beim Speichern: ${errorMessage(error)}`);
     }
-    console.log(resp);
-    alert(`Zahlung von ${amount}€ eingetragen.`);
+    // The club comes from cup-context-club, which doesn't reload it.
     this.club.payment = amount;
-    document.location.reload();
+    this.paymentInput = null;
+    this.clearError();
+    this.dataChanged();
+  }
+
+  clearError() {
+    this.error = null;
+  }
+
+  async showError(message: string) {
+    this.error = message;
+    await this.updateComplete;
+    this.errorBanner?.scrollIntoView({ block: "nearest" });
+  }
+
+  /**
+   * Reloads after a successful change. Inside cup-club-manager, the club
+   * manager cancels the event and reloads all managers (starters change
+   * fees and groups); standalone, only this manager reloads.
+   */
+  dataChanged() {
+    const event = new Event("club-data-changed", {
+      bubbles: true,
+      composed: true,
+      cancelable: true,
+    });
+    if (this.dispatchEvent(event)) {
+      this.starters.run();
+      this.groups.run();
+    }
   }
 }
 
+/** A German message if the starter can't be saved like this. */
 const validateStarter = (starter: MaybeNewStarter) => {
+  if (!starter.firstname.trim() || !starter.lastname.trim()) {
+    return "Vorname und Nachname müssen angegeben werden.";
+  }
+
+  if (Number.isNaN(starter.birthdate.getTime())) {
+    return "Bitte gib ein gültiges Geburtsdatum an.";
+  }
+
   if (starter.single_male && starter.single_female) {
-    alert(
-      "Ein Starter kann nur in einer Einzelkür starten (Einzel M oder Einzel W).",
-    );
-    return false;
+    return "Ein Starter kann nur in einer Einzelkür starten (Einzel M oder Einzel W).";
   }
 
-  if (!starter.firstname || !starter.lastname) {
-    alert("Vorname und Nachname müssen angegeben werden.");
-    return false;
+  // Only admins see the field; without "Paar" it is ignored.
+  const partnerId = starter.pair && starter.partner_id?.trim();
+  if (partnerId && !UUID_PATTERN.test(partnerId)) {
+    return "Die Partner ID ist ungültig.";
   }
 
-  return true;
+  return null;
 };

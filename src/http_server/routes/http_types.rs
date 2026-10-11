@@ -12,26 +12,96 @@ pub struct User {
     pub club_id: Option<Uuid>,
 }
 
+/// A participant of an act, as stored in the `participants` JSON of `view_act`.
 #[derive(Debug, serde::Serialize, serde::Deserialize, utoipa::ToSchema, Clone)]
 pub struct ActParticipant {
     pub firstname: String,
     pub lastname: String,
     pub id: Uuid,
+    pub club_id: Uuid,
     pub club_name: String,
+    /// Replacement riders (Ersatzfahrer) of a group. Always false for singles
+    /// and pairs.
+    pub is_replacement: bool,
 }
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct Act {
     pub id: Uuid,
     pub name: String,
+    /// Group acts only.
+    pub group_name: Option<String>,
+    /// Group acts only: the club that created the group.
+    pub owner_club_id: Option<Uuid>,
     pub song_file: Option<String>,
     pub description: Option<String>,
     pub song_file_name: Option<String>,
     pub song_checked: bool,
     pub act_type: ActType,
+    /// Age of the oldest rider (replacements included) on the determining
+    /// day. Only for admins, `null` for everyone else: it would give away the
+    /// rider's birthdate.
     pub max_age: Option<f64>,
     pub participants: Vec<ActParticipant>,
+    /// `null` for acts no category matches, incomplete groups (fewer than 3
+    /// regular riders) and groups with a `type_conflict`.
     pub category: Option<String>,
+    /// Groups only: a rider is also in another group of the same type (a rider
+    /// may start in one small and one large group). Such groups get no
+    /// category until that's sorted out.
+    pub type_conflict: bool,
     pub act_order: Option<i64>,
     pub category_order: Option<i64>,
+}
+
+impl Act {
+    /// Hides data only admins may see, see [`Act::max_age`].
+    pub fn for_viewer(mut self, is_admin: bool) -> Self {
+        if !is_admin {
+            self.max_age = None;
+        }
+        self
+    }
+}
+
+/// A row of `view_act` (left-joined with its category) as read by `list_acts`
+/// and `get_act`.
+pub struct DBAct {
+    pub id: Uuid,
+    pub name: String,
+    pub group_name: Option<String>,
+    pub owner_club_id: Option<Uuid>,
+    pub song_file: Option<String>,
+    pub description: Option<String>,
+    pub song_file_name: Option<String>,
+    pub act_type: ActType,
+    pub max_age: Option<f64>,
+    pub participants: sqlx::types::Json<Vec<ActParticipant>>,
+    pub category: Option<String>,
+    pub type_conflict: bool,
+    pub song_checked: bool,
+    pub act_order: Option<i64>,
+    pub category_order: Option<i64>,
+}
+
+impl From<DBAct> for Act {
+    fn from(db_act: DBAct) -> Self {
+        Act {
+            id: db_act.id,
+            name: db_act.name,
+            group_name: db_act.group_name,
+            owner_club_id: db_act.owner_club_id,
+            song_file: db_act.song_file,
+            description: db_act.description,
+            song_file_name: db_act.song_file_name,
+            act_type: db_act.act_type,
+            max_age: db_act.max_age,
+            participants: db_act.participants.0,
+            category: db_act.category,
+            type_conflict: db_act.type_conflict,
+            song_checked: db_act.song_checked,
+            act_order: db_act.act_order,
+            category_order: db_act.category_order,
+        }
+    }
 }

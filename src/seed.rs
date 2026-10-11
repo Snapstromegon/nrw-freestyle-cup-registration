@@ -198,6 +198,57 @@ pub fn coverage_warnings(categories: &[ResolvedCategory]) -> Vec<String> {
     warnings
 }
 
+/// The act types (singles split by gender) that need at least one category.
+const CATEGORY_KINDS: [(ActType, bool); 5] = [
+    (ActType::Single, false),
+    (ActType::Single, true),
+    (ActType::Pair, false),
+    (ActType::GroupSmall, false),
+    (ActType::GroupLarge, false),
+];
+
+/// Finds act types without any category. Their acts never get a category, so
+/// they're never scheduled and never show up in the startlist — e.g. groups,
+/// if the config was copied from a year without group categories.
+pub fn missing_act_type_warnings(categories: &[ResolvedCategory]) -> Vec<String> {
+    CATEGORY_KINDS
+        .iter()
+        .filter(|(act_type, single_male)| {
+            !categories.iter().any(|category| {
+                category.act_type == *act_type
+                    // Only single categories are split by gender.
+                    && (*act_type != ActType::Single || category.single_male == *single_male)
+            })
+        })
+        .map(|(act_type, single_male)| {
+            format!(
+                "No category for {}{}: acts of this type never get a category.",
+                act_type.as_str(),
+                if *single_male { ", male" } else { "" }
+            )
+        })
+        .collect()
+}
+
+/// Finds categories without a timeplan entry: their acts are never scheduled
+/// and missing from the startlist export.
+pub fn unscheduled_category_warnings(
+    timeplan: &[TimeplanEntryConfig],
+    category_names: &[String],
+) -> Vec<String> {
+    category_names
+        .iter()
+        .filter(|name| {
+            !timeplan
+                .iter()
+                .any(|entry| entry.category.as_ref() == Some(*name))
+        })
+        .map(|name| {
+            format!("Category {name} has no [[timeplan]] entry; its acts are never scheduled.")
+        })
+        .collect()
+}
+
 /// Checks that every timeplan entry is either a category entry for a known
 /// category or a custom entry with a label and a duration.
 pub fn validate_timeplan(
@@ -286,7 +337,10 @@ pub async fn seed(
             .map(|c| c.determining_day)
             .ok_or("Categories need a [competition] with a determining_day.")?;
         let resolved = resolve_categories(categories, determining_day)?;
-        for warning in coverage_warnings(&resolved) {
+        for warning in coverage_warnings(&resolved)
+            .into_iter()
+            .chain(missing_act_type_warnings(&resolved))
+        {
             warn!("{warning}");
         }
         for (index, category) in resolved.iter().enumerate() {
@@ -332,6 +386,9 @@ pub async fn seed(
                 .await
                 .map_err(db_error)?;
         validate_timeplan(timeplan, &category_names)?;
+        for warning in unscheduled_category_warnings(timeplan, &category_names) {
+            warn!("{warning}");
+        }
         for entry in timeplan {
             let duration_seconds = entry.duration_minutes.map(|m| (m * 60.0).round() as i64);
             sqlx::query!(
@@ -456,6 +513,47 @@ mod tests {
         let open_end = categories(&category("U15", None, Some(15.0)));
         let warnings = coverage_warnings(&resolve_categories(&open_end, DAY).unwrap());
         assert!(warnings[0].contains("born before"), "{warnings:?}");
+    }
+
+    #[test]
+    fn act_types_without_categories_are_reported() {
+        let singles_only =
+            categories(&(category("U15", None, Some(15.0)) + &category("15+", Some(15.0), None)));
+        let warnings = missing_act_type_warnings(&resolve_categories(&singles_only, DAY).unwrap());
+        assert_eq!(
+            warnings,
+            [
+                "No category for single, male: acts of this type never get a category.",
+                "No category for pair: acts of this type never get a category.",
+                "No category for group_small: acts of this type never get a category.",
+                "No category for group_large: acts of this type never get a category.",
+            ]
+        );
+
+        // The gender filter only matters for singles.
+        let mut all = singles_only;
+        all.extend(categories(
+            "[[categories]]\nname = \"EM\"\nact_type = \"single\"\nsingle_male = true\n\
+             [[categories]]\nname = \"P\"\nact_type = \"pair\"\nsingle_male = true\n\
+             [[categories]]\nname = \"KG\"\nact_type = \"group_small\"\n\
+             [[categories]]\nname = \"GG\"\nact_type = \"group_large\"\n",
+        ));
+        let warnings = missing_act_type_warnings(&resolve_categories(&all, DAY).unwrap());
+        assert!(warnings.is_empty(), "{warnings:?}");
+    }
+
+    #[test]
+    fn categories_without_timeplan_entry_are_reported() {
+        let names = vec!["NEM".to_string(), "KG".to_string()];
+        let timeplan = ConfigFile::parse(
+            "[[timeplan]]\ncategory = \"NEM\"\n[[timeplan]]\nlabel = \"Pause\"\nduration_minutes = 30",
+        )
+        .unwrap()
+        .timeplan;
+        assert_eq!(
+            unscheduled_category_warnings(&timeplan, &names),
+            ["Category KG has no [[timeplan]] entry; its acts are never scheduled."]
+        );
     }
 
     #[test]

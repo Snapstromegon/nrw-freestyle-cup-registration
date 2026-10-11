@@ -30,7 +30,7 @@ struct StaticAssets;
 #[derive(OpenApiTrait)]
 #[openapi(
     info(
-        title = "NRW Freestyle Cup Login API",
+        title = "Einradevent Login API",
         description = "API for managing registrations",
         license(name = "AGPL-3.0-or-later", url = "https://www.gnu.org/licenses/agpl-3.0.html"),
     ),

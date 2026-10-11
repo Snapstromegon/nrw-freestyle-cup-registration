@@ -1,688 +1,946 @@
-import { Task } from "@lit/task";
-import { css, html, LitElement } from "lit";
-import { customElement, state } from "lit/decorators.js";
+import { Task, TaskStatus } from "@lit/task";
+import { css, html, LitElement, nothing } from "lit";
+import { customElement, query, state } from "lit/decorators.js";
+import { classMap } from "lit/directives/class-map.js";
 import { repeat } from "lit/directives/repeat.js";
+import { errorMessage, PollController, unwrap } from "../../api";
 import { client, type components } from "../../apiClient";
+import { adminStyles } from "../../styles/admin";
+import { iconStyles, resetStyles } from "../../styles/base";
+import { formatDateTime, formatDuration, parseDuration } from "../../utils";
+
+type Category = components["schemas"]["Category"];
+type Entry = components["schemas"]["TimeplanListEntry"];
+type TimeplanItem = components["schemas"]["TimeplanItem"];
+
+/** The row being edited, with the values as typed. */
+interface EntryDraft {
+  /** `datetime-local` value in local time, "" for none. */
+  earliest: string;
+  /** Category name, "" for a custom entry (break, award ceremony, …). */
+  category: string;
+  label: string;
+  /** Custom entries only: "m:ss" or plain seconds. */
+  duration: string;
+}
+
+interface Editing {
+  /** The edited entry, `null` for a new one. */
+  original: Entry | null;
+  draft: EntryDraft;
+  /** Whether the earliest start was touched; otherwise it is kept as it is. */
+  earliestChanged: boolean;
+}
+
+interface Data {
+  entries: Entry[];
+  categories: Map<string, Category>;
+  actCounts: Map<string, number>;
+  /** The prediction per entry (same index), if it is available. */
+  predictions: (TimeplanItem | undefined)[];
+  /** Delay of the running timeplan in seconds, if predicted. */
+  offset: number | null;
+  /** Why there is no prediction, "" if there is one. */
+  predictionError: string;
+}
+
+const statusChips = {
+  planned: { label: "geplant", tone: "muted" },
+  started: { label: "läuft", tone: "info" },
+  ended: { label: "beendet", tone: "ok" },
+} as const;
+
+const entryStatus = (entry: Entry) =>
+  entry.ended_at ? "ended" : entry.started_at ? "started" : "planned";
+
+/** A date-time as the value of a `datetime-local` input, in local time. */
+const toLocalInput = (value: string | null | undefined) => {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) {
+    return "";
+  }
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-` +
+    `${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+  );
+};
+
+/**
+ * The value of a `datetime-local` input (local time) for the backend, as
+ * RFC 3339 in UTC; `null` if empty or invalid. The backend stores the string
+ * as it is, so it must not be built by appending to the input's value.
+ */
+const toServerTime = (value: string) => {
+  const date = value ? new Date(value) : null;
+  return date && !Number.isNaN(date.getTime()) ? date.toISOString() : null;
+};
+
+/** The backend's (English) reasons why there is no prediction, in German. */
+const predictionErrorMessage = (message: string) => {
+  if (message.includes("Earliest start time is not set")) {
+    return "Der erste Eintrag braucht eine früheste Startzeit.";
+  }
+  if (message.includes("No first entry")) {
+    return "";
+  }
+  if (message.includes("Invalid timeplan entry")) {
+    return "Ein Eintrag ist unvollständig: eigene Einträge brauchen Bezeichnung und Dauer.";
+  }
+  return message;
+};
+
+/** Pairs the prediction's items with the entries (both are ordered by id). */
+const matchPredictions = (
+  entries: Entry[],
+  items: TimeplanItem[] | undefined,
+) => {
+  if (!items || items.length !== entries.length) {
+    return [];
+  }
+  return entries.map((entry, i) => {
+    const item = items[i].timeplan_entry;
+    const matches =
+      "Category" in item
+        ? item.Category.name === entry.category
+        : !entry.category && item.Custom.label === entry.label;
+    return matches ? items[i] : undefined;
+  });
+};
+
+const entryName = (entry: Entry) => entry.category ?? entry.label ?? "";
+
+/**
+ * The prediction starts at the first entry's earliest start. When `next`
+ * becomes the first entry (moving or deleting the current first one) and has
+ * no earliest start, it takes over the current first entry's; `null` if
+ * nothing has to be carried over.
+ */
+const carryOver = (entries: Entry[], next: Entry | undefined) => {
+  const start = entries[0]?.earliest_start_time;
+  return next && next !== entries[0] && start && !next.earliest_start_time
+    ? { entry: next, start }
+    : null;
+};
+
+/** Sets the carried-over earliest start (see `carryOver`). */
+const applyCarryOver = async (carry: ReturnType<typeof carryOver>) => {
+  if (!carry) {
+    return;
+  }
+  const { entry, start } = carry;
+  // edit_timeplan_entry overwrites every field: send the others back as the
+  // server returned them.
+  unwrap(
+    await client.POST("/api/command/edit_timeplan_entry", {
+      body: {
+        id: entry.id,
+        earliest_start_time: start,
+        category: entry.category ?? null,
+        label: entry.label ?? null,
+        duration_seconds: entry.duration_seconds ?? null,
+      },
+    }),
+  );
+};
 
 @customElement("cup-view-admin-timeplan")
 export default class CupViewAdminTimeplan extends LitElement {
-  static override styles = css`
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    .material-icon {
-      font-family: "Material Symbols Outlined";
-      font-weight: normal;
-      font-style: normal;
-      font-size: 24px;
-      line-height: 1;
-      letter-spacing: normal;
-      text-transform: none;
-      display: inline-block;
-      white-space: nowrap;
-      word-wrap: normal;
-      direction: ltr;
-      font-feature-settings: "liga";
-      -webkit-font-smoothing: antialiased;
-    }
-
-    table {
-      border-collapse: collapse;
-      width: 100%;
-    }
-
-    td,
-    th {
-      padding: 0.5rem;
-      border: 1px solid #ccc;
-    }
-
-    th {
-      background-color: #f5f5f5;
-    }
-
-    tr:nth-child(odd) td {
-      background-color: #0001;
-    }
-
-    tr:hover td,
-    tr:hover th {
-      background-color: #0002;
-    }
-
-    .right {
-      text-align: right;
-    }
-
-    nav a {
-      padding: 0.5rem;
-      display: inline-block;
-    }
-
-    .form-container {
-      background-color: #f9f9f9;
-      padding: 1rem;
-      margin: 1rem 0;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-    }
-
-    .form-row {
-      display: flex;
-      gap: 1rem;
-      margin-bottom: 0.5rem;
-      align-items: center;
-    }
-
-    .form-row label {
-      min-width: 150px;
-    }
-
-    .form-row input,
-    .form-row textarea,
-    .form-row select {
-      flex: 1;
-      padding: 0.25rem;
-    }
-
-    .actions {
-      display: flex;
-      gap: 0.5rem;
-    }
-
-    button {
-      padding: 0.5rem 1rem;
-      cursor: pointer;
-    }
-
-    button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    .delete-btn {
-      background-color: #dc3545;
-      color: white;
-      border: none;
-    }
-
-    .edit-btn {
-      background-color: #007bff;
-      color: white;
-      border: none;
-    }
-
-    .save-btn {
-      background-color: #28a745;
-      color: white;
-      border: none;
-    }
-
-    .cancel-btn {
-      background-color: #6c757d;
-      color: white;
-      border: none;
-    }
-
-    .move-btn {
-      background-color: #17a2b8;
-      color: white;
-      border: none;
-      padding: 0.25rem 0.5rem;
-    }
-
-    .move-btn:disabled {
-      background-color: #ccc;
-    }
-  `;
-
-  @state()
-  private editingEntryId: number | null = null;
-
-  @state()
-  private newEntry: Partial<components["schemas"]["TimeplanListEntry"]> = {};
-
-  @state()
-  private editForm: Partial<components["schemas"]["TimeplanListEntry"]> = {};
-
-  @state()
-  private showNewForm = false;
-
-  timeplanEntries = new Task(this, {
-    args: () => [],
-    task: async () => {
-      const data = await client.GET("/api/query/list_timeplan");
-      if (data.error) {
-        throw new Error((data.error as { message: string }).message);
+  static override styles = [
+    resetStyles,
+    iconStyles,
+    adminStyles,
+    css`
+      .toolbar h1 {
+        margin: 0 0.5rem 0 0;
       }
-      return data.data || [];
+
+      input.dur {
+        width: 4.5em;
+      }
+
+      input.label {
+        width: 14em;
+      }
+
+      .entry-edit {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+      }
+
+      tr.editing > td {
+        background: var(--tone-info-bg);
+      }
+    `,
+  ];
+
+  @state() private editing: Editing | null = null;
+  @state() private busy = false;
+  @state() private error = "";
+  /** The failed reload whose banner was closed. */
+  @state() private dismissedError: unknown;
+
+  @query("tr.editing input[data-field=earliest]")
+  private editEarliestInput?: HTMLInputElement | null;
+
+  /** The last loaded data: a failed reload keeps showing it. */
+  private last?: Data;
+
+  private data = new Task(this, {
+    args: () => [],
+    task: async (): Promise<Data> => {
+      const [entries, categories, acts, prediction] = await Promise.all([
+        client.GET("/api/query/list_timeplan"),
+        client.GET("/api/query/list_categories"),
+        client.GET("/api/query/list_acts"),
+        client.GET("/api/query/predict_timeplan"),
+      ]);
+      const list = unwrap(entries);
+      const actCounts = new Map<string, number>();
+      for (const act of unwrap(acts)) {
+        if (act.category) {
+          actCounts.set(act.category, (actCounts.get(act.category) ?? 0) + 1);
+        }
+      }
+      // The prediction fails while the timeplan is incomplete; the list is
+      // still shown then.
+      let timeplan: components["schemas"]["Timeplan"] | null = null;
+      let predictionError = "";
+      try {
+        timeplan = unwrap(prediction);
+      } catch (error) {
+        predictionError = predictionErrorMessage(errorMessage(error));
+      }
+      this.last = {
+        entries: list,
+        categories: new Map(unwrap(categories).map((c) => [c.name, c])),
+        actCounts,
+        predictions: matchPredictions(list, timeplan?.items),
+        offset: timeplan?.offset ?? null,
+        predictionError,
+      };
+      return this.last;
     },
   });
 
-  categories = new Task(this, {
-    args: () => [],
-    task: async () => {
-      const data = await client.GET("/api/query/list_categories");
-      if (data.error) {
-        throw new Error((data.error as { message: string }).message);
-      }
-      return data.data || [];
-    },
-  });
+  // Started/ended entries and the predicted times change during the event.
+  // Not while a row is edited, so the rows don't change under the edit row.
+  poll = new PollController(this, 20000, () =>
+    this.busy || this.editing ? undefined : this.data.run(),
+  );
 
-  private formatDateTimeForInput(date: Date | string | null): string {
-    if (!date) return "";
-    const d = typeof date === "string" ? new Date(date) : date;
-    // Format as YYYY-MM-DDTHH:mm for HTML datetime-local input
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    const hours = String(d.getHours()).padStart(2, "0");
-    const minutes = String(d.getMinutes()).padStart(2, "0");
-    return `${year}-${month}-${day}T${hours}:${minutes}`;
-  }
-
-  private formatDateTimeForDisplay(date: Date | string | null): string {
-    if (!date) return "-";
-    const d = typeof date === "string" ? new Date(date) : date;
-    // Format as readable date and time in user's local timezone
-    return d.toLocaleString(undefined, {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-  }
-
-  private formatSecondsAsTime(seconds: number | undefined | null): string {
-    if (seconds === undefined || seconds === null) return "-";
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
-  }
-
-  private getAvailableCategories(
-    allCategories: components["schemas"]["Category"][],
-    currentCategory: string | null | undefined,
-  ): components["schemas"]["Category"][] {
-    const entries = this.timeplanEntries.value || [];
-    const usedCategories = new Set(
-      entries
-        .filter((e) => e.category && e.category !== currentCategory)
-        .map((e) => e.category),
-    );
-    return allCategories.filter(
-      (cat) => !usedCategories.has(cat.name) || cat.name === currentCategory,
-    );
+  /** The current data, or the last loaded one while a reload failed. */
+  private get current() {
+    return this.data.value ?? this.last;
   }
 
   override render() {
-    return html`
-      <nav>
-        <a href="/admin">Anmeldeübersicht</a>
-        <a href="/admin-acts-overview">Küren Übersicht</a>
-        <a href="/admin-categories">Kategorie Verwaltung</a>
-      </nav>
-
-      <h1>Zeitplan Verwaltung</h1>
-
-      ${this.timeplanEntries.render({
-        pending: () => html`<p>Lade Zeitplan...</p>`,
-        error: (error) => html`<p>Fehler beim Laden: ${error}</p>`,
-        complete: (entries) => this.renderTimeplanTable(entries),
-      })}
-    `;
-  }
-
-  private renderTimeplanTable(
-    entries: components["schemas"]["TimeplanListEntry"][],
-  ) {
-    return html`
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Früheste Startzeit</th>
-            <th>Dauer (s)</th>
-            <th>Label</th>
-            <th>Kategorie</th>
-            <th>Gestartet</th>
-            <th>Beendet</th>
-            <th>Aktionen</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${repeat(
-            entries,
-            (entry) => entry.id,
-            (entry) =>
-              this.editingEntryId === entry.id
-                ? this.renderEditRow(entry)
-                : this.renderEntryRow(entry),
-          )}
-          ${
-            this.showNewForm
-              ? this.renderNewEntryRow()
-              : html`<tr>
-                <td colspan="8" style="text-align: center; padding: 0;">
-                  <button
-                    @click=${this.showAddForm}
-                    style="width: 100%; padding: 1rem; border: none; background: #28a745; color: white; font-size: 1.2em; cursor: pointer;"
-                  >
-                    <span class="material-icon" style="vertical-align: middle;"
-                      >add</span
-                    >
-                    Neuer Eintrag
-                  </button>
-                </td>
-              </tr>`
-          }
-        </tbody>
-      </table>
-    `;
-  }
-
-  private renderEntryRow(entry: components["schemas"]["TimeplanListEntry"]) {
-    return html`
-      <tr>
-        <td>${entry.id}</td>
-        <td>
-          ${this.formatDateTimeForDisplay(entry.earliest_start_time || null)}
-        </td>
-        <td>${this.formatSecondsAsTime(entry.duration_seconds)}</td>
-        <td>${entry.label || "-"}</td>
-        <td>${entry.category || "-"}</td>
-        <td>${this.formatDateTimeForDisplay(entry.started_at || null)}</td>
-        <td>${this.formatDateTimeForDisplay(entry.ended_at || null)}</td>
-        <td>
-          <div class="actions">
+    const data = this.current;
+    return html`<div class="page-pad">
+      <div class="toolbar">
+        <h1>Zeitplan</h1>
+        ${data ? this.renderKpis(data) : nothing}
+        <span class="spacer"></span>
+        <button
+          class="btn primary small"
+          title=${this.editing ? "Erst speichern oder abbrechen" : nothing}
+          ?disabled=${!data || this.busy || this.editing !== null}
+          @click=${this.startNew}
+        >
+          <span class="material-icon">add</span> Neuer Eintrag
+        </button>
+      </div>
+      ${
+        this.error
+          ? html`<div class="error-banner" role="alert">
+            <span>${this.error}</span>
             <button
-              class="move-btn"
-              @click=${
-                // eslint-disable-next-line lit/no-template-arrow
-                () => this.moveEntryUp(entry.id)
-              }
-              title="Nach oben"
+              class="icon-btn"
+              title="Schließen"
+              aria-label="Schließen"
+              @click=${this.clearError}
             >
-              <span class="material-icon">arrow_upward</span>
+              close
             </button>
-            <button
-              class="move-btn"
-              @click=${
-                // eslint-disable-next-line lit/no-template-arrow
-                () => this.moveEntryDown(entry.id)
-              }
-              title="Nach unten"
-            >
-              <span class="material-icon">arrow_downward</span>
-            </button>
-            <button
-              class="edit-btn"
-              @click=${
-                // eslint-disable-next-line lit/no-template-arrow
-                () => this.startEditEntry(entry)
-              }
-            >
-              <span class="material-icon">edit</span>
-            </button>
-            <button
-              class="delete-btn"
-              @click=${
-                // eslint-disable-next-line lit/no-template-arrow
-                () => this.deleteEntry(entry.id)
-              }
-            >
-              <span class="material-icon">delete</span>
-            </button>
-          </div>
-        </td>
-      </tr>
-    `;
+          </div>`
+          : nothing
+      }
+      ${this.renderReloadError()}
+      ${
+        data?.predictionError
+          ? html`<div class="warn-banner">
+              Keine Zeitprognose: ${data.predictionError}
+            </div>`
+          : data?.entries[0] && !data.entries[0].earliest_start_time
+            ? html`<div class="warn-banner">
+                Der erste Eintrag braucht eine früheste Startzeit: ab ihr
+                wird der Zeitplan berechnet.
+              </div>`
+            : nothing
+      }
+      ${
+        data
+          ? this.renderTable(data)
+          : this.data.render({
+              pending: () => html`<p class="empty">Lade Zeitplan …</p>`,
+              error: (error) =>
+                html`<div class="error-banner" role="alert">
+                  Zeitplan konnte nicht geladen werden: ${errorMessage(error)}
+                </div>`,
+            })
+      }
+    </div>`;
   }
 
-  private renderEditRow(entry: components["schemas"]["TimeplanListEntry"]) {
-    return html`
-      <tr>
-        <td>${entry.id}</td>
-        <td>
-          <input
-            type="datetime-local"
-            .value=${this.formatDateTimeForInput(
-              this.editForm.earliest_start_time ||
-                entry.earliest_start_time ||
-                null,
-            )}
-            @input=${
-              // eslint-disable-next-line lit/no-template-arrow
-              (e: Event) =>
-                (this.editForm = {
-                  ...this.editForm,
-                  earliest_start_time: (e.target as HTMLInputElement).value
-                    ? (e.target as HTMLInputElement).value
-                    : null,
-                })
-            }
-          />
-        </td>
-        <td>
-          <input
-            type="number"
-            style="width: 5em;"
-            .value=${(
-              this.editForm.duration_seconds ?? entry.duration_seconds ?? ""
-            ).toString()}
-            @input=${
-              // eslint-disable-next-line lit/no-template-arrow
-              (e: Event) => {
-                const val = (e.target as HTMLInputElement).value;
-                this.editForm = {
-                  ...this.editForm,
-                  duration_seconds: val ? parseInt(val) : null,
-                };
-              }
-            }
-          />
-        </td>
-        <td>
-          <input
-            type="text"
-            .value=${this.editForm.label ?? entry.label ?? ""}
-            @input=${
-              // eslint-disable-next-line lit/no-template-arrow
-              (e: Event) => {
-                const val = (e.target as HTMLInputElement).value;
-                this.editForm = {
-                  ...this.editForm,
-                  label: val || null,
-                };
-              }
-            }
-          />
-        </td>
-        <td>
-          ${this.categories.render({
-            pending: () => html`<span>Laden...</span>`,
-            error: () => html`<span>Fehler</span>`,
-            complete: (categories) => {
-              const selectedCategory =
-                this.editForm.category ?? entry.category ?? "";
-              const availableCategories = this.getAvailableCategories(
-                categories,
-                entry.category,
-              );
-              return html`
-                <select
-                  .value=${selectedCategory}
-                  @change=${
-                    // eslint-disable-next-line lit/no-template-arrow
-                    (e: Event) => {
-                      const val = (e.target as HTMLSelectElement).value;
-                      this.editForm = {
-                        ...this.editForm,
-                        category: val || null,
-                      };
-                    }
-                  }
-                >
-                  <option value="" ?selected=${selectedCategory === ""}>
-                    -
-                  </option>
-                  ${repeat(
-                    availableCategories,
-                    (cat) =>
-                      html`<option
-                        value=${cat.name}
-                        ?selected=${selectedCategory === cat.name}
-                      >
-                        ${cat.name}
-                      </option>`,
-                  )}
-                </select>
-              `;
-            },
-          })}
-        </td>
-        <td colspan="2">
-          <small
-            >Start/Ende werden durch timeplan_forward/backward gesetzt</small
-          >
-        </td>
-        <td>
-          <div class="actions">
-            <button class="save-btn" @click=${this.saveEditEntry}>
-              <span class="material-icon">save</span>
-            </button>
-            <button class="cancel-btn" @click=${this.cancelEditEntry}>
-              <span class="material-icon">cancel</span>
-            </button>
-          </div>
-        </td>
-      </tr>
-    `;
-  }
-
-  private showAddForm() {
-    this.showNewForm = true;
-    this.newEntry = {};
-  }
-
-  private async saveNewEntry() {
-    try {
-      await client.POST("/api/command/add_timeplan_entry", {
-        body: {
-          earliest_start_time: this.newEntry.earliest_start_time
-            ? this.newEntry.earliest_start_time + ":00Z"
-            : null,
-          duration_seconds: this.newEntry.duration_seconds || null,
-          label: this.newEntry.label || null,
-          category: this.newEntry.category || null,
-        },
-      });
-      this.timeplanEntries.run();
-      this.cancelNewEntry();
-    } catch (error) {
-      alert("Fehler beim Erstellen des Eintrags: " + error);
+  /** A failed reload keeps the last data; this says so and offers a retry. */
+  private renderReloadError() {
+    const error = this.data.error;
+    if (
+      this.data.status !== TaskStatus.ERROR ||
+      !this.last ||
+      error === this.dismissedError
+    ) {
+      return nothing;
     }
+    return html`<div class="error-banner" role="alert">
+      <span
+        >Neu laden fehlgeschlagen: ${errorMessage(error)} – angezeigt wird der
+        letzte Stand.</span
+      >
+      <button class="btn small" ?disabled=${this.busy} @click=${this.reload}>
+        Erneut laden
+      </button>
+      <button
+        class="icon-btn"
+        title="Schließen"
+        aria-label="Schließen"
+        @click=${this.dismissReloadError}
+      >
+        close
+      </button>
+    </div>`;
   }
 
-  private cancelNewEntry() {
-    this.showNewForm = false;
-    this.newEntry = {};
+  private renderKpis(data: Data) {
+    const first = data.predictions[0];
+    const last = data.predictions.at(-1);
+    const planned = new Set(data.entries.map((e) => e.category));
+    const missing = [...data.categories.keys()].filter((c) => !planned.has(c));
+    const running = data.entries.find((e) => entryStatus(e) === "started");
+    return html`<div class="kpis">
+      <span class="kpi"><b>${data.entries.length}</b> Einträge</span>
+      ${
+        first
+          ? html`<span class="kpi" title="Geplanter Beginn"
+              >Beginn <b>${formatDateTime(first.planned_start)}</b></span
+            >`
+          : nothing
+      }
+      ${
+        last
+          ? html`<span class="kpi" title="Voraussichtliches Ende"
+              >Ende <b>${formatDateTime(last.predicted_end)}</b></span
+            >`
+          : nothing
+      }
+      ${
+        data.offset !== null && running
+          ? html`<span
+              class=${classMap({
+                kpi: true,
+                ok: data.offset <= 0,
+                warn: data.offset > 0 && data.offset <= 900,
+                bad: data.offset > 900,
+              })}
+              title="Abweichung vom geplanten Ablauf"
+              >${data.offset > 0 ? "Verzug" : "Vorsprung"}
+              <b>${formatDuration(Math.abs(data.offset))}</b></span
+            >`
+          : nothing
+      }
+      ${
+        running
+          ? html`<span class="kpi">läuft: <b>${entryName(running)}</b></span>`
+          : nothing
+      }
+      ${
+        missing.length
+          ? html`<span class="kpi warn" title=${missing.join(", ")}
+              ><b>${missing.length}</b>
+              ${missing.length === 1 ? "Kategorie" : "Kategorien"} nicht im
+              Zeitplan</span
+            >`
+          : nothing
+      }
+    </div>`;
   }
 
-  private renderNewEntryRow() {
-    return html`
-      <tr>
-        <td><em>Neu</em></td>
-        <td>
-          <input
-            type="datetime-local"
-            .value=${this.formatDateTimeForInput(
-              this.newEntry.earliest_start_time || null,
-            )}
-            @input=${
-              // eslint-disable-next-line lit/no-template-arrow
-              (e: Event) => {
-                const val = (e.target as HTMLInputElement).value;
-                this.newEntry = {
-                  ...this.newEntry,
-                  earliest_start_time: val || null,
-                };
-              }
-            }
-          />
-        </td>
-        <td>
-          <input
-            type="number"
-            style="width: 5em;"
-            placeholder="Sekunden"
-            .value=${this.newEntry.duration_seconds?.toString() || ""}
-            @input=${
-              // eslint-disable-next-line lit/no-template-arrow
-              (e: Event) => {
-                const val = (e.target as HTMLInputElement).value;
-                this.newEntry = {
-                  ...this.newEntry,
-                  duration_seconds: val ? parseInt(val) : null,
-                };
-              }
-            }
-          />
-        </td>
-        <td>
-          <input
-            type="text"
-            placeholder="Label"
-            .value=${this.newEntry.label || ""}
-            @input=${
-              // eslint-disable-next-line lit/no-template-arrow
-              (e: Event) => {
-                const val = (e.target as HTMLInputElement).value;
-                this.newEntry = {
-                  ...this.newEntry,
-                  label: val || null,
-                };
-              }
-            }
-          />
-        </td>
-        <td>
-          ${this.categories.render({
-            pending: () => html`<span>Laden...</span>`,
-            error: () => html`<span>Fehler</span>`,
-            complete: (categories) => {
-              const selectedCategory = this.newEntry.category || "";
-              const availableCategories = this.getAvailableCategories(
-                categories,
-                null,
-              );
-              return html`
-                <select
-                  .value=${selectedCategory}
-                  @change=${
-                    // eslint-disable-next-line lit/no-template-arrow
-                    (e: Event) => {
-                      const val = (e.target as HTMLSelectElement).value;
-                      this.newEntry = {
-                        ...this.newEntry,
-                        category: val || null,
-                      };
-                    }
-                  }
-                >
-                  <option value="" ?selected=${selectedCategory === ""}>
-                    -
-                  </option>
-                  ${repeat(
-                    availableCategories,
-                    (cat) =>
-                      html`<option
-                        value=${cat.name}
-                        ?selected=${selectedCategory === cat.name}
-                      >
-                        ${cat.name}
-                      </option>`,
-                  )}
-                </select>
-              `;
-            },
-          })}
-        </td>
-        <td colspan="2">-</td>
-        <td>
-          <div class="actions">
-            <button class="save-btn" @click=${this.saveNewEntry}>
-              <span class="material-icon">save</span>
-            </button>
-            <button class="cancel-btn" @click=${this.cancelNewEntry}>
-              <span class="material-icon">cancel</span>
-            </button>
-          </div>
-        </td>
-      </tr>
-    `;
-  }
-
-  private startEditEntry(entry: components["schemas"]["TimeplanListEntry"]) {
-    this.editingEntryId = entry.id;
-    this.editForm = {
-      id: entry.id,
-      earliest_start_time: entry.earliest_start_time,
-      duration_seconds: entry.duration_seconds,
-      label: entry.label,
-      category: entry.category,
+  /** Planned length of an entry: the category block or the custom duration. */
+  private entryDuration(data: Data, entry: Entry) {
+    if (!entry.category) {
+      return { seconds: entry.duration_seconds ?? null, title: "" };
+    }
+    const category = data.categories.get(entry.category);
+    if (!category) {
+      return { seconds: null, title: "" };
+    }
+    const acts = data.actCounts.get(entry.category) ?? 0;
+    if (acts === 0) {
+      // timeplan_forward ends an empty category right away: no warm-up.
+      return { seconds: 0, title: "Keine Küren: wird übersprungen" };
+    }
+    const per =
+      (category.act_duration_seconds ?? 0) +
+      (category.judge_duration_seconds ?? 0);
+    return {
+      seconds: (category.einfahrzeit_seconds ?? 0) + acts * per,
+      title:
+        `${formatDuration(category.einfahrzeit_seconds)} Einfahren + ${acts} × ` +
+        `(${formatDuration(category.act_duration_seconds)} Kür + ` +
+        `${formatDuration(category.judge_duration_seconds)} Bewertung)`,
     };
   }
 
-  private async saveEditEntry() {
-    try {
-      await client.POST("/api/command/edit_timeplan_entry", {
-        body: {
-          id: this.editForm.id!,
-          earliest_start_time: this.editForm.earliest_start_time
-            ? this.editForm.earliest_start_time + ":00Z"
-            : null,
-          duration_seconds: this.editForm.duration_seconds || null,
-          label: this.editForm.label || null,
-          category: this.editForm.category || null,
-        },
-      });
-      this.timeplanEntries.run();
-      this.cancelEditEntry();
-    } catch (error) {
-      alert("Fehler beim Bearbeiten des Eintrags: " + error);
+  private renderTable(data: Data) {
+    const last = data.entries.length - 1;
+    let totalActs = 0;
+    let totalSeconds = 0;
+    for (const entry of data.entries) {
+      totalActs += entry.category
+        ? (data.actCounts.get(entry.category) ?? 0)
+        : 0;
+      totalSeconds += this.entryDuration(data, entry).seconds ?? 0;
+    }
+    return html`<table class="dense">
+      <thead>
+        <tr>
+          <th class="num">#</th>
+          <th>Status</th>
+          <th title="Frühestens zu dieser Zeit beginnen">Frühester Start</th>
+          <th
+            title="Voraussichtlicher Start; tatsächliche Zeit, sobald gestartet"
+          >
+            Start
+          </th>
+          <th title="Voraussichtliches Ende; tatsächliche Zeit, sobald beendet">
+            Ende
+          </th>
+          <th>Eintrag</th>
+          <th class="num" title="Küren der Kategorie">Küren</th>
+          <th
+            class="num"
+            title="Kategorien: Einfahren + Küren × (Kür + Bewertung); ohne Küren 0:00"
+          >
+            Dauer
+          </th>
+          <th class="actions" aria-label="Aktionen"></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${repeat(
+          data.entries,
+          (entry) => entry.id,
+          (entry, index) =>
+            this.editing?.original?.id === entry.id
+              ? this.renderEditRow(data, this.editing, index)
+              : this.renderRow(data, entry, index, last),
+        )}
+        ${
+          this.editing && !this.editing.original
+            ? this.renderEditRow(data, this.editing, data.entries.length)
+            : nothing
+        }
+        ${
+          data.entries.length === 0 && !this.editing
+            ? html`<tr>
+              <td colspan="9" class="empty">Der Zeitplan ist noch leer.</td>
+            </tr>`
+            : nothing
+        }
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="6">Summe</td>
+          <td class="num">${totalActs}</td>
+          <td class="num">${formatDuration(totalSeconds)}</td>
+          <td class="actions"></td>
+        </tr>
+      </tfoot>
+    </table>`;
+  }
+
+  private renderStatus(entry: Entry) {
+    const status = entryStatus(entry);
+    const chip = statusChips[status];
+    const title = [
+      entry.started_at && `Gestartet ${formatDateTime(entry.started_at)}`,
+      entry.ended_at && `Beendet ${formatDateTime(entry.ended_at)}`,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    return html`<span class="chip ${chip.tone}" title=${title || nothing}
+      >${chip.label}</span
+    >`;
+  }
+
+  private renderEntry(data: Data, entry: Entry) {
+    if (!entry.category) {
+      return entry.label ?? "";
+    }
+    const description = data.categories.get(entry.category)?.description;
+    return html`<b>${entry.category}</b>
+      ${description ? html`<span class="muted">${description}</span>` : nothing}`;
+  }
+
+  private renderRow(data: Data, entry: Entry, index: number, last: number) {
+    const status = entryStatus(entry);
+    const prediction = data.predictions[index];
+    const duration = this.entryDuration(data, entry);
+    const acts = entry.category ? (data.actCounts.get(entry.category) ?? 0) : 0;
+    const locked = this.busy || this.editing !== null;
+    const plannedTitle = prediction
+      ? `Geplant: ${formatDateTime(prediction.planned_start)} – ${formatDateTime(prediction.planned_end)}`
+      : "";
+    return html`<tr
+      class=${classMap({
+        current: status === "started",
+        muted: status === "ended",
+      })}
+    >
+      <td class="num muted">${index + 1}</td>
+      <td>${this.renderStatus(entry)}</td>
+      <td>
+        ${
+          entry.earliest_start_time
+            ? formatDateTime(entry.earliest_start_time)
+            : html`<span class="muted">–</span>`
+        }
+      </td>
+      <td title=${plannedTitle || nothing}>
+        ${prediction ? formatDateTime(prediction.predicted_start) : ""}
+      </td>
+      <td title=${plannedTitle || nothing}>
+        ${prediction ? formatDateTime(prediction.predicted_end) : ""}
+      </td>
+      <td class="wrap">${this.renderEntry(data, entry)}</td>
+      <td
+        class=${classMap({ num: true, "text-warn": !!entry.category && !acts })}
+        title=${
+          entry.category && !acts
+            ? "Keine Küren: der Block wird übersprungen"
+            : nothing
+        }
+      >
+        ${entry.category ? acts : ""}
+      </td>
+      <td
+        class=${classMap({ num: true, muted: !!entry.category && !acts })}
+        title=${duration.title || nothing}
+      >
+        ${duration.seconds === null ? "" : formatDuration(duration.seconds)}
+      </td>
+      <td class="actions">
+        <button
+          class="icon-btn"
+          title="Nach oben"
+          aria-label="Nach oben"
+          data-id=${entry.id}
+          ?disabled=${index === 0 || locked}
+          @click=${this.onMoveUp}
+        >
+          arrow_upward
+        </button>
+        <button
+          class="icon-btn"
+          title="Nach unten"
+          aria-label="Nach unten"
+          data-id=${entry.id}
+          ?disabled=${index === last || locked}
+          @click=${this.onMoveDown}
+        >
+          arrow_downward
+        </button>
+        <button
+          class="icon-btn primary"
+          title=${this.editing ? "Erst speichern oder abbrechen" : "Bearbeiten"}
+          aria-label="Bearbeiten"
+          data-id=${entry.id}
+          ?disabled=${locked}
+          @click=${this.onEdit}
+        >
+          edit
+        </button>
+        <button
+          class="icon-btn danger"
+          title="Löschen"
+          aria-label="Löschen"
+          data-id=${entry.id}
+          ?disabled=${locked}
+          @click=${this.onDelete}
+        >
+          delete
+        </button>
+      </td>
+    </tr>`;
+  }
+
+  private renderEditRow(data: Data, editing: Editing, index: number) {
+    const { draft, original } = editing;
+    const used = new Set(
+      data.entries
+        .filter((e) => e.id !== original?.id && e.category)
+        .map((e) => e.category),
+    );
+    const available = [...data.categories.values()].filter(
+      (c) => !used.has(c.name),
+    );
+    const custom = !draft.category;
+    const duration = custom
+      ? null
+      : this.entryDuration(data, {
+          id: original?.id ?? -1,
+          category: draft.category,
+        });
+    const problems = this.draftProblems(editing, index);
+    return html`<tr class="editing" @keydown=${this.onEditKeydown}>
+      <td class="num muted">${original ? index + 1 : "neu"}</td>
+      <td>${original ? this.renderStatus(original) : nothing}</td>
+      <td>
+        <input
+          class=${classMap({ inline: true, invalid: problems.earliest })}
+          type="datetime-local"
+          aria-label="Frühester Start"
+          title="Frühester Start (Ortszeit); leer lassen, um direkt nach dem vorherigen Eintrag zu beginnen"
+          data-field="earliest"
+          .value=${draft.earliest}
+          @input=${this.onDraftInput}
+        />
+      </td>
+      <td colspan="2" class="muted small">wird berechnet</td>
+      <td>
+        <div class="entry-edit">
+          <select
+            class="inline"
+            aria-label="Eintrag"
+            data-field="category"
+            @change=${this.onDraftInput}
+          >
+            <option value="" ?selected=${custom}>Eigener Eintrag …</option>
+            ${repeat(
+              available,
+              (c) => c.name,
+              (c) =>
+                html`<option
+                  value=${c.name}
+                  ?selected=${c.name === draft.category}
+                >
+                  ${c.name}${c.description ? ` – ${c.description}` : ""}
+                </option>`,
+            )}
+          </select>
+          ${
+            custom
+              ? html`<input
+                  class=${classMap({
+                    inline: true,
+                    label: true,
+                    invalid: problems.label,
+                  })}
+                  type="text"
+                  placeholder="Bezeichnung, z. B. Mittagspause"
+                  aria-label="Bezeichnung"
+                  data-field="label"
+                  .value=${draft.label}
+                  @input=${this.onDraftInput}
+                />`
+              : nothing
+          }
+        </div>
+      </td>
+      <td class="num">
+        ${custom ? "" : (data.actCounts.get(draft.category) ?? 0)}
+      </td>
+      <td class="num" title=${duration?.title || nothing}>
+        ${
+          custom
+            ? html`<input
+                class=${classMap({
+                  inline: true,
+                  num: true,
+                  dur: true,
+                  invalid: problems.duration,
+                })}
+                type="text"
+                placeholder="m:ss"
+                title="Dauer als m:ss oder in Sekunden"
+                aria-label="Dauer"
+                data-field="duration"
+                .value=${draft.duration}
+                @input=${this.onDraftInput}
+              />`
+            : !duration || duration.seconds === null
+              ? ""
+              : formatDuration(duration.seconds)
+        }
+      </td>
+      <td class="actions">
+        <button
+          class="icon-btn ok"
+          title="Speichern (Enter)"
+          aria-label="Speichern"
+          ?disabled=${this.busy}
+          @click=${this.save}
+        >
+          check
+        </button>
+        <button
+          class="icon-btn"
+          title="Abbrechen (Esc)"
+          aria-label="Abbrechen"
+          ?disabled=${this.busy}
+          @click=${this.cancelEdit}
+        >
+          close
+        </button>
+      </td>
+    </tr>`;
+  }
+
+  /** Which fields of the draft are invalid; `index` is the row's position. */
+  private draftProblems({ draft }: Editing, index: number) {
+    const custom = !draft.category;
+    const earliestInvalid =
+      !!draft.earliest && toServerTime(draft.earliest) === null;
+    return {
+      // The prediction starts at the first entry's earliest start.
+      earliestMissing: index === 0 && !draft.earliest,
+      earliest: earliestInvalid || (index === 0 && !draft.earliest),
+      earliestInvalid,
+      label: custom && !draft.label.trim(),
+      duration: custom && !parseDuration(draft.duration),
+    };
+  }
+
+  private entryById(id: string | undefined) {
+    return this.current?.entries.find((e) => String(e.id) === id);
+  }
+
+  private clearError() {
+    this.error = "";
+  }
+
+  private reload() {
+    this.data.run();
+  }
+
+  private dismissReloadError() {
+    this.dismissedError = this.data.error;
+  }
+
+  private async focusEditRow() {
+    await this.updateComplete;
+    this.editEarliestInput?.focus();
+  }
+
+  private startNew() {
+    this.error = "";
+    this.editing = {
+      original: null,
+      draft: { earliest: "", category: "", label: "", duration: "" },
+      earliestChanged: true,
+    };
+    this.focusEditRow();
+  }
+
+  private onEdit(e: Event) {
+    const entry = this.entryById((e.currentTarget as HTMLElement).dataset.id);
+    if (!entry) {
+      return;
+    }
+    this.error = "";
+    this.editing = {
+      original: entry,
+      draft: {
+        earliest: toLocalInput(entry.earliest_start_time),
+        category: entry.category ?? "",
+        label: entry.label ?? "",
+        duration:
+          entry.duration_seconds === null ||
+          entry.duration_seconds === undefined
+            ? ""
+            : formatDuration(entry.duration_seconds),
+      },
+      earliestChanged: false,
+    };
+    this.focusEditRow();
+  }
+
+  private cancelEdit() {
+    this.editing = null;
+    this.error = "";
+  }
+
+  private onDraftInput(e: Event) {
+    if (!this.editing) {
+      return;
+    }
+    const target = e.currentTarget as HTMLInputElement | HTMLSelectElement;
+    const field = target.dataset.field as keyof EntryDraft;
+    this.editing = {
+      ...this.editing,
+      draft: { ...this.editing.draft, [field]: target.value },
+      earliestChanged: this.editing.earliestChanged || field === "earliest",
+    };
+  }
+
+  private onEditKeydown(e: KeyboardEvent) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      this.cancelEdit();
+    } else if (e.key === "Enter" && !(e.target instanceof HTMLButtonElement)) {
+      e.preventDefault();
+      this.save();
     }
   }
 
-  private cancelEditEntry() {
-    this.editingEntryId = null;
-    this.editForm = {};
+  private async save() {
+    const editing = this.editing;
+    const data = this.current;
+    if (!editing || !data || this.busy) {
+      return;
+    }
+    const { draft, original } = editing;
+    // By id: a poll may have reloaded the entries since editing started.
+    const index = original
+      ? data.entries.findIndex((e) => e.id === original.id)
+      : data.entries.length;
+    const problems = this.draftProblems(editing, index);
+    const messages = [
+      problems.earliestInvalid && "Die früheste Startzeit ist ungültig.",
+      problems.earliestMissing &&
+        "Der erste Eintrag braucht eine früheste Startzeit.",
+      problems.label && "Bitte eine Bezeichnung eingeben.",
+      problems.duration &&
+        "Bitte eine Dauer als m:ss (z. B. 15:00) oder in Sekunden eingeben.",
+    ].filter(Boolean);
+    if (messages.length) {
+      this.error = messages.join("\n");
+      return;
+    }
+
+    const custom = !draft.category;
+    // edit_timeplan_entry overwrites every field, so untouched fields are sent
+    // back exactly as the server returned them.
+    const body = {
+      earliest_start_time: editing.earliestChanged
+        ? toServerTime(draft.earliest)
+        : (original?.earliest_start_time ?? null),
+      category: draft.category || null,
+      label: custom
+        ? draft.label.trim()
+        : original?.category
+          ? (original.label ?? null)
+          : null,
+      duration_seconds: custom
+        ? parseDuration(draft.duration)
+        : original?.category
+          ? (original.duration_seconds ?? null)
+          : null,
+    };
+    this.busy = true;
+    this.error = "";
+    try {
+      if (original) {
+        unwrap(
+          await client.POST("/api/command/edit_timeplan_entry", {
+            body: { ...body, id: original.id },
+          }),
+        );
+      } else {
+        unwrap(await client.POST("/api/command/add_timeplan_entry", { body }));
+      }
+      this.editing = null;
+      await this.data.run();
+    } catch (error) {
+      // Keep the row in edit mode, so nothing typed is lost.
+      this.error = `Speichern fehlgeschlagen: ${errorMessage(error)}`;
+    } finally {
+      this.busy = false;
+    }
   }
 
-  private async deleteEntry(entryId: number) {
+  private async onDelete(e: Event) {
+    const entry = this.entryById((e.currentTarget as HTMLElement).dataset.id);
+    const entries = this.current?.entries ?? [];
+    if (!entry || this.busy) {
+      return;
+    }
+    // Deleting the first entry makes the second one the first.
+    const carry = entry === entries[0] ? carryOver(entries, entries[1]) : null;
     if (
       !confirm(
-        `Sind Sie sicher, dass Sie diesen Zeitplan-Eintrag löschen möchten?`,
+        `Zeitplan-Eintrag „${entryName(entry)}“ löschen?` +
+          (carry
+            ? `\n\n„${entryName(carry.entry)}“ wird der erste Eintrag und ` +
+              `übernimmt die früheste Startzeit ${formatDateTime(carry.start)}.`
+            : ""),
       )
     ) {
       return;
     }
-
-    try {
-      await client.POST("/api/command/delete_timeplan_entry", {
-        body: { id: entryId },
-      });
-      this.timeplanEntries.run();
-    } catch (error) {
-      alert("Fehler beim Löschen des Eintrags: " + error);
-    }
+    await this.command("Löschen fehlgeschlagen", async () => {
+      await applyCarryOver(carry);
+      unwrap(
+        await client.POST("/api/command/delete_timeplan_entry", {
+          body: { id: entry.id },
+        }),
+      );
+    });
   }
 
-  private async moveEntryUp(entryId: number) {
-    try {
-      await client.POST("/api/command/move_timeplan_up", {
-        body: { id: entryId },
-      });
-      this.timeplanEntries.run();
-    } catch (error) {
-      // Silently fail if can't move up (already at top)
-    }
+  private async onMoveUp(e: Event) {
+    const id = Number((e.currentTarget as HTMLElement).dataset.id);
+    const entries = this.current?.entries ?? [];
+    // Moving the second entry up makes it the first one.
+    const carry = entries[1]?.id === id ? carryOver(entries, entries[1]) : null;
+    await this.command("Verschieben fehlgeschlagen", async () => {
+      await applyCarryOver(carry);
+      unwrap(
+        await client.POST("/api/command/move_timeplan_up", { body: { id } }),
+      );
+    });
   }
 
-  private async moveEntryDown(entryId: number) {
+  private async onMoveDown(e: Event) {
+    const id = Number((e.currentTarget as HTMLElement).dataset.id);
+    const entries = this.current?.entries ?? [];
+    // Moving the first entry down makes the second one the first.
+    const carry = entries[0]?.id === id ? carryOver(entries, entries[1]) : null;
+    await this.command("Verschieben fehlgeschlagen", async () => {
+      await applyCarryOver(carry);
+      unwrap(
+        await client.POST("/api/command/move_timeplan_down", {
+          body: { id },
+        }),
+      );
+    });
+  }
+
+  /** Runs a command, then reloads; failures end up in the error banner. */
+  private async command(failure: string, run: () => Promise<unknown>) {
+    if (this.busy) {
+      return;
+    }
+    this.busy = true;
+    this.error = "";
     try {
-      await client.POST("/api/command/move_timeplan_down", {
-        body: { id: entryId },
-      });
-      this.timeplanEntries.run();
+      await run();
+      await this.data.run();
     } catch (error) {
-      // Silently fail if can't move down (already at bottom)
+      this.error = `${failure}: ${errorMessage(error)}`;
+    } finally {
+      this.busy = false;
     }
   }
 }

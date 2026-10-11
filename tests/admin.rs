@@ -104,8 +104,8 @@ async fn system_status_reflects_open_registration(db: SqlitePool) {
             "can_upload_music": true,
         })
     );
-    assert_eq!(competition["name"], "NRW Freestyle Cup 2027");
-    assert_eq!(competition["determining_day"], "2027-06-01");
+    assert_eq!(competition["name"], "Einradevent 2027 (Demo)");
+    assert_eq!(competition["determining_day"], "2027-04-01");
     assert_eq!(competition["fee_per_start"], 15.0);
     assert_eq!(competition["max_fee_per_starter"], 45.0);
     assert_eq!(competition["payment_reference"], "Startgeld");
@@ -132,7 +132,7 @@ async fn categories_are_seeded_in_order(db: SqlitePool) {
     let app = TestApp::new(db).await;
     let categories = category_orders(&app).await;
 
-    assert_eq!(categories.len(), 36);
+    assert_eq!(categories.len(), 40);
     assert_eq!(categories[0], ("EMU11".to_string(), Some(1)));
     let orders: Vec<_> = categories.iter().map(|(_, o)| o.unwrap()).collect();
     assert!(orders.is_sorted());
@@ -161,7 +161,7 @@ async fn category_commands_require_admin(db: SqlitePool) {
         let response = app.post(uri, json!({ "name": "EMU11" }), Some(&user)).await;
         assert_eq!(response.status, StatusCode::FORBIDDEN, "{uri}");
     }
-    assert_eq!(category_orders(&app).await.len(), 36);
+    assert_eq!(category_orders(&app).await.len(), 40);
 }
 
 #[sqlx::test]
@@ -262,7 +262,7 @@ async fn moving_first_category_up_or_last_down_is_rejected(db: SqlitePool) {
     let down = app
         .post(
             "/api/command/move_category_down",
-            json!({ "name": "P70+" }),
+            json!({ "name": "GG15+" }),
             Some(&admin),
         )
         .await;

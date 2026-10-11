@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::{
     act_type::ActType,
+    groups::{ensure_partner_in_club, ensure_starter_access},
     http_server::{ClientError, HttpError, extractor::auth::Auth},
     reloadable_sqlite::ReloadableSqlite,
     system_status::Capabilities,
@@ -29,9 +30,11 @@ pub struct EditClubStarterBody {
     partner_id: Option<Uuid>,
 }
 
-/// EditClubStarter a new user.
+/// Edit a starter.
 ///
-/// This endpoint is used to create a new user.
+/// Only the starter's club (or an admin) can edit them. A newly chosen
+/// `partner_id` must be a starter of the same club; admins can also link
+/// partners of other clubs.
 #[utoipa::path(
     post,
     tags=["command", "club"],
@@ -40,6 +43,8 @@ pub struct EditClubStarterBody {
     responses(
         (status=200, content_type="application/json", body=EditClubStarterResponse),
         (status=400, content_type="application/json", body=ClientError),
+        (status=403, content_type="application/json", body=ClientError),
+        (status=404, content_type="application/json", body=ClientError),
         (status=500, content_type="application/json", body=ClientError),
     ),
 )]
@@ -56,6 +61,7 @@ pub async fn edit_club_starter(
     }
     check_single_start(body.single_male, body.single_female).map_err(HttpError::ErrorMessages)?;
     let db = db.get().await.clone();
+    let club_id = ensure_starter_access(&mut *db.acquire().await?, &auth, body.starter_id).await?;
 
     let self_name = format!("{} {}", body.firstname, body.lastname);
 
@@ -71,6 +77,21 @@ pub async fn edit_club_starter(
 
     if existing_partner_name != body.partner_name || !body.pair {
         body.partner_id = None;
+    }
+
+    // A partner linked before (possibly by an admin, across clubs) is kept;
+    // a newly chosen one must be from the same club.
+    if let Some(partner_id) = body.partner_id {
+        let mut conn = db.acquire().await?;
+        let existing_partner_id = sqlx::query_scalar!(
+            r#"SELECT partner_id as "partner_id: Uuid" FROM starter WHERE id = ?"#,
+            body.starter_id,
+        )
+        .fetch_one(&mut *conn)
+        .await?;
+        if existing_partner_id != Some(partner_id) {
+            ensure_partner_in_club(&mut conn, &auth, partner_id, club_id).await?;
+        }
     }
 
     // Find potential partner

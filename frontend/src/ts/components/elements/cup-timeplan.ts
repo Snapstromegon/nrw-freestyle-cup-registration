@@ -1,184 +1,696 @@
-import { Task } from "@lit/task";
-import { css, html, LitElement, nothing } from "lit";
-import { customElement, property } from "lit/decorators.js";
+import { css, html, LitElement, nothing, type PropertyValues } from "lit";
+import { customElement, property, state } from "lit/decorators.js";
+import { classMap } from "lit/directives/class-map.js";
 import { repeat } from "lit/directives/repeat.js";
+import { PollController, unwrap } from "../../api";
 import { client } from "../../apiClient";
 import type { components } from "../../bindings";
+import { iconStyles, resetStyles } from "../../styles/base";
+import {
+  actClubNames,
+  type CheckInMap,
+  checkInStats,
+  formatTime,
+  isGroupActType,
+  participantName,
+} from "../../utils";
 
+type Act = components["schemas"]["Act"];
+type Timeplan = components["schemas"]["Timeplan"];
+type TimeplanItem = components["schemas"]["TimeplanItem"];
+type TimeplanAct = components["schemas"]["TimeplanAct"];
+type TimeplanEntry = components["schemas"]["TimeplanEntry"];
+type CategoryEntry = Extract<TimeplanEntry, { Category: unknown }>["Category"];
+type CustomEntry = Extract<TimeplanEntry, { Custom: unknown }>["Custom"];
+
+/** Upcoming acts with riders missing at check-in get red this early. */
+const CALL_IN_SECONDS = 30 * 60;
+
+/**
+ * The (upcoming) timeplan: category blocks with their acts and custom entries.
+ *
+ * - Public (info board, moderation): the dark display look. Groups show their
+ *   name and clubs instead of every member.
+ * - `is-admin`: adds the music state per act and category and, with
+ *   `.checkIns`, the check-in state per rider, act ("✓ x/y") and category.
+ * - `dense`: a compact light list for admin pages, one line per act.
+ *
+ * Acts come from `.acts` if set (also `null` while the parent is still
+ * loading them), otherwise the element loads `list_acts` itself and refreshes
+ * it every minute.
+ */
 @customElement("cup-timeplan")
 export default class CupTimeplan extends LitElement {
-  static override styles = css`
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    #wrapper {
-      display: flex;
-      flex-direction: column;
-      max-height: 100%;
-      position: relative;
-      overflow: inherit;
-      background: #002d56;
-
-      & > section {
+  static override styles = [
+    resetStyles,
+    iconStyles,
+    css`
+      #wrapper {
+        display: flex;
+        flex-direction: column;
+        max-height: 100%;
+        position: relative;
+        overflow: inherit;
         background: #002d56;
-        color: #fff;
-        padding: 1rem;
-        &.category-header {
-          position: sticky;
-          top: 0;
-          background: linear-gradient(to right, #002242 66%, #00224200);
+
+        & > section {
+          background: #002d56;
+          color: #fff;
+          padding: 1rem;
+          &.category-header {
+            position: sticky;
+            top: 0;
+            background: linear-gradient(to right, #002242 66%, #00224200);
+          }
+        }
+
+        .event {
+          background: linear-gradient(to right, #400 66%, #fff0);
         }
       }
 
-      .event {
-        background: linear-gradient(to right, #400 66%, #fff0);
-      }
-    }
-  `;
+      /* ---------- Check-in markers and chips (admin) ---------- */
 
-  @property({ attribute: false }) timeplan?:
-    | components["schemas"]["Timeplan"]
-    | null = null;
+      .ci {
+        display: inline-block;
+        min-width: 1em;
+        margin-right: 0.15em;
+        text-align: center;
+        font-weight: 700;
+        line-height: 1;
+      }
+
+      .ci.yes {
+        color: var(--ci-yes-color, var(--cup-green));
+      }
+
+      .ci.no {
+        color: var(--ci-no-color, var(--cup-muted));
+      }
+
+      .ci.yes::before {
+        content: "✓";
+      }
+
+      .ci.no::before {
+        content: "○";
+      }
+
+      /* Dark display look: brighter markers. */
+      #wrapper:not(.dense) {
+        --ci-yes-color: #6fdc8c;
+        --ci-no-color: rgb(255 255 255 / 60%);
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.2em;
+        padding: 0 0.45em;
+        border: 1px solid var(--cup-border);
+        border-radius: 999px;
+        background: var(--cup-surface-2);
+        color: var(--cup-text);
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 16px;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+        vertical-align: middle;
+      }
+
+      .chip.ok {
+        background: color-mix(in srgb, var(--cup-green) 12%, var(--cup-surface));
+        color: color-mix(in srgb, var(--cup-green) 70%, black);
+        border-color: color-mix(in srgb, var(--cup-green) 35%, var(--cup-surface));
+      }
+
+      .chip.warn {
+        background: color-mix(in srgb, var(--cup-amber) 14%, var(--cup-surface));
+        color: color-mix(in srgb, var(--cup-amber) 78%, black);
+        border-color: color-mix(in srgb, var(--cup-amber) 40%, var(--cup-surface));
+      }
+
+      .chip.bad {
+        background: color-mix(in srgb, var(--cup-red) 10%, var(--cup-surface));
+        color: color-mix(in srgb, var(--cup-red) 80%, black);
+        border-color: color-mix(in srgb, var(--cup-red) 35%, var(--cup-surface));
+      }
+
+      .chip .material-icon {
+        font-size: 13px;
+      }
+
+      section .chip {
+        margin-left: 0.25rem;
+      }
+
+      .song {
+        flex: none;
+        font-size: 16px;
+      }
+
+      .song.ok {
+        color: var(--cup-green);
+      }
+
+      .song.warn {
+        color: var(--cup-amber);
+      }
+
+      .song.bad {
+        color: var(--cup-red);
+      }
+
+      /* ---------- Dense admin list ---------- */
+
+      #wrapper.dense {
+        background: var(--cup-surface);
+        color: var(--cup-text);
+        font-size: 13px;
+        line-height: 1.3;
+        font-variant-numeric: tabular-nums;
+        container-type: inline-size;
+      }
+
+      /*
+       * Category rows: the description ("Einzel Männlich U13"), or the short
+       * name ("EMU13") where the description would be cut off.
+       */
+      .dense > .cat .short {
+        display: none;
+      }
+
+      @container (max-width: 21rem) {
+        .dense > .cat:not(.empty) .long {
+          display: none;
+        }
+
+        .dense > .cat:not(.empty) .short {
+          display: inline;
+        }
+      }
+
+      .dense > .cat,
+      .dense > .act,
+      .dense > .custom {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        min-height: 1.4rem;
+        padding: 1px 6px;
+        border-bottom: 1px solid var(--cup-border);
+        white-space: nowrap;
+      }
+
+      .dense > .cat {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: color-mix(in srgb, var(--cup-blue-2) 30%, var(--cup-surface));
+        color: var(--cup-blue);
+        font-weight: 700;
+        border-bottom-color: var(--cup-blue-2);
+      }
+
+      .dense > .cat .count {
+        color: var(--cup-muted);
+        font-weight: 400;
+      }
+
+      .dense > .cat .chip {
+        font-weight: 600;
+      }
+
+      /* Blocks without acts are skipped; they don't need attention. */
+      .dense > .cat.empty {
+        position: static;
+        background: var(--cup-surface-2);
+        color: var(--cup-muted);
+        font-weight: 400;
+        border-bottom-color: var(--cup-border);
+      }
+
+      .dense > .act.current {
+        background: color-mix(in srgb, var(--cup-blue-2) 45%, var(--cup-surface));
+        font-weight: 600;
+      }
+
+      .dense > .act.call {
+        background: color-mix(in srgb, var(--cup-red) 10%, var(--cup-surface));
+      }
+
+      .dense > .custom {
+        background: var(--cup-surface-2);
+        color: var(--cup-muted);
+        font-style: italic;
+      }
+
+      .dense .time {
+        flex: none;
+        min-width: 2.75em;
+        color: var(--cup-muted);
+        font-style: normal;
+      }
+
+      .dense .time .orig {
+        font-size: 0.9em;
+      }
+
+      .dense > .cat .time {
+        color: inherit;
+      }
+
+      .dense .who {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .dense .club,
+      .dense .clubs {
+        color: var(--cup-muted);
+        font-size: 0.92em;
+      }
+    `,
+  ];
+
+  @property({ attribute: false }) timeplan?: Timeplan | null = null;
+  /**
+   * The acts (`list_acts`). `undefined`: the element loads them itself;
+   * `null`: the parent provides them, but hasn't loaded them yet.
+   */
+  @property({ attribute: false }) acts?: Act[] | null;
+  /** Check-in time per starter id (admin only). */
+  @property({ attribute: false }) checkIns?: CheckInMap | null;
   @property({ attribute: "include-past", type: Boolean }) includePast = false;
   @property({ attribute: "include-active-act", type: Boolean })
   includeActiveAct = false;
   @property({ attribute: "include-original-time", type: Boolean })
   includeOriginalTime = false;
   @property({ attribute: "is-admin", type: Boolean }) isAdmin = false;
-
-  allActs = new Task(this, {
-    task: async () => (await client.GET("/api/query/list_acts")).data,
-    args: () => [],
-  });
-
   @property({ type: Boolean }) description = false;
+  /** Compact light list for admin pages: one line per act. */
+  @property({ type: Boolean }) dense = false;
+
+  /** The acts loaded by the element itself, if `acts` isn't set. */
+  @state() private fetchedActs?: Act[];
+  private fetchedActsJson = "";
+  private actsById = new Map<string, Act>();
+
+  // Keeps the element's own acts reasonably fresh on display screens.
+  actsPoll = new PollController(this, 60_000, () => this.fetchActs());
+
+  override firstUpdated() {
+    this.fetchActs().catch((error) => console.error(error));
+  }
+
+  override willUpdate(changed: PropertyValues) {
+    if (changed.has("acts") || changed.has("fetchedActs")) {
+      this.actsById = new Map(
+        (this.currentActs() ?? []).map((act) => [act.id, act]),
+      );
+    }
+  }
+
+  private currentActs() {
+    return this.acts !== undefined ? this.acts : this.fetchedActs;
+  }
+
+  private async fetchActs() {
+    if (this.acts !== undefined) {
+      return;
+    }
+    const acts = unwrap(await client.GET("/api/query/list_acts"));
+    const json = JSON.stringify(acts);
+    if (json !== this.fetchedActsJson) {
+      this.fetchedActsJson = json;
+      this.fetchedActs = acts;
+    }
+  }
 
   override render() {
-    return html`<div id="wrapper">
-      ${this.allActs.render({
-        loading: () => html`Loading...`,
-        error: (error) => html`Error: ${error}`,
-        complete: (acts) =>
-          repeat(
-            (this.includePast
-              ? this.timeplan?.items
-              : this.timeplan?.items.filter(
-                  (item) => item.status != "Ended",
-                )) || [],
-            (item) =>
-              "Category" in item.timeplan_entry
-                ? item.timeplan_entry.Category.name
-                : item.timeplan_entry.Custom.label,
-            (item) =>
-              "Category" in item.timeplan_entry
-                ? item.timeplan_entry.Category.acts.filter(
-                    (a) =>
-                      (this.includePast || a.status != "Ended") &&
-                      (this.includeActiveAct || a.status != "Started"),
-                  ).length
-                  ? html`<section class="category-header">
-                        <h3 class="title">
-                          ${item.timeplan_entry.Category.description}
-                        </h3>
-                        ${
-                          item.started_at
-                            ? nothing
-                            : html`<p class="time">
-                              ${niceTime(item.predicted_start)}${
-                                this.includeOriginalTime
-                                  ? html` (${niceTime(item.planned_start)})`
-                                  : nothing
-                              }
-                            </p>`
-                        }
-                        ${
-                          this.isAdmin
-                            ? html`<input
-                              type="checkbox"
-                              ?checked=${acts
-                                ?.filter(
-                                  (completeAct) =>
-                                    "Category" in item.timeplan_entry &&
-                                    completeAct.category ==
-                                      item.timeplan_entry.Category.name,
-                                )
-                                ?.every((a) => a.song_checked)}
-                              disabled
-                            />`
-                            : nothing
-                        }
-                      </section>
-                      ${repeat(
-                        item.timeplan_entry.Category.acts.filter(
-                          (a) =>
-                            (this.includePast || a.status != "Ended") &&
-                            (this.includeActiveAct || a.status != "Started"),
-                        ),
-                        (act) => act.id,
-                        (act) => html`
-                          <section>
-                            <h3>
-                              ${repeat(
-                                acts?.find(
-                                  (completeAct) => completeAct.id == act.id,
-                                )?.participants || [],
-                                (p) =>
-                                  html`${p.firstname} ${p.lastname}
-                                    (${p.club_name})<br />`,
-                              )}
-                            </h3>
-                            <h4>${act.name}</h4>
-                            <p class="time">
-                              ${niceTime(act.predicted_start)}${
-                                this.includeOriginalTime
-                                  ? html` (${niceTime(item.planned_start)})`
-                                  : nothing
-                              }
-                            </p>
-                            <p>
-                              ${
-                                this.description
-                                  ? acts?.find(
-                                      (completeAct) => completeAct.id == act.id,
-                                    )?.description
-                                  : nothing
-                              }
-                            </p>
-                            ${
-                              this.isAdmin
-                                ? html`<input
-                                  type="checkbox"
-                                  ?checked=${
-                                    acts?.find(
-                                      (completeAct) => completeAct.id == act.id,
-                                    )?.song_checked
-                                  }
-                                  disabled
-                                />`
-                                : nothing
-                            }
-                          </section>
-                        `,
-                      )}`
-                  : nothing
-                : html`
-                    <section class="event">
-                      <h3 class="title">${item.timeplan_entry.Custom.label}</h3>
-                      <p class="time">
-                        ${niceTime(item.predicted_start)}${
-                          this.includeOriginalTime
-                            ? html` (${niceTime(item.planned_start)})`
-                            : nothing
-                        }
-                      </p>
-                    </section>
-                  `,
-          ),
-      })}
+    // Like before, nothing is shown until the participants are known.
+    if (!this.currentActs()) {
+      return html`<div id="wrapper"></div>`;
+    }
+    const items =
+      (this.includePast
+        ? this.timeplan?.items
+        : this.timeplan?.items.filter((item) => item.status !== "Ended")) || [];
+    return html`<div id="wrapper" class=${classMap({ dense: this.dense })}>
+      ${repeat(
+        items,
+        (item) =>
+          "Category" in item.timeplan_entry
+            ? `category:${item.timeplan_entry.Category.name}`
+            : `custom:${item.planned_start}:${item.timeplan_entry.Custom.label}`,
+        (item) =>
+          "Category" in item.timeplan_entry
+            ? this.renderCategory(item, item.timeplan_entry.Category)
+            : this.renderCustom(item, item.timeplan_entry.Custom),
+      )}
+      ${
+        this.dense && this.timeplan && !items.length
+          ? html`<div class="custom">Keine weiteren Programmpunkte</div>`
+          : nothing
+      }
     </div>`;
+  }
+
+  private renderCategory(item: TimeplanItem, category: CategoryEntry) {
+    const shown = category.acts.filter(
+      (a) =>
+        (this.includePast || a.status !== "Ended") &&
+        (this.includeActiveAct || a.status !== "Started"),
+    );
+    if (this.dense) {
+      return this.renderDenseCategory(item, category, shown);
+    }
+    if (!shown.length) {
+      return nothing;
+    }
+    return html`<section class="category-header">
+        <h3 class="title">${category.description}</h3>
+        ${
+          item.started_at
+            ? nothing
+            : html`<p class="time">
+              ${niceTime(item.predicted_start)}${
+                this.includeOriginalTime
+                  ? html` (${niceTime(item.planned_start)})`
+                  : nothing
+              }
+            </p>`
+        }
+        ${
+          this.isAdmin
+            ? html`<input
+                type="checkbox"
+                ?checked=${category.acts.every(
+                  (a) => this.actsById.get(a.id)?.song_checked,
+                )}
+                disabled
+              />${this.renderCategoryCheckIns(shown)}`
+            : nothing
+        }
+      </section>
+      ${repeat(
+        shown,
+        (act) => act.id,
+        (act) => this.renderAct(act),
+      )}`;
+  }
+
+  private renderAct(timeplanAct: TimeplanAct) {
+    const act = this.actsById.get(timeplanAct.id);
+    return html`
+      <section>
+        <h3>${act ? this.renderNames(act) : nothing}</h3>
+        <h4>${timeplanAct.name}</h4>
+        <p class="time">
+          ${niceTime(timeplanAct.predicted_start)}${
+            this.includeOriginalTime
+              ? html` (${niceTime(timeplanAct.planned_start)})`
+              : nothing
+          }
+        </p>
+        <p>${this.description ? act?.description : nothing}</p>
+        ${
+          this.isAdmin
+            ? html`<input
+                type="checkbox"
+                ?checked=${act?.song_checked}
+                disabled
+              />${act ? this.renderActCheckIns(act) : nothing}`
+            : nothing
+        }
+      </section>
+    `;
+  }
+
+  /** One line per participant, or the group name with its clubs. */
+  private renderNames(act: Act) {
+    if (isGroupActType(act.act_type)) {
+      const clubs = actClubNames(act);
+      return html`${act.group_name}${
+        clubs.length ? ` (${clubs.join(", ")})` : nothing
+      }<br />`;
+    }
+    return repeat(
+      act.participants,
+      (p) => p.id,
+      (p) =>
+        html`${this.marker(p.id)}${p.firstname} ${p.lastname}
+          (${p.club_name})<br />`,
+    );
+  }
+
+  private renderCustom(item: TimeplanItem, custom: CustomEntry) {
+    if (this.dense) {
+      return html`<div class="custom">
+        ${this.renderDenseTime(item.predicted_start, item.planned_start)}
+        <span class="who" title=${custom.label}>${custom.label}</span>
+      </div>`;
+    }
+    return html`
+      <section class="event">
+        <h3 class="title">${custom.label}</h3>
+        <p class="time">
+          ${niceTime(item.predicted_start)}${
+            this.includeOriginalTime
+              ? html` (${niceTime(item.planned_start)})`
+              : nothing
+          }
+        </p>
+      </section>
+    `;
+  }
+
+  private renderDenseCategory(
+    item: TimeplanItem,
+    category: CategoryEntry,
+    shown: TimeplanAct[],
+  ) {
+    // Empty upcoming blocks stay visible, so the operator knows they are
+    // skipped; blocks whose shown acts are all over are left out.
+    if (!shown.length && (category.acts.length || item.status === "Ended")) {
+      return nothing;
+    }
+    return html`<div
+        class=${classMap({ cat: true, empty: !category.acts.length })}
+        title=${
+          category.description
+            ? `${category.name} – ${category.description}`
+            : category.name
+        }
+      >
+        ${
+          item.started_at
+            ? html`<span class="time">läuft</span>`
+            : this.renderDenseTime(item.predicted_start, item.planned_start)
+        }
+        <span class="who"
+          ><span class="long">${category.description || category.name}</span
+          ><span class="short">${category.name}</span></span
+        >
+        ${
+          // For admins the music chip ("♪ x/y") already counts the acts.
+          !category.acts.length
+            ? html`<span class="count">keine Küren</span>`
+            : this.isAdmin
+              ? nothing
+              : html`<span class="count"
+                  >${shown.length} ${shown.length === 1 ? "Kür" : "Küren"}</span
+                >`
+        }
+        ${
+          this.isAdmin && shown.length
+            ? html`${this.renderCategoryCheckIns(shown)}${this.renderCategorySongs(
+                shown,
+              )}`
+            : nothing
+        }
+      </div>
+      ${repeat(
+        shown,
+        (act) => act.id,
+        (act) => this.renderDenseAct(act),
+      )}`;
+  }
+
+  private renderDenseAct(timeplanAct: TimeplanAct) {
+    const act = this.actsById.get(timeplanAct.id);
+    const stats =
+      act && this.isAdmin && this.checkIns
+        ? checkInStats(act.participants, this.checkIns)
+        : null;
+    const startsIn =
+      (new Date(timeplanAct.predicted_start).getTime() - Date.now()) / 1000;
+    const call =
+      !!stats &&
+      timeplanAct.status === "Planned" &&
+      startsIn < CALL_IN_SECONDS &&
+      stats.missing.some((p) => !p.is_replacement);
+    return html`<div
+      class=${classMap({
+        act: true,
+        current: timeplanAct.status === "Started",
+        call,
+      })}
+    >
+      ${this.renderDenseTime(timeplanAct.predicted_start, timeplanAct.planned_start)}
+      <span class="who" title=${this.tooltip(timeplanAct, act)}
+        >${act ? this.renderDenseNames(act) : timeplanAct.name}</span
+      >
+      ${
+        this.isAdmin && act
+          ? html`${this.renderActCheckIns(act)}${this.renderSong(act)}`
+          : nothing
+      }
+    </div>`;
+  }
+
+  private renderDenseTime(predicted: string, planned: string) {
+    return html`<span class="time"
+      >${formatTime(predicted)}${
+        this.includeOriginalTime
+          ? html` <span class="orig">(${formatTime(planned)})</span>`
+          : nothing
+      }</span
+    >`;
+  }
+
+  private renderDenseNames(act: Act) {
+    if (isGroupActType(act.act_type)) {
+      return html`<b>${act.group_name}</b>
+        <span class="clubs">${actClubNames(act).join(", ")}</span>`;
+    }
+    return repeat(
+      act.participants,
+      (p) => p.id,
+      (p, i) =>
+        html`${i > 0 ? " & " : nothing}${this.marker(p.id)}${participantName(p)}
+          <span class="club">(${p.club_name})</span>`,
+    );
+  }
+
+  private tooltip(timeplanAct: TimeplanAct, act?: Act) {
+    const lines = [timeplanAct.name ? `Kür: ${timeplanAct.name}` : ""];
+    for (const p of act?.participants ?? []) {
+      let line = `${participantName(p)} (${p.club_name})`;
+      if (p.is_replacement) {
+        line += " – Ersatz";
+      }
+      if (this.isAdmin && this.checkIns) {
+        line += this.checkIns.get(p.id)
+          ? " – eingecheckt"
+          : " – nicht eingecheckt";
+      }
+      lines.push(line);
+    }
+    return lines.filter(Boolean).join("\n");
+  }
+
+  /** ✓/○ before a rider's name, only with check-in data. */
+  private marker(starterId: string) {
+    if (!this.isAdmin || !this.checkIns) {
+      return nothing;
+    }
+    const checkedIn = !!this.checkIns.get(starterId);
+    return html`<span
+      class=${classMap({ ci: true, yes: checkedIn, no: !checkedIn })}
+      title=${checkedIn ? "eingecheckt" : "nicht eingecheckt"}
+    ></span>`;
+  }
+
+  /** "✓ x/y" of one act: green if complete, amber if only replacements miss. */
+  private renderActCheckIns(act: Act) {
+    if (!this.checkIns) {
+      return nothing;
+    }
+    const stats = checkInStats(act.participants, this.checkIns);
+    const regularMissing = stats.missing.some((p) => !p.is_replacement);
+    return html`<span
+      class=${classMap({
+        chip: true,
+        ok: stats.missing.length === 0,
+        warn: stats.missing.length > 0 && !regularMissing,
+        bad: regularMissing,
+      })}
+      title=${
+        stats.missingNames.length
+          ? `Nicht eingecheckt: ${stats.missingNames.join(", ")}`
+          : "Alle eingecheckt"
+      }
+      >✓ ${stats.checkedIn}/${stats.total}</span
+    >`;
+  }
+
+  /** Checked-in riders of the shown acts of a category. */
+  private renderCategoryCheckIns(shown: TimeplanAct[]) {
+    if (!this.checkIns) {
+      return nothing;
+    }
+    const checkIns = this.checkIns;
+    let checkedIn = 0;
+    let total = 0;
+    let regularMissing = 0;
+    for (const timeplanAct of shown) {
+      for (const p of this.actsById.get(timeplanAct.id)?.participants ?? []) {
+        total += 1;
+        if (checkIns.get(p.id)) {
+          checkedIn += 1;
+        } else if (!p.is_replacement) {
+          regularMissing += 1;
+        }
+      }
+    }
+    return html`<span
+      class=${classMap({
+        chip: true,
+        ok: checkedIn === total,
+        warn: checkedIn < total && regularMissing === 0,
+        bad: regularMissing > 0,
+      })}
+      title="Eingecheckt: ${checkedIn} von ${total} Fahrern"
+      >✓ ${checkedIn}/${total}</span
+    >`;
+  }
+
+  /** Checked songs of the shown acts of a category. */
+  private renderCategorySongs(shown: TimeplanAct[]) {
+    const acts = shown.map((a) => this.actsById.get(a.id));
+    const checked = acts.filter((a) => a?.song_checked).length;
+    const missing = acts.filter((a) => !a?.song_file).length;
+    return html`<span
+      class=${classMap({
+        chip: true,
+        ok: checked === acts.length,
+        warn: checked < acts.length && missing === 0,
+        bad: missing > 0,
+      })}
+      title="Musik geprüft: ${checked} von ${acts.length}${
+        missing ? `, ${missing} ohne Musik` : ""
+      }"
+      ><span class="material-icon" aria-hidden="true">music_note</span>${checked}/${acts.length}</span
+    >`;
+  }
+
+  private renderSong(act: Act) {
+    const [tone, icon, label] = !act.song_file
+      ? ["bad", "music_off", "Keine Musik hochgeladen"]
+      : act.song_checked
+        ? ["ok", "music_note", "Musik geprüft"]
+        : ["warn", "music_note", "Musik nicht geprüft"];
+    return html`<span
+      class="material-icon song ${tone}"
+      role="img"
+      title=${label}
+      aria-label=${label}
+      >${icon}</span
+    >`;
   }
 }
 

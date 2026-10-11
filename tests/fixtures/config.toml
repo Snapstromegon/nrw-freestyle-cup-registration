@@ -2,11 +2,11 @@
 # Mirrors config.example.toml; the registration dates are overwritten per test.
 
 [competition]
-id = "nrw-freestyle-cup-2027"
-name = "NRW Freestyle Cup 2027"
-location = "SSV Nümbrecht"
-start_date = 2027-06-05
-end_date = 2027-06-05
+id = "einrad-demo-2027"
+name = "Einradevent 2027 (Demo)"
+location = "Düsseldorf"
+start_date = 2027-04-01
+end_date = 2027-04-02
 determining_day = 2027-06-01
 registration_start = 2026-12-01T00:00:00+01:00
 registration_end = 2027-04-30T23:59:59+02:00
@@ -387,6 +387,42 @@ einfahrzeit_minutes = 10
 act_duration_minutes = 3
 judge_duration_minutes = 3
 
+[[categories]]
+name = "KGU15"
+description = "Kleingruppe U15"
+act_type = "group_small"
+under_age = 15
+einfahrzeit_minutes = 10
+act_duration_minutes = 5
+judge_duration_minutes = 3
+
+[[categories]]
+name = "KG15+"
+description = "Kleingruppe 15+"
+act_type = "group_small"
+min_age = 15
+einfahrzeit_minutes = 10
+act_duration_minutes = 5
+judge_duration_minutes = 3
+
+[[categories]]
+name = "GGU15"
+description = "Großgruppe U15"
+act_type = "group_large"
+under_age = 15
+einfahrzeit_minutes = 10
+act_duration_minutes = 5
+judge_duration_minutes = 3
+
+[[categories]]
+name = "GG15+"
+description = "Großgruppe 15+"
+act_type = "group_large"
+min_age = 15
+einfahrzeit_minutes = 10
+act_duration_minutes = 5
+judge_duration_minutes = 3
+
 [[timeplan]]
 category = "EMU11"
 earliest_start = 2027-06-05T10:00:00+02:00
@@ -499,6 +535,18 @@ category = "PU70"
 
 [[timeplan]]
 category = "P70+"
+
+[[timeplan]]
+category = "KGU15"
+
+[[timeplan]]
+category = "KG15+"
+
+[[timeplan]]
+category = "GGU15"
+
+[[timeplan]]
+category = "GG15+"
 
 [[timeplan]]
 label = "Siegerehrung"

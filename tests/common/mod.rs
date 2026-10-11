@@ -115,6 +115,12 @@ pub async fn seed_db(db: &SqlitePool, status: &StatusOptions) {
     )
     .await
     .unwrap();
+    set_registration_status(db, status).await;
+}
+
+/// Sets the registration dates of the competition to `status`. Capabilities
+/// are read per request, so this takes effect immediately.
+pub async fn set_registration_status(db: &SqlitePool, status: &StatusOptions) {
     sqlx::query(
         "UPDATE competition SET registration_start = ?, registration_end = ?, music_upload_end = ?",
     )
@@ -336,6 +342,82 @@ impl TestApp {
             .fetch_one(&self.db)
             .await
             .unwrap()
+    }
+
+    /// Returns the id of the act of `act_type` the starter takes part in.
+    /// Unlike [`TestApp::act_of`] this stays unambiguous for riders in groups.
+    pub async fn act_of_type(&self, starter_id: Uuid, act_type: &str) -> Uuid {
+        sqlx::query_scalar(
+            "SELECT act_id FROM act_participants JOIN acts ON acts.id = act_id WHERE starter_id = ? AND act_type = ?",
+        )
+        .bind(starter_id)
+        .bind(act_type)
+        .fetch_one(&self.db)
+        .await
+        .unwrap()
+    }
+
+    /// Adds `count` starters without single or pair starts, named
+    /// `{prefix}1 Muster`, `{prefix}2 Muster`, …, and returns their ids.
+    pub async fn add_riders(
+        &self,
+        cookie: &str,
+        club_id: Uuid,
+        prefix: &str,
+        count: usize,
+    ) -> Vec<Uuid> {
+        let mut ids = Vec::with_capacity(count);
+        for i in 1..=count {
+            let body = starter_body(club_id, &format!("{prefix}{i}"), false, false);
+            ids.push(self.add_starter(cookie, body).await);
+        }
+        ids
+    }
+
+    /// Creates a group owned by `club_id` and returns its act id.
+    pub async fn create_group(&self, cookie: &str, club_id: Uuid, group_name: &str) -> Uuid {
+        let response = self
+            .post(
+                "/api/command/create_club_group",
+                json!({ "club_id": club_id, "group_name": group_name }),
+                Some(cookie),
+            )
+            .await;
+        assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+        response.body["act_id"].as_str().unwrap().parse().unwrap()
+    }
+
+    /// Sets the riders of `club_id` in a group: `regular` riders and
+    /// `replacements`. Returns the response, so failures can be asserted.
+    pub async fn set_group_members(
+        &self,
+        cookie: &str,
+        club_id: Uuid,
+        act_id: Uuid,
+        regular: &[Uuid],
+        replacements: &[Uuid],
+    ) -> TestResponse {
+        let members: Vec<Value> = regular
+            .iter()
+            .map(|id| json!({ "starter_id": id, "is_replacement": false }))
+            .chain(
+                replacements
+                    .iter()
+                    .map(|id| json!({ "starter_id": id, "is_replacement": true })),
+            )
+            .collect();
+        self.post(
+            "/api/command/set_club_group_members",
+            json!({ "club_id": club_id, "act_id": act_id, "members": members }),
+            Some(cookie),
+        )
+        .await
+    }
+
+    /// Ends the registration and music upload window, so data created while
+    /// it was open can be tested with closed registration.
+    pub async fn close_registration(&self) {
+        set_registration_status(&self.db, &closed_registration()).await;
     }
 
     /// Returns all mails received by Mailpit, oldest first.

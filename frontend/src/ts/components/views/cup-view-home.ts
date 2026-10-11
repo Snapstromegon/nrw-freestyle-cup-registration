@@ -1,6 +1,7 @@
 import { consume } from "@lit/context";
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
+import { errorMessage } from "../../api";
 import { client } from "../../apiClient";
 import { type User, userContext } from "../../contexts/user";
 import "../elements/cup-context-club.js";
@@ -172,9 +173,11 @@ export default class CupViewHome extends LitElement {
     const data = await client.POST("/api/command/resend_mail_validation", {
       body: {},
     });
-    if (data.error) {
+    if (data.error !== undefined || !data.response.ok) {
       console.error(data.error);
-      alert("Fehler beim Versenden der Mail: " + data.error);
+      alert(
+        `Fehler beim Versenden der Mail: ${errorMessage(data.error, data.response.status)}`,
+      );
       return;
     }
     alert("Mail wurde versendet.");

@@ -6,8 +6,12 @@ mod get_startlist_csv;
 mod get_system_status;
 mod list_acts;
 mod list_categories;
+mod list_check_ins;
 mod list_club_acts;
+mod list_club_groups;
 mod list_club_starters;
+mod list_clubs;
+mod list_groups;
 mod list_starters;
 mod list_timeplan;
 mod list_users;
@@ -31,4 +35,8 @@ pub fn get_query_router() -> OpenApiRouter {
         .routes(routes!(startlist::startlist))
         .routes(routes!(get_startlist_csv::get_startlist_csv))
         .routes(routes!(predict_timeplan::predict_timeplan))
+        .routes(routes!(list_clubs::list_clubs))
+        .routes(routes!(list_groups::list_groups))
+        .routes(routes!(list_club_groups::list_club_groups))
+        .routes(routes!(list_check_ins::list_check_ins))
 }

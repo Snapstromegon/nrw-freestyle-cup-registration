@@ -1,21 +1,10 @@
 import { consume } from "@lit/context";
-import { Task } from "@lit/task";
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
+import { repeat } from "lit/directives/repeat.js";
+import { PollController, unwrap } from "../../api";
 import { client, type components } from "../../apiClient";
-import "../elements/cup-context-club.js";
-import "../elements/cup-club-manager.js";
-import "../elements/cup-starter-table.js";
 import "../elements/cup-timeplan.js";
-import {
-  currentTimeplanAct,
-  currentTimeplanEntry,
-  lastTimeplanAct,
-  lastTimeplanEntry,
-  nextTimeplanEntry,
-  TimeplanStatus,
-  timeplanStatus,
-} from "../../utils.js";
 import "../elements/cup-clock.js";
 import "../elements/cup-countdown.js";
 import "../elements/cup-fotobox.js";
@@ -23,7 +12,30 @@ import {
   type SystemStatus,
   systemStatusContext,
 } from "../../contexts/systemStatus";
-import { competitionName } from "../../utils";
+import {
+  actClubNames,
+  actParticipantsLabel,
+  competitionName,
+  currentTimeplanAct,
+  currentTimeplanEntry,
+  isGroupActType,
+  lastTimeplanAct,
+  lastTimeplanEntry,
+  nextTimeplanEntry,
+  participantName,
+  TimeplanStatus,
+  timeplanStatus,
+} from "../../utils";
+
+type Act = components["schemas"]["Act"];
+type Timeplan = components["schemas"]["Timeplan"];
+type TimeplanItem = components["schemas"]["TimeplanItem"];
+
+/** The description of a timeplan item's category, if it is one. */
+const categoryDescription = (item: TimeplanItem | undefined) =>
+  item && "Category" in item.timeplan_entry
+    ? item.timeplan_entry.Category.description
+    : nothing;
 
 @customElement("cup-view-info-board")
 export default class CupViewInfoBoard extends LitElement {
@@ -37,22 +49,6 @@ export default class CupViewInfoBoard extends LitElement {
       box-sizing: border-box;
       font-family: "Mona Sans";
     }
-    .material-icon {
-      font-family: "Material Symbols Outlined";
-      font-weight: normal;
-      font-style: normal;
-      font-size: 24px;
-      line-height: 1;
-      letter-spacing: normal;
-      text-transform: none;
-      display: inline-block;
-      white-space: nowrap;
-      word-wrap: normal;
-      direction: ltr;
-      font-feature-settings: "liga";
-      -webkit-font-smoothing: antialiased;
-    }
-
     #wrapper {
       display: grid;
       grid-template-columns: 1fr 3fr;
@@ -278,6 +274,10 @@ export default class CupViewInfoBoard extends LitElement {
       text-align: center;
     }
 
+    .starter.group h3 {
+      text-wrap: balance;
+    }
+
     cup-fotobox {
       min-height: 0;
       width: 100%;
@@ -315,34 +315,74 @@ export default class CupViewInfoBoard extends LitElement {
     }
   `;
 
-  lastRawTimeplan?: components["schemas"]["Timeplan"];
+  /** The last timeplan as JSON, to only re-render when it changed. */
+  private lastRawTimeplan?: string;
+  /** Which acts were shown (current and last) when `acts` was loaded. */
+  private actsLoadedFor?: string;
 
-  @state() predictedTimeplan?: components["schemas"]["Timeplan"];
+  @state() predictedTimeplan?: Timeplan;
+  @state() acts = new Map<string, Act>();
 
-  allActs = new Task(this, {
-    task: async () => (await client.GET("/api/query/list_acts")).data,
-    args: () => [],
-  });
-
-  dataUpdateInterval?: number;
+  poll = new PollController(this, 1000, () => this.refresh());
 
   override connectedCallback() {
     super.connectedCallback?.();
-    this.dataUpdateInterval = setInterval(async () => {
-      const newTimeplan = (await client.GET("/api/query/predict_timeplan"))
-        .data;
-      if (
-        JSON.stringify(newTimeplan) !== JSON.stringify(this.lastRawTimeplan)
-      ) {
-        this.predictedTimeplan = newTimeplan;
-        this.lastRawTimeplan = this.predictedTimeplan;
-      }
-    }, 1000);
+    this.poll.runNow();
   }
 
-  override disconnectedCallback() {
-    super.disconnectedCallback?.();
-    clearInterval(this.dataUpdateInterval);
+  /**
+   * Loads the timeplan. The acts are only reloaded when another act is shown,
+   * which also picks up late changes (e.g. to a group's members).
+   */
+  async refresh() {
+    const timeplan = unwrap(await client.GET("/api/query/predict_timeplan"));
+    const shownActs = `${currentTimeplanAct(timeplan)?.id}/${lastTimeplanAct(timeplan)?.id}`;
+    if (shownActs !== this.actsLoadedFor) {
+      try {
+        const acts = unwrap(await client.GET("/api/query/list_acts"));
+        this.acts = new Map(acts.map((act) => [act.id, act]));
+        this.actsLoadedFor = shownActs;
+      } catch (error) {
+        // Keep showing the timeplan; the acts are retried with the next poll.
+        console.error(error);
+      }
+    }
+    const raw = JSON.stringify(timeplan);
+    if (raw !== this.lastRawTimeplan) {
+      this.predictedTimeplan = timeplan;
+      this.lastRawTimeplan = raw;
+    }
+  }
+
+  /**
+   * The riders of an act with their clubs. A group shows its name and clubs
+   * instead, since tiles for 9 or more riders don't fit on the board.
+   */
+  renderPerformers(actId: string | undefined) {
+    const act = actId ? this.acts.get(actId) : undefined;
+    if (!act) {
+      return nothing;
+    }
+    if (isGroupActType(act.act_type)) {
+      return html`<div class="starters">
+        <div class="starter group">
+          <h2>${actParticipantsLabel(act)}</h2>
+          <h3>${actClubNames(act).join(" · ")}</h3>
+        </div>
+      </div>`;
+    }
+    return html`<div class="starters">
+      ${repeat(
+        act.participants,
+        (p) => p.id,
+        (p) => html`
+          <div class="starter">
+            <h2>${participantName(p)}</h2>
+            <h3>${p.club_name}</h3>
+          </div>
+        `,
+      )}
+    </div>`;
   }
 
   renderMain() {
@@ -359,6 +399,7 @@ export default class CupViewInfoBoard extends LitElement {
     const status = timeplanStatus(timeplan);
     const currentEntry = currentTimeplanEntry(timeplan);
     const currentAct = currentTimeplanAct(timeplan);
+    const lastAct = lastTimeplanAct(timeplan);
     const lastEntry = lastTimeplanEntry(timeplan);
     const nextEntry = nextTimeplanEntry(timeplan);
     switch (status) {
@@ -377,17 +418,11 @@ export default class CupViewInfoBoard extends LitElement {
       case TimeplanStatus.Warmup:
         return html`<div class="warmup">
           <h1>Einfahrzeit</h1>
-          <h2>
-            ${
-              currentEntry && "Category" in currentEntry.timeplan_entry
-                ? currentEntry.timeplan_entry.Category.description
-                : "Invalid State"
-            }
-          </h2>
+          <h2>${categoryDescription(currentEntry)}</h2>
           ${
             nextEntry &&
             "Category" in nextEntry.timeplan_entry &&
-            nextEntry.timeplan_entry.Category.einfahrzeit_seconds == 0
+            nextEntry.timeplan_entry.Category.einfahrzeit_seconds === 0
               ? html`<h2>${nextEntry.timeplan_entry.Category.description}</h2>`
               : nothing
           }
@@ -403,56 +438,22 @@ export default class CupViewInfoBoard extends LitElement {
         </div>`;
       case TimeplanStatus.Act:
         return html`<div class="act">
-          <h1>${currentAct?.name}</h1>
-          <div class="starters">
-            ${this.allActs.value
-              ?.find((a) => a.id == currentAct?.id)
-              ?.participants.map(
-                (p) => html`
-                  <div class="starter">
-                    <h2>${p.firstname} ${p.lastname}</h2>
-                    <h3>${p.club_name}</h3>
-                  </div>
-                `,
-              )}
-          </div>
-          <h3>
-            ${
-              currentEntry && "Category" in currentEntry.timeplan_entry
-                ? currentEntry.timeplan_entry.Category.description
-                : "Invalid State"
-            }
-          </h3>
+          ${currentAct?.name ? html`<h1>${currentAct.name}</h1>` : nothing}
+          ${this.renderPerformers(currentAct?.id)}
+          <h3>${categoryDescription(currentEntry)}</h3>
         </div>`;
       case TimeplanStatus.Judging:
         return html`<div class="judging">
           <cup-fotobox
             src="http://nrw-cup-fotos:8080/newest?date=${Math.floor(
-              new Date().getTime() / 1000 / 60,
+              Date.now() / 1000 / 60,
             )}"
           ></cup-fotobox>
           <section>
             <h3>Das war...</h3>
-            <h1>${lastTimeplanAct(timeplan)?.name}</h1>
-            <div class="starters">
-              ${this.allActs.value
-                ?.find((a) => a.id == lastTimeplanAct(timeplan)?.id)
-                ?.participants.map(
-                  (p) => html`
-                    <div class="starter">
-                      <h2>${p.firstname} ${p.lastname}</h2>
-                      <h3>${p.club_name}</h3>
-                    </div>
-                  `,
-                )}
-            </div>
-            <h3>
-              ${
-                currentEntry && "Category" in currentEntry.timeplan_entry
-                  ? currentEntry.timeplan_entry.Category.description
-                  : "Invalid State"
-              }
-            </h3>
+            ${lastAct?.name ? html`<h1>${lastAct.name}</h1>` : nothing}
+            ${this.renderPerformers(lastAct?.id)}
+            <h3>${categoryDescription(currentEntry)}</h3>
             <cup-clock></cup-clock>
           </section>
         </div>`;
@@ -470,7 +471,6 @@ export default class CupViewInfoBoard extends LitElement {
   }
 
   override render() {
-    console.log("Info Board Rendering", this.predictedTimeplan);
     return html`
       <div id="wrapper">
         <aside>

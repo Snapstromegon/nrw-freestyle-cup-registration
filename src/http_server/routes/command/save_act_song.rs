@@ -15,6 +15,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
+    groups::ensure_act_access,
     http_server::{ClientError, HttpError, HttpServerOptions, extractor::auth::Auth},
     reloadable_sqlite::ReloadableSqlite,
     system_status::Capabilities,
@@ -39,9 +40,11 @@ pub struct Upload {
     pub metadata: Option<Metadata>,
 }
 
-/// EditClubAct a new user.
+/// Upload an act's song.
 ///
-/// This endpoint is used to create a new user.
+/// Replaces an earlier upload, which also resets `song_checked`: the new file
+/// hasn't been checked yet. Only clubs with a rider in the act, the club that
+/// created a group, and admins can upload.
 #[utoipa::path(
     post,
     tags=["command", "club"],
@@ -50,6 +53,8 @@ pub struct Upload {
     responses(
         (status=200, content_type="application/json", body=SaveActSongResponse),
         (status=400, content_type="application/json", body=ClientError),
+        (status=403, content_type="application/json", body=ClientError),
+        (status=404, content_type="application/json", body=ClientError),
         (status=500, content_type="application/json", body=ClientError),
     ),
 )]
@@ -64,6 +69,7 @@ pub async fn save_act_song(
     mut body: Multipart,
 ) -> Result<Json<SaveActSongResponse>, HttpError> {
     let db = db.get().await.clone();
+    ensure_act_access(&mut *db.acquire().await?, &auth, query.act_id).await?;
     let entry = body
         .next_field()
         .await
@@ -100,7 +106,7 @@ pub async fn save_act_song(
     sqlx::query!(
         r#"
         UPDATE acts
-        SET song_file_name = ?, song_file = ?
+        SET song_file_name = ?, song_file = ?, song_checked = FALSE
         WHERE id = ?
         "#,
         file_name,

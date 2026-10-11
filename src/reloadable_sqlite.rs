@@ -31,6 +31,19 @@ impl ReloadableSqlite {
     }
 }
 
+/// Begins a transaction that will write, with `BEGIN IMMEDIATE`.
+///
+/// A plain (deferred) `BEGIN` takes the write lock only at the first write.
+/// If another connection writes meanwhile, SQLite fails the upgrade from read
+/// to write at once with "database is locked", without waiting for the busy
+/// timeout. Commands that read before they write use this instead, so they
+/// wait for the lock up front.
+pub async fn begin_write(
+    pool: &SqlitePool,
+) -> Result<sqlx::Transaction<'static, sqlx::Sqlite>, sqlx::Error> {
+    pool.begin_with("BEGIN IMMEDIATE").await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -122,5 +135,48 @@ mod tests {
         db.reload().await.unwrap();
 
         assert_eq!(read_marker(&clone).await, "new");
+    }
+
+    #[tokio::test]
+    async fn write_transactions_wait_for_each_other() {
+        let dir = TempDir::new();
+        let pool = SqlitePool::connect(&dir.db_url("db.sqlite")).await.unwrap();
+        sqlx::query("CREATE TABLE counter (value INTEGER NOT NULL)")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO counter (value) VALUES (0)")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        // Read, then write, like the commands do. With a deferred BEGIN some
+        // of them fail at once with "database is locked".
+        let tasks: Vec<_> = (0..8)
+            .map(|_| {
+                let pool = pool.clone();
+                tokio::spawn(async move {
+                    let mut tx = begin_write(&pool).await?;
+                    let value: i64 = sqlx::query_scalar("SELECT value FROM counter")
+                        .fetch_one(&mut *tx)
+                        .await?;
+                    tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+                    sqlx::query("UPDATE counter SET value = ?")
+                        .bind(value + 1)
+                        .execute(&mut *tx)
+                        .await?;
+                    tx.commit().await
+                })
+            })
+            .collect();
+        for task in tasks {
+            task.await.unwrap().unwrap();
+        }
+
+        let value: i64 = sqlx::query_scalar("SELECT value FROM counter")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(value, 8);
     }
 }

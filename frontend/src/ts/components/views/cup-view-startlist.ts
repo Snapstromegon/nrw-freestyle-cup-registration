@@ -2,209 +2,305 @@ import { consume } from "@lit/context";
 import { Task } from "@lit/task";
 import { css, html, LitElement, nothing } from "lit";
 import { customElement } from "lit/decorators.js";
-import { client, type components } from "../../apiClient";
-import "../elements/cup-context-club.js";
-import "../elements/cup-club-manager.js";
-import "../elements/cup-starter-table.js";
-import { cache } from "lit/directives/cache.js";
 import { repeat } from "lit/directives/repeat.js";
+import { errorMessage, unwrap } from "../../api";
+import { client, type components } from "../../apiClient";
 import {
   type SystemStatus,
   systemStatusContext,
 } from "../../contexts/systemStatus";
-import { competitionName, formatDateRange } from "../../utils";
+import { resetStyles } from "../../styles/base";
+import {
+  actClubNames,
+  actParticipantsLabel,
+  competitionName,
+  formatDateRange,
+  formatTime,
+  isGroupActType,
+  participantName,
+} from "../../utils";
+
+type Category = components["schemas"]["Category"];
+type StartlistAct = components["schemas"]["StartlistAct"];
+type Timeplan = components["schemas"]["Timeplan"];
+
+/** A warm-up (Einfahrzeit) that one or more consecutive categories share. */
+interface Warmup {
+  /** Predicted start of the warm-up. */
+  start: string;
+  /** The categories warming up together; only those with acts. */
+  categories: Category[];
+}
+
+interface StartlistSection {
+  category: Category;
+  /** The acts with their predicted start, if the timeplan has them. */
+  acts: { act: StartlistAct; start?: string }[];
+  warmup?: Warmup;
+}
+
+interface Startlist {
+  /** Only categories with acts. */
+  sections: StartlistSection[];
+  warmups: Warmup[];
+}
+
+const categoryLabel = (category: Category) =>
+  category.description || category.name;
+
+/**
+ * Who performs an act: "Vorname Nachname (Verein)" joined with " & ", or for
+ * groups the group name and its clubs (not every member).
+ */
+const performers = (act: StartlistAct) =>
+  isGroupActType(act.act_type)
+    ? `${actParticipantsLabel(act)} (${actClubNames(act).join(" & ")})`
+    : act.participants
+        .map((p) => `${participantName(p)} (${p.club_name})`)
+        .join(" & ");
+
+/**
+ * Groups the acts by category and takes the predicted times from the
+ * timeplan. A category with warm-up time starts a warm-up; the categories
+ * right after it without warm-up time share that one.
+ */
+const buildStartlist = (
+  categories: Category[],
+  acts: StartlistAct[],
+  timeplan: Timeplan | undefined,
+): Startlist => {
+  const categoriesByName = new Map(categories.map((c) => [c.name, c]));
+  const actsByCategory = new Map<string, StartlistAct[]>();
+  for (const act of acts) {
+    if (!act.category) {
+      continue;
+    }
+    const categoryActs = actsByCategory.get(act.category) ?? [];
+    categoryActs.push(act);
+    actsByCategory.set(act.category, categoryActs);
+  }
+
+  const actStarts = new Map<string, string>();
+  const warmups: Warmup[] = [];
+  const warmupByCategory = new Map<string, Warmup>();
+  let warmup: Warmup | undefined;
+  for (const item of timeplan?.items ?? []) {
+    if (!("Category" in item.timeplan_entry)) {
+      // Nobody warms up across a break or the award ceremony.
+      warmup = undefined;
+      continue;
+    }
+    const entry = item.timeplan_entry.Category;
+    for (const act of entry.acts) {
+      actStarts.set(act.id, act.predicted_start);
+    }
+    if (entry.einfahrzeit_seconds > 0) {
+      warmup = { start: item.predicted_start, categories: [] };
+      warmups.push(warmup);
+    }
+    const category = categoriesByName.get(entry.name);
+    if (warmup && category && actsByCategory.has(entry.name)) {
+      warmup.categories.push(category);
+      warmupByCategory.set(entry.name, warmup);
+    }
+  }
+
+  return {
+    sections: categories.flatMap((category) => {
+      const categoryActs = actsByCategory.get(category.name);
+      if (!categoryActs) {
+        return [];
+      }
+      return [
+        {
+          category,
+          acts: categoryActs.map((act) => ({
+            act,
+            start: actStarts.get(act.id),
+          })),
+          warmup: warmupByCategory.get(category.name),
+        },
+      ];
+    }),
+    warmups: warmups.filter((w) => w.categories.length > 0),
+  };
+};
 
 @customElement("cup-view-startlist")
 export default class CupViewStartlist extends LitElement {
   @consume({ context: systemStatusContext, subscribe: true })
   systemStatus: SystemStatus | null = null;
 
-  static override styles = css`
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    .material-icon {
-      font-family: "Material Symbols Outlined";
-      font-weight: normal;
-      font-style: normal;
-      font-size: 24px;
-      line-height: 1;
-      letter-spacing: normal;
-      text-transform: none;
-      display: inline-block;
-      white-space: nowrap;
-      word-wrap: normal;
-      direction: ltr;
-      font-feature-settings: "liga";
-      -webkit-font-smoothing: antialiased;
-    }
-    header {
-      display: grid;
-      background: #002d56;
-      padding: 2rem 0;
-      color: #fff;
-      grid-template-columns: 1fr 2fr;
-      grid-template-rows: auto auto auto;
-      grid-template-areas: "img h1" "img date" "img location";
-      place-items: center start;
-    }
-
-    header img {
-      grid-area: img;
-      width: 100%;
-      min-height: 0;
-      height: 7rem;
-      max-height: 100%;
-    }
-
-    header h1 {
-      grid-area: h1;
-      font-size: 2rem;
-      text-align: center;
-    }
-
-    header .date {
-      grid-area: date;
-      text-align: right;
-    }
-
-    header .location {
-      grid-area: location;
-      text-align: right;
-    }
-
-    main {
-      max-width: 1800px;
-      margin: 0 auto;
-      padding: 2rem;
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
-
-    h3 {
-      margin-bottom: 1rem;
-    }
-
-    table {
-      border-collapse: collapse;
-      width: 100%;
-      margin-bottom: 3rem;
-    }
-
-    td:nth-child(1) {
-      width: 10%;
-    }
-
-    td:nth-child(2) {
-      width: 40%;
-    }
-
-    td:nth-child(3) {
-      width: 50%;
-    }
-
-    td,
-    th {
-      padding: 0.5rem;
-    }
-
-    tr:nth-child(odd) td {
-      background-color: #0001;
-    }
-
-    tr:hover td,
-    tr:hover th {
-      background-color: #0002;
-    }
-
-    .right {
-      text-align: right;
-    }
-
-    nav a {
-      padding: 0.5rem;
-      display: inline-block;
-    }
-
-    audio {
-      height: 2rem;
-    }
-  `;
-
-  allActs = new Task(this, {
-    args: () => [],
-    task: async () => {
-      const acts = await client.GET("/api/query/startlist");
-      return acts.data || [];
-    },
-  });
-  categories = new Task(this, {
-    args: () => [],
-    task: async () => {
-      const data = await client.GET("/api/query/list_categories");
-      if (data.error) {
-        throw new Error((data.error as { message: string }).message);
+  static override styles = [
+    resetStyles,
+    css`
+      header {
+        display: grid;
+        background: #002d56;
+        padding: 2rem 0;
+        color: #fff;
+        grid-template-columns: 1fr 2fr;
+        grid-template-rows: auto auto auto;
+        grid-template-areas: "img h1" "img date" "img location";
+        place-items: center start;
       }
-      return data.data;
-    },
-  });
-  acts = new Task(this, {
-    task: async ([categories, acts, predictTimeplan]): Promise<
-      Map<string, { act: components["schemas"]["StartlistAct"]; tpAct: any }[]>
-    > => {
-      if (!categories || !acts) return new Map();
 
-      const actsByCategory = new Map<
-        string,
-        { act: components["schemas"]["StartlistAct"]; tpAct: any }[]
-      >();
-      for (const category of categories) {
-        actsByCategory.set(
-          category.name,
-          acts
-            .filter((act) => act.category === category.name)
-            .map((act) => {
-              const tpEntry = predictTimeplan?.items.find((item) =>
-                item.timeplan_entry && "Category" in item.timeplan_entry
-                  ? item.timeplan_entry?.Category?.name == category.name
-                  : undefined,
-              )?.timeplan_entry;
-              const tpAct =
-                tpEntry && "Category" in tpEntry
-                  ? tpEntry.Category.acts.find((tpAct) => tpAct.id == act.id)
-                  : undefined;
-              return {
-                act,
-                tpAct,
-              };
-            }),
-        );
+      header img {
+        grid-area: img;
+        width: 100%;
+        min-height: 0;
+        height: 7rem;
+        max-height: 100%;
       }
-      console.log(actsByCategory);
-      return actsByCategory;
+
+      header h1 {
+        grid-area: h1;
+        font-size: 2rem;
+        text-align: center;
+      }
+
+      header .date {
+        grid-area: date;
+        text-align: right;
+      }
+
+      header .location {
+        grid-area: location;
+        text-align: right;
+      }
+
+      main {
+        max-width: 1800px;
+        margin: 0 auto;
+        padding: 2rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      h3 {
+        margin-bottom: 1rem;
+      }
+
+      h3:has(+ .warmup) {
+        margin-bottom: 0.25rem;
+      }
+
+      .warmup {
+        margin-bottom: 1rem;
+        font-style: italic;
+      }
+
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        margin-bottom: 3rem;
+      }
+
+      td:nth-child(1) {
+        width: 10%;
+      }
+
+      td:nth-child(2) {
+        width: 40%;
+      }
+
+      td:nth-child(3) {
+        width: 50%;
+      }
+
+      td.time {
+        white-space: nowrap;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+
+      td,
+      th {
+        padding: 0.5rem;
+      }
+
+      tr:nth-child(odd) td {
+        background-color: #0001;
+      }
+
+      tr:hover td,
+      tr:hover th {
+        background-color: #0002;
+      }
+
+      .error {
+        color: #e2001a;
+      }
+
+      nav a {
+        padding: 0.5rem;
+        display: inline-block;
+      }
+    `,
+  ];
+
+  startlist = new Task(this, {
+    args: () => [],
+    task: async (): Promise<Startlist> => {
+      const [categories, acts, timeplan] = await Promise.all([
+        client.GET("/api/query/list_categories"),
+        client.GET("/api/query/startlist"),
+        client.GET("/api/query/predict_timeplan"),
+      ]);
+      // Without the timeplan the list still works, just without times.
+      return buildStartlist(unwrap(categories), unwrap(acts), timeplan.data);
     },
-    args: () =>
-      [
-        this.categories.value,
-        this.allActs.value,
-        this.predictedTimeplan.value,
-      ] as [
-        components["schemas"]["Category"][],
-        components["schemas"]["StartlistAct"][],
-        components["schemas"]["Timeplan"],
-      ],
   });
 
-  predictedTimeplan = new Task(this, {
-    task: async () => {
-      const res = await client.GET("/api/query/predict_timeplan");
-      return res.data;
-    },
-    args: () => [],
-  });
+  renderSection({ category, acts, warmup }: StartlistSection) {
+    const others = (warmup?.categories ?? []).filter(
+      (c) => c.name !== category.name,
+    );
+    return html`
+      <section class="category">
+        <h3>${categoryLabel(category)}</h3>
+        ${
+          warmup
+            ? html`<p class="warmup">
+                Einfahrzeit ab ${formatTime(warmup.start)}${
+                  others.length > 0
+                    ? `, gemeinsam mit ${others.map(categoryLabel).join(" & ")}`
+                    : ""
+                }
+              </p>`
+            : nothing
+        }
+        <table>
+          ${repeat(
+            acts,
+            ({ act }) => act.id,
+            ({ act, start }) => html`
+              <tr>
+                <td>${act.act_order || "⌛"}</td>
+                <td>${act.name}</td>
+                <td>${performers(act)}</td>
+                <td class="time">${formatTime(start)}</td>
+              </tr>
+            `,
+          )}
+        </table>
+      </section>
+    `;
+  }
+
+  renderStartlist({ sections }: Startlist) {
+    if (sections.length === 0) {
+      return html`<p>Die Startliste ist noch leer.</p>`;
+    }
+    return html`
+      ${repeat(
+        sections,
+        (section) => section.category.name,
+        (section) => this.renderSection(section),
+      )}
+    `;
+  }
 
   override render() {
     return html`<header>
@@ -235,57 +331,15 @@ export default class CupViewStartlist extends LitElement {
           >Alle Zeitangaben sind vorläufig und können sich am Wettkampftag nach
           vorne UND hinten verschieben.</i
         >
-        <strong>Einfahrzeiten werden alle zwei Gruppen für beide Gruppen gemeinsam eingelegt.</strong>
-        <p>Einfahrzeiten: EM & EWU10; EWU10,5 & EWU11; EWU15 & EW15+; PU10 & PU11; PU12 & PU12,5; PU13,5 & PU14; PU15 & P15+</p>
-        ${cache(
-          this.categories.render({
-            complete: (categories) =>
-              this.acts.render({
-                complete: (actsByCategory) => html`
-                  ${repeat(
-                    categories,
-                    (category) => category.name,
-                    (category) => {
-                      const acts = actsByCategory.get(category.name) || [];
-                      return html`
-                        <section class="category">
-                          <h3>${category.description}</h3>
-                          <table>
-                            ${repeat(
-                              acts,
-                              (act) => act.act.id,
-                              (act) => html`
-                                <tr>
-                                  <td>${act.act.act_order || "⌛"}</td>
-                                  <td>${act.act.name}</td>
-                                  <td>
-                                    ${act.act.participants
-                                      .map(
-                                        (p) =>
-                                          `${p.firstname} ${p.lastname} (${p.club_name})`,
-                                      )
-                                      .join(" & ")}
-                                  </td>
-                                  <td>
-                                    ${new Date(
-                                      act.tpAct.predicted_start,
-                                    ).toLocaleTimeString(undefined, {
-                                      minute: "2-digit",
-                                      hour: "2-digit",
-                                    })}
-                                  </td>
-                                </tr>
-                              `,
-                            )}
-                          </table>
-                        </section>
-                      `;
-                    },
-                  )}
-                `,
-              }),
-          }),
-        )}
+        ${this.startlist.render({
+          pending: () => html`<p>Startliste wird geladen …</p>`,
+          error: (error) =>
+            html`<p class="error">
+              Die Startliste konnte nicht geladen werden:
+              ${errorMessage(error)}
+            </p>`,
+          complete: (startlist) => this.renderStartlist(startlist),
+        })}
       </main>`;
   }
 }

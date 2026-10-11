@@ -5,7 +5,9 @@ mod add_category;
 mod add_club_starter;
 mod add_timeplan_entry;
 mod create_club;
+mod create_club_group;
 mod delete_category;
+mod delete_club_group;
 mod delete_club_starter;
 mod delete_timeplan_entry;
 mod edit_category;
@@ -21,11 +23,14 @@ mod move_timeplan_up;
 mod register;
 mod reload_db;
 mod rename_club;
+mod rename_club_group;
 mod request_password_reset;
 mod resend_mail_validation;
 mod reset_password;
 mod save_act_song;
 mod set_act_order;
+mod set_checked_in;
+mod set_club_group_members;
 mod set_payment;
 mod set_song_checked;
 mod timeplan_backward;
@@ -54,11 +59,16 @@ pub fn get_command_router() -> OpenApiRouter {
         .routes(routes!(add_club_starter::add_club_starter))
         .routes(routes!(delete_club_starter::delete_club_starter))
         .routes(routes!(edit_club_starter::edit_club_starter))
+        .routes(routes!(create_club_group::create_club_group))
+        .routes(routes!(set_club_group_members::set_club_group_members))
+        .routes(routes!(rename_club_group::rename_club_group))
+        .routes(routes!(delete_club_group::delete_club_group))
         .routes(routes!(edit_club_act::edit_club_act))
         .routes(routes!(save_act_song::save_act_song))
         .routes(routes!(set_payment::set_payment))
         .routes(routes!(set_song_checked::set_song_checked))
         .routes(routes!(set_act_order::set_act_order))
+        .routes(routes!(set_checked_in::set_checked_in))
         .routes(routes!(timeplan_forward::timeplan_forward))
         .routes(routes!(timeplan_backward::timeplan_backward))
         .routes(routes!(move_timeplan_up::move_timeplan_up))

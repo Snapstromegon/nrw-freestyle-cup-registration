@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::{
     act_type::ActType,
+    groups::{ensure_club_access, ensure_partner_in_club},
     http_server::{ClientError, HttpError, extractor::auth::Auth},
     reloadable_sqlite::ReloadableSqlite,
     system_status::Capabilities,
@@ -31,9 +32,11 @@ pub struct AddClubStarterBody {
     partner_name: Option<String>,
 }
 
-/// AddClubStarter a new user.
+/// Add a starter to a club.
 ///
-/// This endpoint is used to create a new user.
+/// Only the club (or an admin) can add starters to it. An explicit
+/// `partner_id` must be a starter of the same club; admins can also link
+/// partners of other clubs.
 #[utoipa::path(
     post,
     tags=["command", "club"],
@@ -42,6 +45,8 @@ pub struct AddClubStarterBody {
     responses(
         (status=200, content_type="application/json", body=AddClubStarterResponse),
         (status=400, content_type="application/json", body=ClientError),
+        (status=403, content_type="application/json", body=ClientError),
+        (status=404, content_type="application/json", body=ClientError),
         (status=500, content_type="application/json", body=ClientError),
     ),
 )]
@@ -58,6 +63,13 @@ pub async fn add_club_starter(
     }
     check_single_start(body.single_male, body.single_female).map_err(HttpError::ErrorMessages)?;
     let db = db.get().await.clone();
+    {
+        let mut conn = db.acquire().await?;
+        ensure_club_access(&mut conn, &auth, body.club_id).await?;
+        if let Some(partner_id) = body.partner_id {
+            ensure_partner_in_club(&mut conn, &auth, partner_id, body.club_id).await?;
+        }
+    }
     let starter_id = Uuid::now_v7();
 
     let self_name = format!("{} {}", body.firstname, body.lastname);

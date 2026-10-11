@@ -6,7 +6,7 @@ use utoipa::ToSchema;
 use crate::{
     act_type::ActType,
     http_server::{ClientError, HttpError, extractor::auth::Auth},
-    reloadable_sqlite::ReloadableSqlite,
+    reloadable_sqlite::{ReloadableSqlite, begin_write},
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -53,7 +53,7 @@ pub async fn edit_category(
     let db = db.get().await.clone();
 
     // Start a transaction to ensure atomicity
-    let mut tx = db.begin().await?;
+    let mut tx = begin_write(&db).await?;
 
     sqlx::query!("PRAGMA defer_foreign_keys = ON")
         .execute(&mut *tx)

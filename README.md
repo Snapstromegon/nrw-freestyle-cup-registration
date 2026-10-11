@@ -36,7 +36,10 @@ database created by those migrations can't be migrated with the baseline.
 and recreates it with the demo data from [`demo-data.toml`](demo-data.toml):
 users in every state, clubs with full, partial, missing and excess payments,
 starters in single and pair starts (incl. partners across clubs and
-unregistered partners), acts with names, songs and orders, and a timeplan
-that is partly run. The file lists the logins at the top. The database and
-data path are resolved like for the server; use `--demo` / `DEMO_DATA` for
-another file. Tests can load it with `demo::DemoData`.
+unregistered partners), groups (a small group across clubs with a replacement
+rider, a large group and an incomplete group without category), acts with
+names, songs and orders, a timeplan that is partly run and a check-in in
+progress (one club fully, one partly, one not checked in). The file lists the
+logins at the top. The database and data path are resolved like for the
+server; use `--demo` / `DEMO_DATA` for another file. Tests can load it with
+`demo::DemoData`.

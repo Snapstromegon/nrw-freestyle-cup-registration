@@ -5,7 +5,7 @@ use utoipa::ToSchema;
 
 use crate::{
     http_server::{ClientError, HttpError, extractor::auth::Auth},
-    reloadable_sqlite::ReloadableSqlite,
+    reloadable_sqlite::{ReloadableSqlite, begin_write},
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -43,7 +43,7 @@ pub async fn move_timeplan_down(
     let db = db.get().await.clone();
 
     // Start a transaction
-    let mut tx = db.begin().await?;
+    let mut tx = begin_write(&db).await?;
 
     // Find the next entry (the one with the smallest id greater than current)
     let next_entry = sqlx::query!(

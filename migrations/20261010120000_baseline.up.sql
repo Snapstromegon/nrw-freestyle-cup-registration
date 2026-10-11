@@ -72,6 +72,8 @@ CREATE TABLE "starter" (
   "pair" BOOLEAN NOT NULL,
   "partner_id" BLOB,
   "partner_name" TEXT,
+  -- When the rider checked in on competition day. NULL means not checked in yet.
+  "checked_in_at" DATETIME,
   FOREIGN KEY ("club_id") REFERENCES "clubs" ("id"),
   FOREIGN KEY ("partner_id") REFERENCES "starter" ("id"),
   CONSTRAINT "unique_name" UNIQUE ("club_id", "firstname", "lastname"),
@@ -86,17 +88,28 @@ CREATE TABLE "acts" (
   "created_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   "description" TEXT,
   "song_file_name" TEXT,
-  -- The group values are reserved for group acts, so adding them later needs no table rebuild.
+  -- Group acts are group_small (Kleingruppe) or group_large (Großgruppe),
+  -- depending on the number of regular (non-replacement) riders.
   "act_type" TEXT NOT NULL CHECK ("act_type" IN ('single', 'pair', 'group_small', 'group_large')),
   "song_checked" BOOLEAN NOT NULL DEFAULT FALSE,
   "order" INTEGER,
   "started_at" DATETIME,
-  "ended_at" DATETIME
+  "ended_at" DATETIME,
+  -- Group acts only: the group's name, unique across the competition (riders
+  -- from several clubs can form one group), and the club that created it.
+  "group_name" TEXT,
+  "owner_club_id" BLOB,
+  FOREIGN KEY ("owner_club_id") REFERENCES "clubs" ("id"),
+  CONSTRAINT "group_name_only_for_groups" CHECK (("act_type" IN ('group_small', 'group_large')) = ("group_name" IS NOT NULL))
 );
+
+CREATE UNIQUE INDEX "acts_group_name" ON "acts" ("group_name" COLLATE NOCASE) WHERE "group_name" IS NOT NULL;
 
 CREATE TABLE "act_participants" (
   "act_id" BLOB NOT NULL,
   "starter_id" BLOB NOT NULL,
+  -- Replacement riders (Ersatzfahrer) of a group don't count towards its size.
+  "is_replacement" BOOLEAN NOT NULL DEFAULT FALSE,
   FOREIGN KEY ("act_id") REFERENCES "acts" ("id") ON DELETE CASCADE,
   FOREIGN KEY ("starter_id") REFERENCES "starter" ("id"),
   PRIMARY KEY ("act_id", "starter_id")
@@ -130,10 +143,37 @@ CREATE TABLE "timeplan" (
   FOREIGN KEY ("category") REFERENCES "categories" ("name")
 );
 
+-- Acts with their computed data. Replacement riders count for the age
+-- (max_age and the category's age group), because they may end up riding, but
+-- not for the size of a group.
+--
+-- A rider may start in only one small and one large group (replacements
+-- included). Groups breaking this rule get no category until the clubs sort it
+-- out, like incomplete groups. The rule isn't enforced on writes, because
+-- clubs add their riders to a shared group one after another and a growing
+-- large group counts as a small group meanwhile (see src/groups.rs).
 CREATE VIEW
   view_act AS
 SELECT
   a.*,
+  (
+    SELECT
+      COUNT(*)
+    FROM
+      act_participants p
+    WHERE
+      p.act_id = a.id
+      AND NOT p.is_replacement
+  ) AS regular_count,
+  (
+    SELECT
+      COUNT(*)
+    FROM
+      act_participants p
+    WHERE
+      p.act_id = a.id
+      AND p.is_replacement
+  ) AS replacement_count,
   (
     SELECT
       MAX(
@@ -152,25 +192,48 @@ SELECT
       p.act_id = a.id
   ) AS max_age,
   (
+    -- Regular riders first, then replacements, each sorted by name. The
+    -- ordered subquery keeps json_group_array's order deterministic.
     SELECT
       json_group_array (
         json_object (
           'firstname',
-          starter.firstname,
+          firstname,
           'lastname',
-          starter.lastname,
+          lastname,
           'id',
-          hex (starter.id),
+          hex (id),
+          'club_id',
+          hex (club_id),
           'club_name',
-          clubs.name
+          club_name,
+          'is_replacement',
+          CASE
+            WHEN is_replacement THEN json ('true')
+            ELSE json ('false')
+          END
         )
       )
     FROM
-      starter
-      JOIN act_participants p ON p.starter_id = starter.id
-      JOIN clubs ON clubs.id = starter.club_id
-    WHERE
-      p.act_id = a.id
+      (
+        SELECT
+          starter.firstname,
+          starter.lastname,
+          starter.id,
+          starter.club_id,
+          clubs.name AS club_name,
+          p.is_replacement
+        FROM
+          starter
+          JOIN act_participants p ON p.starter_id = starter.id
+          JOIN clubs ON clubs.id = starter.club_id
+        WHERE
+          p.act_id = a.id
+        ORDER BY
+          p.is_replacement,
+          starter.lastname,
+          starter.firstname
+      )
   ) AS participants,
   (
     SELECT
@@ -190,6 +253,37 @@ SELECT
             JOIN act_participants p ON p.starter_id = s.id
           WHERE
             p.act_id = a.id
+        )
+      )
+      -- Groups need at least 3 regular riders; smaller groups stay without a
+      -- category until they are complete.
+      AND (
+        a.act_type NOT IN ('group_small', 'group_large')
+        OR (
+          SELECT
+            COUNT(*)
+          FROM
+            act_participants p
+          WHERE
+            p.act_id = a.id
+            AND NOT p.is_replacement
+        ) >= 3
+      )
+      -- Groups with a rider in another group of the same type (see above)
+      -- stay without a category, too.
+      AND (
+        a.act_type NOT IN ('group_small', 'group_large')
+        OR NOT EXISTS (
+          SELECT
+            1
+          FROM
+            act_participants own
+            JOIN act_participants theirs ON theirs.starter_id = own.starter_id
+            AND theirs.act_id != own.act_id
+            JOIN acts other ON other.id = theirs.act_id
+            AND other.act_type = a.act_type
+          WHERE
+            own.act_id = a.id
         )
       )
       AND categories.from_birthday <= (

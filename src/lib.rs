@@ -2,6 +2,7 @@ pub mod act_type;
 pub mod competition;
 pub mod config;
 pub mod demo;
+pub mod groups;
 pub mod http_server;
 pub mod jwt;
 pub mod mailer;

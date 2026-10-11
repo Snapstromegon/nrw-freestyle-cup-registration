@@ -24,6 +24,11 @@ pub struct Starter {
     resolved_partner_name: Option<String>,
     resolved_partner_club: Option<String>,
     age_on_competition: f64,
+    /// When the starter checked in on competition day.
+    #[serde(with = "time::serde::iso8601::option")]
+    checked_in_at: Option<time::OffsetDateTime>,
+    /// Number of groups the starter is in, as a regular or replacement rider.
+    group_count: i64,
 }
 
 /// Get information about a club.
@@ -73,7 +78,14 @@ pub async fn list_starters(
                 - julianday(starter.birthdate)
               ) / 365.2425,
               0.0
-            ) as "age_on_competition!: f64"
+            ) as "age_on_competition!: f64",
+            starter.checked_in_at as "checked_in_at: time::OffsetDateTime",
+            (
+              SELECT COUNT(*) FROM act_participants
+              JOIN acts ON acts.id = act_participants.act_id
+              WHERE act_participants.starter_id = starter.id
+                AND acts.act_type IN ('group_small', 'group_large')
+            ) as "group_count!: i64"
         FROM starter
           LEFT JOIN clubs as club ON club.id = starter.club_id
           LEFT JOIN starter as partner ON partner.id = starter.partner_id

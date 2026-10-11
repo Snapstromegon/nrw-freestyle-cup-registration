@@ -8,9 +8,12 @@
 #
 # Every user's password is their first name, e.g. "Maria". Logins:
 # - admin@example.org             admin
-# - maria.wagner@example.org      SSV Nümbrecht, paid in full, live timeplan acts
-# - jonas.becker@example.org      RSC Köln, paid partially
-# - lena.schmitz@example.org      RV Bonn, not paid
+# - maria.wagner@example.org      SSV Nümbrecht, paid in full, live timeplan acts,
+#                                 owns a small group across clubs, all checked in
+# - jonas.becker@example.org      RSC Köln, paid partially, owns a large group,
+#                                 partly checked in
+# - lena.schmitz@example.org      RV Bonn, not paid, owns an incomplete group,
+#                                 nobody checked in
 # - sabine.koch@example.org       club without starters, overpaid, password reset pending
 # - tim.neumann@example.org       verified, no club yet
 # - paul.hoffmann@example.org     email not verified
@@ -22,15 +25,15 @@
 # Same format as in config.toml. The registration window is open until the
 # end of April 2027; move it into the past to try the closed registration.
 [competition]
-id = "nrw-freestyle-cup-2027-demo"
-name = "NRW Freestyle Cup 2027 (Demo)"
-location = "SSV Nümbrecht"
-start_date = 2027-06-05
-end_date = 2027-06-05
+id = "einrad-demo"
+name = "Einradevent 2027 (Demo)"
+location = "Düsseldorf"
+start_date = 2027-04-01
+end_date = 2027-04-02
 determining_day = 2027-06-01
 registration_start = 2026-01-01T00:00:00+01:00
-registration_end = 2027-04-30T23:59:59+02:00
-music_upload_end = 2027-05-15T23:59:59+02:00
+registration_end = 2027-02-28T23:59:59+02:00
+music_upload_end = 2027-03-15T23:59:59+02:00
 fee_per_start = 15
 max_fee_per_starter = 45
 
@@ -89,37 +92,46 @@ verification_token = "00000000-0000-4000-8000-000000000001"
 #
 # Starters: single is "male" or "female" (or missing). A pair starter either
 # names a registered partner (any club, linked both ways), names an
-# unregistered partner with partner_name, or has no partner yet.
+# unregistered partner with partner_name, or has no partner yet. checked_in_at
+# is set for starters who already checked in on competition day.
+#
+# Every start costs 15 €, group starts (replacements included) as well, but at
+# most 45 € per starter.
 
-# 13 starts, 195 € due: paid in full.
+# 19 starts, 270 € due (Emma Wagner's 4 starts cost 45 €): paid in full.
+# Everybody checked in.
 [[clubs]]
 name = "SSV Nümbrecht"
 owner = "Maria Wagner"
-payment = 195
+payment = 270
 
 [[clubs.starters]]
 firstname = "Ben"
 lastname = "Fischer"
 birthdate = 2017-08-20
 single = "male"
+checked_in_at = 2027-06-05T08:41:00+02:00
 
 [[clubs.starters]]
 firstname = "Noah"
 lastname = "Fischer"
 birthdate = 2016-11-02
 single = "male"
+checked_in_at = 2027-06-05T08:41:00+02:00
 
 [[clubs.starters]]
 firstname = "Luca"
 lastname = "Weber"
 birthdate = 2015-02-10
 single = "male"
+checked_in_at = 2027-06-05T08:43:00+02:00
 
 [[clubs.starters]]
 firstname = "Elias"
 lastname = "Weber"
 birthdate = 2014-09-30
 single = "male"
+checked_in_at = 2027-06-05T08:43:00+02:00
 
 # Single and pair (with a partner from the same club).
 [[clubs.starters]]
@@ -129,6 +141,7 @@ birthdate = 2017-03-12
 single = "female"
 pair = true
 partner = "Emma Wagner"
+checked_in_at = 2027-06-05T08:50:00+02:00
 
 [[clubs.starters]]
 firstname = "Emma"
@@ -136,6 +149,7 @@ lastname = "Wagner"
 birthdate = 2016-12-01
 single = "female"
 pair = true
+checked_in_at = 2027-06-05T08:50:00+02:00
 
 # Pair with a partner from RSC Köln.
 [[clubs.starters]]
@@ -145,18 +159,21 @@ birthdate = 2012-04-15
 single = "female"
 pair = true
 partner = "Lea Hoffmann"
+checked_in_at = 2027-06-05T09:05:00+02:00
 
 [[clubs.starters]]
 firstname = "Hannah"
 lastname = "Klein"
 birthdate = 1990-05-05
 single = "female"
+checked_in_at = 2027-06-05T09:12:00+02:00
 
 [[clubs.starters]]
 firstname = "Peter"
 lastname = "Lange"
 birthdate = 1965-08-08
 single = "male"
+checked_in_at = 2027-06-05T09:20:00+02:00
 
 # Open-ended category (70+).
 [[clubs.starters]]
@@ -164,8 +181,9 @@ firstname = "Karl"
 lastname = "Richter"
 birthdate = 1952-01-20
 single = "male"
+checked_in_at = 2027-06-05T09:31:00+02:00
 
-# 10 starts, 150 € due: paid partially.
+# 18 starts, 270 € due: paid partially. Half of the starters checked in.
 [[clubs]]
 name = "RSC Köln"
 owner = "Jonas Becker"
@@ -176,6 +194,7 @@ firstname = "Finn"
 lastname = "Meyer"
 birthdate = 2015-07-07
 single = "male"
+checked_in_at = 2027-06-05T08:55:00+02:00
 
 [[clubs.starters]]
 firstname = "Lea"
@@ -190,6 +209,7 @@ birthdate = 2008-02-14
 single = "female"
 pair = true
 partner = "Max Krüger"
+checked_in_at = 2027-06-05T09:02:00+02:00
 
 [[clubs.starters]]
 firstname = "Max"
@@ -197,12 +217,14 @@ lastname = "Krüger"
 birthdate = 2009-11-11
 single = "male"
 pair = true
+checked_in_at = 2027-06-05T09:02:00+02:00
 
 [[clubs.starters]]
 firstname = "Tom"
 lastname = "Schulz"
 birthdate = 2001-03-03
 single = "male"
+checked_in_at = 2027-06-05T09:40:00+02:00
 
 [[clubs.starters]]
 firstname = "Jan"
@@ -225,7 +247,7 @@ lastname = "Wolf"
 birthdate = 2011-05-25
 pair = true
 
-# 6 starts, 90 € due: nothing paid.
+# 10 starts, 150 € due: nothing paid. Nobody checked in yet.
 [[clubs]]
 name = "RV Bonn"
 owner = "Lena Schmitz"
@@ -269,11 +291,54 @@ name = "Einrad-Freunde Aachen"
 owner = "Sabine Koch"
 payment = 30
 
-# Act details. An act exists for every single starter and every linked pair;
-# each entry selects one by a participant (starter) and act_type. Optional:
-# name, description, song (file name shown; a short tone is generated unless
-# song_source points to an audio file relative to this file), song_checked,
-# order, started_at, ended_at.
+# Groups: name (unique), owner (the club that created it and manages its name)
+# and the full names of the regular riders (members) and replacement riders
+# (replacements, Ersatzfahrer), from any club. Up to 8 regular riders make a
+# small group (Kleingruppe), more a large group (Großgruppe); with fewer than 3
+# the group has no category yet. Replacements don't count towards the size,
+# but towards the age. A rider can be in one small and one large group.
+
+# Small group U15 across three clubs, with a replacement.
+[[groups]]
+name = "Rollende Rebellen"
+owner = "SSV Nümbrecht"
+members = [
+  "Ben Fischer",
+  "Noah Fischer",
+  "Emma Wagner",
+  "Finn Meyer",
+  "Anna Braun",
+]
+replacements = ["Lea Hoffmann"]
+
+# Large group 15+ (10 riders), with Emma Wagner (U15) in both group types.
+[[groups]]
+name = "Einrad-Express"
+owner = "RSC Köln"
+members = [
+  "Julia Krüger",
+  "Max Krüger",
+  "Tom Schulz",
+  "Jan Zimmermann",
+  "Laura Schulz",
+  "Nina Wolf",
+  "Hannah Klein",
+  "Peter Lange",
+  "Emma Wagner",
+  "Marie Lehmann",
+]
+
+# Incomplete: only 2 riders, so no category and not in the startlist yet.
+[[groups]]
+name = "Die Neuen"
+owner = "RV Bonn"
+members = ["Felix Braun", "Leon Lehmann"]
+
+# Act details. An act exists for every single starter, every linked pair and
+# every group; each entry selects one by a participant (starter) and act_type,
+# or a group by its name (group). Optional: name, description, song (file name
+# shown; a short tone is generated unless song_source points to an audio file
+# relative to this file), song_checked, order, started_at, ended_at.
 #
 # EMU11 is finished and EMU13 is running (see the timeplan below), so the info
 # board and the live startlist have something to show.
@@ -358,6 +423,25 @@ starter = "Julia Krüger"
 act_type = "pair"
 name = "Geschwister"
 song = "geschwister.wav"
+
+[[acts]]
+group = "Rollende Rebellen"
+name = "Räder im Wind"
+description = "Mit Fahnen, Aufstellung im Halbkreis."
+song = "raeder-im-wind.wav"
+song_checked = true
+order = 1
+
+# Song uploaded, not checked yet.
+[[acts]]
+group = "Einrad-Express"
+name = "Zug um Zug"
+song = "zug-um-zug.wav"
+order = 1
+
+[[acts]]
+group = "Die Neuen"
+name = "Erste Schritte"
 
 # Categories and timeplan, same format as in config.toml.
 [[categories]]
@@ -726,6 +810,42 @@ einfahrzeit_minutes = 10
 act_duration_minutes = 3
 judge_duration_minutes = 3
 
+[[categories]]
+name = "KGU15"
+description = "Kleingruppe U15"
+act_type = "group_small"
+under_age = 15
+einfahrzeit_minutes = 10
+act_duration_minutes = 5
+judge_duration_minutes = 3
+
+[[categories]]
+name = "KG15+"
+description = "Kleingruppe 15+"
+act_type = "group_small"
+min_age = 15
+einfahrzeit_minutes = 10
+act_duration_minutes = 5
+judge_duration_minutes = 3
+
+[[categories]]
+name = "GGU15"
+description = "Großgruppe U15"
+act_type = "group_large"
+under_age = 15
+einfahrzeit_minutes = 10
+act_duration_minutes = 5
+judge_duration_minutes = 3
+
+[[categories]]
+name = "GG15+"
+description = "Großgruppe 15+"
+act_type = "group_large"
+min_age = 15
+einfahrzeit_minutes = 10
+act_duration_minutes = 5
+judge_duration_minutes = 3
+
 # Timeplan entries can also carry their live state: started_at and ended_at.
 [[timeplan]]
 category = "EMU11"
@@ -843,6 +963,18 @@ category = "PU70"
 
 [[timeplan]]
 category = "P70+"
+
+[[timeplan]]
+category = "KGU15"
+
+[[timeplan]]
+category = "KG15+"
+
+[[timeplan]]
+category = "GGU15"
+
+[[timeplan]]
+category = "GG15+"
 
 [[timeplan]]
 label = "Siegerehrung"

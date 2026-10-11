@@ -509,14 +509,15 @@ mod tests {
             crate::seed::resolve_categories(&file.categories, competition.determining_day).unwrap();
         let warnings = crate::seed::coverage_warnings(&categories);
         assert!(warnings.is_empty(), "{warnings:?}");
-        crate::seed::validate_timeplan(
-            &file.timeplan,
-            &file
-                .categories
-                .iter()
-                .map(|c| c.name.clone())
-                .collect::<Vec<_>>(),
-        )
-        .unwrap();
+        let warnings = crate::seed::missing_act_type_warnings(&categories);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        let category_names = file
+            .categories
+            .iter()
+            .map(|c| c.name.clone())
+            .collect::<Vec<_>>();
+        crate::seed::validate_timeplan(&file.timeplan, &category_names).unwrap();
+        let warnings = crate::seed::unscheduled_category_warnings(&file.timeplan, &category_names);
+        assert!(warnings.is_empty(), "{warnings:?}");
     }
 }
