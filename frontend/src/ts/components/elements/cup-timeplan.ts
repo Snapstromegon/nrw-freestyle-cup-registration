@@ -80,8 +80,9 @@ export default class CupTimeplan extends LitElement {
         line-height: 1;
       }
 
+      /* Admin pages: the darker status green, readable as text. */
       .ci.yes {
-        color: var(--ci-yes-color, var(--cup-green));
+        color: var(--ci-yes-color, var(--tone-ok-fg, var(--cup-green)));
       }
 
       .ci.no {
@@ -300,7 +301,9 @@ export default class CupTimeplan extends LitElement {
   private actsById = new Map<string, Act>();
 
   // Keeps the element's own acts reasonably fresh on display screens.
-  actsPoll = new PollController(this, 60_000, () => this.fetchActs());
+  actsPoll = new PollController(this, 60_000, (signal) =>
+    this.fetchActs(signal),
+  );
 
   override firstUpdated() {
     this.fetchActs().catch((error) => console.error(error));
@@ -318,11 +321,11 @@ export default class CupTimeplan extends LitElement {
     return this.acts !== undefined ? this.acts : this.fetchedActs;
   }
 
-  private async fetchActs() {
+  private async fetchActs(signal?: AbortSignal) {
     if (this.acts !== undefined) {
       return;
     }
-    const acts = unwrap(await client.GET("/api/query/list_acts"));
+    const acts = unwrap(await client.GET("/api/query/list_acts", { signal }));
     const json = JSON.stringify(acts);
     if (json !== this.fetchedActsJson) {
       this.fetchedActsJson = json;

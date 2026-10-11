@@ -24,6 +24,7 @@ import {
   formatTime,
   getStarterPrice,
   isGroupActType,
+  MIN_GROUP_SIZE,
   participantName,
 } from "../../utils";
 
@@ -37,6 +38,8 @@ type TimeplanItemStatus = components["schemas"]["TimeplanItemStatus"];
 const SOON_MINUTES = 60;
 /** Not checked in and starting within this many minutes: row in red. */
 const URGENT_MINUTES = 30;
+/** Where the own bar isn't sticky; keep in sync with the CSS. */
+const STATIC_BAR = "(max-width: 640px), (max-height: 500px)";
 
 type StatusFilter = "all" | "open" | "in";
 
@@ -179,7 +182,8 @@ export default class CupViewAdminCheckIn extends LitElement {
         --admin-sticky-top: calc(var(--ci-outer-top) + var(--ci-bar-h, 0px));
       }
 
-      @media (max-width: 640px) {
+      /* Phones and landscape phones: the bar scrolls away (see STATIC_BAR). */
+      @media (max-width: 640px), (max-height: 500px) {
         .bar {
           position: static;
         }
@@ -488,6 +492,7 @@ export default class CupViewAdminCheckIn extends LitElement {
    */
   private keepVisible = new Set<string>();
   private resizeObserver?: ResizeObserver;
+  private staticBar?: MediaQueryList;
   /** Whether the search got its initial focus. */
   private autofocused = false;
 
@@ -509,6 +514,13 @@ export default class CupViewAdminCheckIn extends LitElement {
   override connectedCallback() {
     super.connectedCallback?.();
     document.addEventListener("keydown", this.onDocumentKeyDown);
+    // Only the window's height may change (e.g. a landscape phone): the bar
+    // keeps its size, but stops or starts sticking.
+    this.staticBar = matchMedia(STATIC_BAR);
+    this.staticBar.addEventListener("change", this.onStaticBarChange);
+    if (this.hasUpdated) {
+      this.observeBar();
+    }
     this.loadAll();
   }
 
@@ -517,11 +529,17 @@ export default class CupViewAdminCheckIn extends LitElement {
     document.removeEventListener("keydown", this.onDocumentKeyDown);
     this.resizeObserver?.disconnect();
     this.resizeObserver = undefined;
+    this.staticBar?.removeEventListener("change", this.onStaticBarChange);
+    this.staticBar = undefined;
   }
 
   override firstUpdated() {
+    this.observeBar();
+  }
+
+  private observeBar() {
     const bar = this.bar;
-    if (bar) {
+    if (bar && !this.resizeObserver) {
       this.resizeObserver = new ResizeObserver(() => this.updateBarHeight());
       this.resizeObserver.observe(bar);
     }
@@ -1109,7 +1127,13 @@ export default class CupViewAdminCheckIn extends LitElement {
       const regular = act.participants.filter((p) => !p.is_replacement);
       const replacements = act.participants.length - regular.length;
       lines[0] = `${actTypeLabels[act.act_type]} „${act.group_name ?? ""}“${
-        act.category ? ` (${act.category})` : " – ohne Kategorie, unvollständig"
+        act.category
+          ? ` (${act.category})`
+          : act.type_conflict
+            ? ` – ohne Kategorie: Konflikt, FahrerIn auch in einer anderen ${actTypeLabels[act.act_type]}`
+            : regular.length < MIN_GROUP_SIZE
+              ? " – ohne Kategorie, unvollständig"
+              : " – ohne passende Kategorie"
       }`;
       lines.push(
         `${regular.length} Fahrer${replacements ? ` + ${replacements} Ersatz` : ""} · ${actClubNames(act).join(", ")}`,
@@ -1854,6 +1878,8 @@ export default class CupViewAdminCheckIn extends LitElement {
       input.select();
     }
   }
+
+  private onStaticBarChange = () => this.updateBarHeight();
 
   /** Table headers stick below the own bar while it is sticky. */
   private updateBarHeight() {

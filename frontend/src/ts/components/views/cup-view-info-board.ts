@@ -321,9 +321,15 @@ export default class CupViewInfoBoard extends LitElement {
   private actsLoadedFor?: string;
 
   @state() predictedTimeplan?: Timeplan;
+  /**
+   * What the board shows. It is computed with every poll, because the
+   * judging after a block's last act ends by time, without any change to the
+   * timeplan.
+   */
+  @state() status?: TimeplanStatus;
   @state() acts = new Map<string, Act>();
 
-  poll = new PollController(this, 1000, () => this.refresh());
+  poll = new PollController(this, 1000, (signal) => this.refresh(signal));
 
   override connectedCallback() {
     super.connectedCallback?.();
@@ -334,12 +340,16 @@ export default class CupViewInfoBoard extends LitElement {
    * Loads the timeplan. The acts are only reloaded when another act is shown,
    * which also picks up late changes (e.g. to a group's members).
    */
-  async refresh() {
-    const timeplan = unwrap(await client.GET("/api/query/predict_timeplan"));
+  async refresh(signal?: AbortSignal) {
+    const timeplan = unwrap(
+      await client.GET("/api/query/predict_timeplan", { signal }),
+    );
     const shownActs = `${currentTimeplanAct(timeplan)?.id}/${lastTimeplanAct(timeplan)?.id}`;
     if (shownActs !== this.actsLoadedFor) {
       try {
-        const acts = unwrap(await client.GET("/api/query/list_acts"));
+        const acts = unwrap(
+          await client.GET("/api/query/list_acts", { signal }),
+        );
         this.acts = new Map(acts.map((act) => [act.id, act]));
         this.actsLoadedFor = shownActs;
       } catch (error) {
@@ -351,6 +361,10 @@ export default class CupViewInfoBoard extends LitElement {
     if (raw !== this.lastRawTimeplan) {
       this.predictedTimeplan = timeplan;
       this.lastRawTimeplan = raw;
+    }
+    const status = timeplanStatus(timeplan);
+    if (status !== this.status) {
+      this.status = status;
     }
   }
 
@@ -396,9 +410,11 @@ export default class CupViewInfoBoard extends LitElement {
       </div>`;
     }
     const timeplan = this.predictedTimeplan;
-    const status = timeplanStatus(timeplan);
+    const status = this.status ?? timeplanStatus(timeplan);
     const currentEntry = currentTimeplanEntry(timeplan);
     const currentAct = currentTimeplanAct(timeplan);
+    // A block's last act is judged after the block has ended; the act and its
+    // block are then the last ended ones.
     const lastAct = lastTimeplanAct(timeplan);
     const lastEntry = lastTimeplanEntry(timeplan);
     const nextEntry = nextTimeplanEntry(timeplan);
@@ -453,7 +469,7 @@ export default class CupViewInfoBoard extends LitElement {
             <h3>Das war...</h3>
             ${lastAct?.name ? html`<h1>${lastAct.name}</h1>` : nothing}
             ${this.renderPerformers(lastAct?.id)}
-            <h3>${categoryDescription(currentEntry)}</h3>
+            <h3>${categoryDescription(currentEntry ?? lastEntry)}</h3>
             <cup-clock></cup-clock>
           </section>
         </div>`;

@@ -18,6 +18,7 @@ import {
   formatDuration,
   formatTime,
   isGroupActType,
+  judgingAfterBlockEnd,
 } from "../../utils";
 import "../elements/cup-act-participants.js";
 import "../elements/cup-timeplan.js";
@@ -123,26 +124,19 @@ const liveState = (timeplan: Timeplan, now: number): Live => {
     const lastEntry = timeplan.items.findLast((i) => i.status === "Ended");
     const nextEntry = timeplan.items.find((i) => i.status === "Planned");
     // Ending the last act ends its block at once, but it is judged afterwards.
-    if (lastEntry && "Category" in lastEntry.timeplan_entry) {
-      const category = lastEntry.timeplan_entry.Category;
-      const judged = category.acts.findLast((a) => a.status === "Ended");
-      if (
-        judged?.ended_at &&
-        now - new Date(judged.ended_at).getTime() <
-          category.judge_duration_seconds * 1000
-      ) {
-        return {
-          phase: "judging",
-          block: lastEntry,
-          category,
-          act: judged,
-          next,
-          nextEntry,
-          lastEntry,
-          since: judged.ended_at,
-          plannedSeconds: category.judge_duration_seconds,
-        };
-      }
+    const judging = judgingAfterBlockEnd(timeplan, now);
+    if (judging) {
+      return {
+        phase: "judging",
+        block: judging.entry,
+        category: judging.category,
+        act: judging.act,
+        next,
+        nextEntry,
+        lastEntry,
+        since: judging.act.ended_at,
+        plannedSeconds: judging.category.judge_duration_seconds,
+      };
     }
     return {
       phase: !lastEntry ? "before" : nextEntry ? "pause" : "done",
@@ -606,8 +600,10 @@ export default class CupViewAdminMusicControl extends LitElement {
   private appliedSeq = 0;
   /** The first load that started after the last timeplan step. */
   private reloadSeq = 0;
+  /** The load whose timeplan is shown. */
+  private timeplanSeq = 0;
 
-  poll = new PollController(this, 3000, () => this.load());
+  poll = new PollController(this, 3000, (signal) => this.load(signal));
   // Ticks the phase timer.
   clock = new PollController(this, 1000, () => {
     this.now = Date.now();
@@ -648,16 +644,20 @@ export default class CupViewAdminMusicControl extends LitElement {
   };
 
   /** Loads timeplan, acts and check-ins; unchanged data isn't re-rendered. */
-  private async load() {
+  private async load(signal?: AbortSignal) {
     // The admin shell shows "Kein Zugriff" instead; don't poll in vain.
     if (!this.user?.is_admin) {
       return;
     }
     const seq = ++this.loadSeq;
     const [timeplan, acts, checkIns] = await Promise.allSettled([
-      client.GET("/api/query/predict_timeplan").then((r) => unwrap(r)),
-      client.GET("/api/query/list_acts").then((r) => unwrap(r)),
-      client.GET("/api/query/list_check_ins").then((r) => unwrap(r)),
+      client
+        .GET("/api/query/predict_timeplan", { signal })
+        .then((r) => unwrap(r)),
+      client.GET("/api/query/list_acts", { signal }).then((r) => unwrap(r)),
+      client
+        .GET("/api/query/list_check_ins", { signal })
+        .then((r) => unwrap(r)),
     ]);
     // A slow, older poll must not overwrite the state after a command.
     if (seq < this.appliedSeq) {
@@ -669,6 +669,7 @@ export default class CupViewAdminMusicControl extends LitElement {
       if (this.changed("timeplan", timeplan.value)) {
         this.timeplan = timeplan.value;
       }
+      this.timeplanSeq = seq;
       if (seq >= this.reloadSeq) {
         this.stale = false;
       }
@@ -802,7 +803,8 @@ export default class CupViewAdminMusicControl extends LitElement {
     const position =
       live.category && live.act
         ? `Kür ${live.category.acts.indexOf(live.act) + 1} von ${live.category.acts.length}`
-        : live.category
+        : // Empty blocks: the "Ohne Küren" chip says it already.
+          live.category?.acts.length
           ? `${live.category.acts.length} ${
               live.category.acts.length === 1 ? "Kür" : "Küren"
             }`
@@ -1075,7 +1077,7 @@ export default class CupViewAdminMusicControl extends LitElement {
           body: { starter_ids: ids, checked_in: true },
         }),
       );
-      await Promise.race([this.load(), delay(RELOAD_TIMEOUT_MS)]);
+      await this.reload();
     } catch (error) {
       this.commandError = `Einchecken von ${names} fehlgeschlagen: ${errorMessage(error)}`;
     } finally {
@@ -1243,10 +1245,18 @@ export default class CupViewAdminMusicControl extends LitElement {
   }
 
   /**
+   * Reloads after a command. Requests that take longer than
+   * `RELOAD_TIMEOUT_MS` are aborted (shown as a load error), so a dying
+   * connection can't hold the buttons.
+   */
+  private reload() {
+    return this.load(AbortSignal.timeout(RELOAD_TIMEOUT_MS));
+  }
+
+  /**
    * Runs a timeplan step and reloads. The buttons stay disabled until the
    * step is answered and for at least `MIN_BUSY_MS`; a hanging reload only
-   * holds them for `RELOAD_TIMEOUT_MS` (its late result is dropped by
-   * `load()` if a newer one came in).
+   * holds them for `RELOAD_TIMEOUT_MS`.
    */
   private async runCommand(command: () => Promise<unknown>) {
     if (this.busy) {
@@ -1263,12 +1273,10 @@ export default class CupViewAdminMusicControl extends LitElement {
     try {
       // Only a load started from here on shows the state after the step.
       this.reloadSeq = this.loadSeq + 1;
-      const reloaded = await Promise.race([
-        this.load().then(() => true),
-        delay(RELOAD_TIMEOUT_MS).then(() => false),
-      ]);
-      // The buttons may still offer the step that was just taken.
-      this.stale = !reloaded;
+      await this.reload();
+      // Without a timeplan from after the step, the buttons may still offer
+      // the step that was just taken. The next poll that gets one clears it.
+      this.stale = this.timeplanSeq < this.reloadSeq;
       await minBusy;
     } finally {
       this.busy = false;

@@ -136,9 +136,10 @@ export default class CupViewAdminStarters extends LitElement {
     desc: false,
   };
 
-  // Registers itself with the host; keeps the check-in column current.
-  readonly poll = new PollController(this, 10_000, () =>
-    this.refreshCheckIns(),
+  // Registers itself with the host; keeps the check-in column current. A
+  // poll that hangs is aborted, so its failure shows up as "Abgleich gestört".
+  readonly poll = new PollController(this, 10_000, (signal) =>
+    this.refreshCheckIns(signal),
   );
 
   override connectedCallback() {
@@ -146,12 +147,12 @@ export default class CupViewAdminStarters extends LitElement {
     this.load();
   }
 
-  private async load() {
+  private async load(signal?: AbortSignal) {
     try {
       const [starters, acts, categories] = await Promise.all([
-        client.GET("/api/query/list_starters"),
-        client.GET("/api/query/list_acts"),
-        client.GET("/api/query/list_categories"),
+        client.GET("/api/query/list_starters", { signal }),
+        client.GET("/api/query/list_acts", { signal }),
+        client.GET("/api/query/list_categories", { signal }),
       ]);
       this.starters = unwrap(starters);
       this.acts = unwrap(acts);
@@ -170,14 +171,14 @@ export default class CupViewAdminStarters extends LitElement {
     }
   }
 
-  private async refreshCheckIns() {
+  private async refreshCheckIns(signal?: AbortSignal) {
     if (!this.loaded) {
       // The first load failed: retry it.
-      return this.load();
+      return this.load(signal);
     }
     try {
       this.checkIns = checkInMap(
-        unwrap(await client.GET("/api/query/list_check_ins")),
+        unwrap(await client.GET("/api/query/list_check_ins", { signal })),
       );
       this.pollError = null;
     } catch (error) {
@@ -343,7 +344,7 @@ export default class CupViewAdminStarters extends LitElement {
           this.error
             ? html`<div class="error-banner">
               ${this.error}
-              <button class="btn small" @click=${this.load}>Erneut versuchen</button>
+              <button class="btn small" @click=${this.onReloadClick}>Erneut versuchen</button>
             </div>`
             : html`<p class="muted">Lädt…</p>`
         }
@@ -492,7 +493,7 @@ export default class CupViewAdminStarters extends LitElement {
         class="icon-btn"
         title="Aktualisieren"
         aria-label="Aktualisieren"
-        @click=${this.load}
+        @click=${this.onReloadClick}
       >
         refresh
       </button>
@@ -901,6 +902,11 @@ export default class CupViewAdminStarters extends LitElement {
 
   private dismissError() {
     this.error = null;
+  }
+
+  /** Not `@click=${this.load}`: the click event isn't an AbortSignal. */
+  private onReloadClick() {
+    this.load();
   }
 
   private onSearchInput(e: Event) {

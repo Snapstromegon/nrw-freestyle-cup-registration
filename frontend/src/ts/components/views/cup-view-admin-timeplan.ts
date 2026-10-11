@@ -189,12 +189,14 @@ export default class CupViewAdminTimeplan extends LitElement {
 
   private data = new Task(this, {
     args: () => [],
-    task: async (): Promise<Data> => {
+    // The next run aborts a hanging one through `signal`, e.g. the next poll
+    // after the PollController gave up on it.
+    task: async (_args, { signal }): Promise<Data> => {
       const [entries, categories, acts, prediction] = await Promise.all([
-        client.GET("/api/query/list_timeplan"),
-        client.GET("/api/query/list_categories"),
-        client.GET("/api/query/list_acts"),
-        client.GET("/api/query/predict_timeplan"),
+        client.GET("/api/query/list_timeplan", { signal }),
+        client.GET("/api/query/list_categories", { signal }),
+        client.GET("/api/query/list_acts", { signal }),
+        client.GET("/api/query/predict_timeplan", { signal }),
       ]);
       const list = unwrap(entries);
       const actCounts = new Map<string, number>();

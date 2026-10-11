@@ -35,9 +35,12 @@ type ClubGroup = components["schemas"]["ClubGroup"];
 type ClubGroupMember = components["schemas"]["ClubGroupMember"];
 type GroupSummary = components["schemas"]["GroupSummary"];
 type ClubStarter = components["schemas"]["ClubStarter"];
+type Category = components["schemas"]["Category"];
 
 /** Groups whose oldest rider is younger than this are U15, otherwise 15+. */
 const GROUP_AGE_LIMIT = 15;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** The name as the backend stores it: trimmed, inner whitespace collapsed. */
 const normalizeGroupName = (name: string) => name.trim().replace(/\s+/g, " ");
@@ -111,18 +114,50 @@ const ownOver15 = (
   );
 
 /**
- * Whether `group` is U15, `null` without riders. Own riders are checked by
- * birthdate, like the category. Of other clubs' riders only the oldest
- * rider's age in whole years (`max_age`) is known; it is a day off for a
- * rider born exactly 15 years before the determining day.
+ * Whether a group in `category` is U15, from the birthday bounds the
+ * category sets for the oldest rider (exact dates, like the server);
+ * `null` if the category doesn't tell.
  */
-const groupIsU15 = (
-  group: ClubGroup,
-  own: ClubGroupMember[],
+const categoryIsU15 = (
+  category: Category | undefined,
   competition: SystemStatus["competition"],
 ): boolean | null => {
-  if (ownOver15(own, competition)) {
+  const from = category?.from_birthday;
+  if (from && isUnderAge(new Date(from), GROUP_AGE_LIMIT, competition)) {
+    return true;
+  }
+  // to_birthday is exclusive: the latest birthdate is the day before.
+  const to = category?.to_birthday;
+  if (
+    to &&
+    !isUnderAge(
+      new Date(new Date(to).getTime() - DAY_MS),
+      GROUP_AGE_LIMIT,
+      competition,
+    )
+  ) {
     return false;
+  }
+  return null;
+};
+
+/**
+ * Whether the oldest rider of `group` is under 15, `null` if unknown. Taken
+ * from the group's category where it has one. Otherwise only the oldest
+ * rider's age in whole years (`max_age`) is known, which is a day off for a
+ * rider born exactly 15 years before the determining day.
+ */
+const oldestIsU15 = (
+  group: ClubGroup,
+  categories: Category[] | undefined,
+  competition: SystemStatus["competition"],
+): boolean | null => {
+  const category = group.category
+    ? categories?.find((c) => c.name === group.category)
+    : undefined;
+  const fromCategory = categoryIsU15(category, competition);
+  if (fromCategory !== null) {
+    return fromCategory;
   }
   if (group.max_age === null || group.max_age === undefined) {
     return null;
@@ -131,20 +166,36 @@ const groupIsU15 = (
 };
 
 /**
+ * Whether `group` is U15, `null` without riders. Own riders are checked by
+ * birthdate, like the category; other clubs' riders see `oldestIsU15`.
+ */
+const groupIsU15 = (
+  group: ClubGroup,
+  own: ClubGroupMember[],
+  competition: SystemStatus["competition"],
+  categories: Category[] | undefined,
+): boolean | null => {
+  if (ownOver15(own, competition)) {
+    return false;
+  }
+  return oldestIsU15(group, categories, competition);
+};
+
+/**
  * Whether all riders of other clubs in `group` are under 15. The server only
- * shares the age of the oldest rider (`max_age`) and the own riders'
- * birthdates, so this is `null` when an own rider might be the oldest.
+ * shares the group's category and age (see `oldestIsU15`) and the own
+ * riders' birthdates, so this is `null` when an own rider might be the
+ * oldest.
  */
 const othersAreU15 = (
   group: ClubGroup,
   own: ClubGroupMember[],
   competition: SystemStatus["competition"],
+  categories: Category[] | undefined,
 ): boolean | null => {
-  if (group.max_age === null || group.max_age === undefined) {
-    return null;
-  }
-  if (group.max_age < GROUP_AGE_LIMIT) {
-    return true;
+  const oldestU15 = oldestIsU15(group, categories, competition);
+  if (oldestU15 !== false) {
+    return oldestU15;
   }
   // Someone is 15+. If it isn't an own rider, it is one of another club.
   const ownAllU15 = own.every(
@@ -303,6 +354,13 @@ export default class CupClubGroupManager extends LitElement {
     args: () => [this.canEdit, this.refresh],
   });
 
+  /** All categories, to tell a group's age group from its category. */
+  categories = new Task(this, {
+    task: async (): Promise<Category[]> =>
+      unwrap(await client.GET("/api/query/list_categories")),
+    args: () => [],
+  });
+
   @state() edits = new Map<string, GroupEdit>();
   /** A group the club is joining; it isn't in `groups` until saved. */
   @state() joinEdit: GroupEdit | null = null;
@@ -328,16 +386,23 @@ export default class CupClubGroupManager extends LitElement {
     return this.adminMode ? 6 : 5;
   }
 
-  /** The starters and groups the open edits were last matched against. */
+  /** The data the open edits were last matched against. */
   private seenStarters?: ClubStarter[];
   private seenGroups?: ClubGroup[];
+  private seenCategories?: Category[];
 
   override willUpdate() {
     const starters = this.starters.value;
     const groups = this.groups.value;
-    if (starters !== this.seenStarters || groups !== this.seenGroups) {
+    const categories = this.categories.value;
+    if (
+      starters !== this.seenStarters ||
+      groups !== this.seenGroups ||
+      categories !== this.seenCategories
+    ) {
       this.seenStarters = starters;
       this.seenGroups = groups;
+      this.seenCategories = categories;
       this.reconcileEdits(starters, groups);
     }
   }
@@ -371,7 +436,12 @@ export default class CupClubGroupManager extends LitElement {
         edit.otherRegular = others.filter((m) => !m.is_replacement).length;
         edit.otherReplacements = others.length - edit.otherRegular;
         edit.othersU15 = others.length
-          ? othersAreU15(group, own, this.systemStatus?.competition)
+          ? othersAreU15(
+              group,
+              own,
+              this.systemStatus?.competition,
+              this.categories.value,
+            )
           : true;
       }
     }
@@ -613,7 +683,12 @@ export default class CupClubGroupManager extends LitElement {
     const others = this.otherMembers(group);
     const regular = group.members.filter((m) => !m.is_replacement).length;
     const replacements = group.members.length - regular;
-    const isU15 = groupIsU15(group, own, this.systemStatus?.competition);
+    const isU15 = groupIsU15(
+      group,
+      own,
+      this.systemStatus?.competition,
+      this.categories.value,
+    );
     const deleteBlocked = !this.user?.is_admin && others.length > 0;
     return html`<tr>
       ${this.adminMode ? html`<td>${group.id}</td>` : nothing}
@@ -1209,7 +1284,12 @@ export default class CupClubGroupManager extends LitElement {
       otherRegular: others.filter((m) => !m.is_replacement).length,
       otherReplacements: others.filter((m) => m.is_replacement).length,
       othersU15: others.length
-        ? othersAreU15(group, own, this.systemStatus?.competition)
+        ? othersAreU15(
+            group,
+            own,
+            this.systemStatus?.competition,
+            this.categories.value,
+          )
         : true,
       joining: null,
       saving: false,

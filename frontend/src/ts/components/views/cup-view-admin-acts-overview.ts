@@ -326,8 +326,11 @@ export default class CupViewAdminActsOverview extends LitElement {
    */
   private version = 0;
 
-  // Registers itself with the host; keeps acts and check-ins current.
-  readonly poll = new PollController(this, 10_000, () => this.refresh());
+  // Registers itself with the host; keeps acts and check-ins current. A poll
+  // that hangs is aborted, so its failure shows up as "Abgleich gestört".
+  readonly poll = new PollController(this, 10_000, (signal) =>
+    this.refresh(signal),
+  );
 
   override connectedCallback() {
     super.connectedCallback?.();
@@ -380,14 +383,14 @@ export default class CupViewAdminActsOverview extends LitElement {
     this.categoryStatus = status;
   }
 
-  private async load() {
+  private async load(signal?: AbortSignal) {
     try {
       const [clubs, acts, categories, checkIns, timeplan] = await Promise.all([
-        client.GET("/api/query/list_clubs"),
-        client.GET("/api/query/list_acts"),
-        client.GET("/api/query/list_categories"),
-        client.GET("/api/query/list_check_ins"),
-        client.GET("/api/query/list_timeplan"),
+        client.GET("/api/query/list_clubs", { signal }),
+        client.GET("/api/query/list_acts", { signal }),
+        client.GET("/api/query/list_categories", { signal }),
+        client.GET("/api/query/list_check_ins", { signal }),
+        client.GET("/api/query/list_timeplan", { signal }),
       ]);
       this.clubs = unwrap(clubs);
       this.setActs(unwrap(acts));
@@ -406,16 +409,16 @@ export default class CupViewAdminActsOverview extends LitElement {
    * Reloads what changes during the competition: acts, check-ins and which
    * categories have started.
    */
-  private async refresh() {
+  private async refresh(signal?: AbortSignal) {
     if (!this.loaded) {
-      return this.load();
+      return this.load(signal);
     }
     const version = this.version;
     try {
       const [acts, checkIns, timeplan] = await Promise.all([
-        client.GET("/api/query/list_acts"),
-        client.GET("/api/query/list_check_ins"),
-        client.GET("/api/query/list_timeplan"),
+        client.GET("/api/query/list_acts", { signal }),
+        client.GET("/api/query/list_check_ins", { signal }),
+        client.GET("/api/query/list_timeplan", { signal }),
       ]);
       if (version === this.version) {
         this.setActs(unwrap(acts));
@@ -601,7 +604,7 @@ export default class CupViewAdminActsOverview extends LitElement {
           this.error
             ? html`<div class="error-banner">
               ${this.error}
-              <button class="btn small" @click=${this.load}>Erneut versuchen</button>
+              <button class="btn small" @click=${this.onRetryClick}>Erneut versuchen</button>
             </div>`
             : html`<p class="muted">Lädt…</p>`
         }
@@ -1134,6 +1137,11 @@ export default class CupViewAdminActsOverview extends LitElement {
 
   private dismissError() {
     this.error = null;
+  }
+
+  /** Not `@click=${this.load}`: the click event isn't an AbortSignal. */
+  private onRetryClick() {
+    this.load();
   }
 
   private onSearchInput(e: Event) {

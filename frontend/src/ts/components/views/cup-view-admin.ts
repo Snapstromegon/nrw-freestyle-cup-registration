@@ -207,6 +207,23 @@ interface Issue {
   items: string[];
 }
 
+/**
+ * Why a group with `type_conflict` has no category: a rider is also in
+ * another group of the same type.
+ */
+const conflictReason = (act: Act, acts: Act[]) => {
+  const ids = new Set(act.participants.map((p) => p.id));
+  const others = acts
+    .filter(
+      (other) =>
+        other.id !== act.id &&
+        other.act_type === act.act_type &&
+        other.participants.some((p) => ids.has(p.id)),
+    )
+    .map((other) => `„${other.group_name ?? other.name}“`);
+  return `Konflikt – FahrerIn auch in ${others.join(", ") || "einer anderen Gruppe"}`;
+};
+
 const buildIssues = (
   data: DashboardData,
   rows: ClubRow[],
@@ -239,8 +256,9 @@ const buildIssues = (
       .filter((act) => !act.category)
       .map((act) => {
         const regular = regularCount(act);
-        const reason =
-          isGroupActType(act.act_type) && regular < MIN_GROUP_SIZE
+        const reason = act.type_conflict
+          ? conflictReason(act, data.acts)
+          : isGroupActType(act.act_type) && regular < MIN_GROUP_SIZE
             ? describeGroup(regular, act.participants.length - regular, null)
             : "keine passende Kategorie";
         return `${actLabel(act)}: ${reason}`;
@@ -400,11 +418,19 @@ export default class CupViewAdmin extends LitElement {
 
       /*
        * Below 1280px the 16 columns only fit without the e-mail (it stays in
-       * the contact's tooltip); the table scrolls on its own as a last resort.
+       * the contact's tooltip). Below 1024px they don't fit at all: the table
+       * scrolls on its own (its headers then don't stick), not the page.
        */
       @media (max-width: 1279px) {
         td.contact .email {
           display: none;
+        }
+      }
+
+      @media (max-width: 1023px) {
+        .table-wrap {
+          overflow-x: auto;
+          --admin-sticky-top: 0px;
         }
       }
 
@@ -842,7 +868,7 @@ export default class CupViewAdmin extends LitElement {
         ? "text-bad"
         : "text-warn";
 
-    return html`<table class="dense">
+    return html`<div class="table-wrap"><table class="dense">
       <thead>
         <tr>
           ${this.renderSortHeader("name", "Verein")}
@@ -923,7 +949,7 @@ export default class CupViewAdmin extends LitElement {
           <td class="actions"></td>
         </tr>
       </tfoot>
-    </table>`;
+    </table></div>`;
   }
 
   renderClubRow(row: ClubRow, musicTone: string) {
