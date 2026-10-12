@@ -226,8 +226,14 @@ pub async fn get_startlist_csv(
                 .fetch_all(&db)
                 .await?;
 
-                next_predicted_start_time += time::Duration::seconds(cat.einfahrzeit_seconds);
-                next_planned_start_time += time::Duration::seconds(cat.einfahrzeit_seconds);
+                // A category without acts is skipped, so nobody warms up for it.
+                let warmup_seconds = if acts.is_empty() {
+                    0
+                } else {
+                    cat.einfahrzeit_seconds
+                };
+                next_predicted_start_time += time::Duration::seconds(warmup_seconds);
+                next_planned_start_time += time::Duration::seconds(warmup_seconds);
 
                 let mut timeplan_acts = vec![];
                 for act in acts {
@@ -281,7 +287,7 @@ pub async fn get_startlist_csv(
                 TimeplanEntry::Category {
                     name,
                     description: cat.description,
-                    duration_seconds: (cat.einfahrzeit_seconds
+                    duration_seconds: (warmup_seconds
                         + (cat.act_duration_seconds + cat.judge_duration_seconds)
                             * timeplan_acts.len() as i64),
                     order: cat.order,

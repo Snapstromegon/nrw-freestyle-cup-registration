@@ -342,11 +342,14 @@ async fn predicted_timeplan_is_contiguous_and_planned(db: SqlitePool) {
         previous_end = Some(end);
     }
 
-    // A category without acts only lasts as long as its warm-up time.
+    // A category without acts is skipped: it takes no time, not even for the
+    // warm-up, but still reports its configured warm-up time.
     let first = &items[0]["timeplan_entry"]["Category"];
     assert_eq!(first["name"], "EMU11");
-    assert_eq!(first["duration_seconds"], first["einfahrzeit_seconds"]);
+    assert_eq!(first["duration_seconds"], 0);
+    assert!(first["einfahrzeit_seconds"].as_i64().unwrap() > 0);
     assert!(first["acts"].as_array().unwrap().is_empty());
+    assert_eq!(items[0]["planned_start"], items[1]["planned_start"]);
 
     let lunch = items
         .iter()
