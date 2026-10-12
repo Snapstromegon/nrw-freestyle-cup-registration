@@ -105,7 +105,7 @@ async fn system_status_reflects_open_registration(db: SqlitePool) {
         })
     );
     assert_eq!(competition["name"], "Einradevent 2027 (Demo)");
-    assert_eq!(competition["determining_day"], "2027-04-01");
+    assert_eq!(competition["determining_day"], "2027-06-01");
     assert_eq!(competition["fee_per_start"], 15.0);
     assert_eq!(competition["max_fee_per_starter"], 45.0);
     assert_eq!(competition["payment_reference"], "Startgeld");
