@@ -53,7 +53,7 @@ test: migrate-db
 
 lint:
 	cargo clippy
-	cd frontend && npm run check && npm run lint
+	cd frontend && npm run check && npm run lint && npm run typecheck
 
 clean-frontend:
 	rm -rf static

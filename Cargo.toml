@@ -25,7 +25,7 @@ clap = { version = "4.6.1", features = ["derive", "env"] }
 color-eyre = "0.6.5"
 dotenvy = "0.15.7"
 eyre = "0.6.12"
-jsonwebtoken = { version = "10.3.0", features = ["rust_crypto"] }
+jsonwebtoken = { version = "11.1.0", features = ["rust_crypto"] }
 lettre = { version = "0.11.22", features = [
   "builder",
   "hostname",
@@ -58,15 +58,15 @@ tower-http = { version = "0.7.0", features = [
 tracing = "0.1.44"
 tracing-subscriber = "0.3.23"
 url = { version = "2.5.8", features = ["serde"] }
-utoipa = { version = "5", features = [
+utoipa = { version = "6", features = [
   "axum_extras",
   "debug",
   "time",
   "uuid",
   "yaml",
 ] }
-utoipa-axum = { version = "0.2", features = ["debug"] }
-utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
+utoipa-axum = { version = "0.3", features = ["debug"] }
+utoipa-swagger-ui = { version = "10", features = ["axum", "vendored"] }
 uuid = { version = "1.23.1", features = ["serde", "v7"] }
 
 [dev-dependencies]

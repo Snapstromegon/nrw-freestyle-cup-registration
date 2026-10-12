@@ -4,7 +4,6 @@ import { customElement, state } from "lit/decorators.js";
 import "./views/cup-view-not-found.js";
 import "./elements/cup-context-user.js";
 import "./elements/cup-context-system-status.js";
-// @ts-expect-error: Property 'UrlPattern' does not exist
 if (!globalThis.URLPattern) {
   await import("urlpattern-polyfill");
 }
