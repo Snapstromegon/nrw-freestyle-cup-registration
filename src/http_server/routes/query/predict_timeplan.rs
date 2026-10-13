@@ -19,6 +19,10 @@ pub struct TimeplanAct {
     pub started_at: Option<time::OffsetDateTime>,
     #[serde(with = "time::serde::iso8601::option")]
     pub ended_at: Option<time::OffsetDateTime>,
+    /// When the act's music first started while it ran; the act timer counts
+    /// from here.
+    #[serde(with = "time::serde::iso8601::option")]
+    pub music_started_at: Option<time::OffsetDateTime>,
     #[serde(with = "time::serde::iso8601")]
     pub predicted_start: time::OffsetDateTime,
     #[serde(with = "time::serde::iso8601")]
@@ -179,6 +183,7 @@ pub async fn predict(db: &sqlx::SqlitePool) -> Result<Timeplan, HttpError> {
             name,
             started_at,
             ended_at,
+            music_started_at,
             category as "category!"
         FROM
             view_act
@@ -276,6 +281,7 @@ pub async fn predict(db: &sqlx::SqlitePool) -> Result<Timeplan, HttpError> {
                         name: act.name,
                         started_at: act.started_at,
                         ended_at: act.ended_at,
+                        music_started_at: act.music_started_at,
                         predicted_start: next_predicted_start_time,
                         predicted_end: next_predicted_end_time,
                         planned_start: next_planned_start_time,

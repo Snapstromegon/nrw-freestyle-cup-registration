@@ -39,6 +39,68 @@ The migrations of the 2024–2026 seasons were squashed into one baseline
 migration; the originals are kept in `migrations-archive/` for reference. A
 database created by those migrations can't be migrated with the baseline.
 
+## Metrics
+
+With `METRICS_TOKEN` (or `[server] metrics_token`) set, `GET /metrics` serves
+Prometheus metrics in the OpenMetrics format; without a token the endpoint
+doesn't exist. The database counts (users, clubs, starters, acts, music,
+payments, fees, the live timeplan and its delay) are read on every scrape;
+HTTP requests, mails and normalization jobs are counted as they happen. All
+metrics start with `cup_`.
+
+```yaml
+scrape_configs:
+  - job_name: freestyle-cup
+    scheme: https
+    scrape_interval: 30s
+    authorization:
+      credentials: "<METRICS_TOKEN>"
+    static_configs:
+      - targets: ["anmeldung.example.org"]
+```
+
+## Remote music playback / event server
+
+The music control (admin) can play the current act's song itself, or drive a
+player on another device: the web player at `/player` (any browser, e.g. a
+laptop at the sound desk) or the server player, which plays on the server's own
+sound card. Players and the music control talk over a websocket
+(`/api/ws/player`); both need an admin login. "Weiter" in the timeplan cues the
+next song on the active player but never starts it. The act timer starts with
+the act's music, not with "Weiter" (acts without music: with "Weiter"), and the
+waveform marks where the act's time runs out.
+
+- **Web player:** open `/player` and click once to unlock audio (browsers
+  block autoplay until then).
+- **Server player:** build with `--features local-audio` (`make
+  event-release`; needs the ALSA headers, `libasound2-dev` on Linux) and set
+  `LOCAL_PLAYER=<name>` (`--local-player`, `[server] local_player`).
+- **Command-line player:** `cup-player` plays on the sound card of the
+  computer it runs on, without a browser: no audio to unlock, no tab to close
+  by accident. Build it with `make cup-player` (needs the ALSA headers like
+  the server player) and start it with an admin login:
+
+  ```sh
+  CUP_SERVER=https://anmeldung.example.org CUP_EMAIL=admin@example.org \
+    CUP_PASSWORD=… target/release/cup-player
+  ```
+
+  The settings can also go into a `.env` file next to it. `--name` sets the
+  name in the music control (default: the computer's name; a player with the
+  same name takes over), `--device` the sound card (`--list-devices` lists
+  them). It downloads the songs coming up in advance, and when the
+  connection drops the music plays on while it connects again.
+
+Event day setup:
+
+1. Close registration and music changes before the event.
+2. Copy the database and the songs with `make download`.
+3. Run the server in the venue's local network. Over plain http set
+   `INSECURE_COOKIES=true`, otherwise the login cookie is `Secure` and the
+   browsers drop it.
+4. After the event, upload the database with `make sync-up` and make the
+   online server load it with `POST /api/command/reload_db?token=<RELOAD_DB_TOKEN>`.
+
 ## Demo data
 
 `cargo run --bin seed_demo` (or `make demo`) **deletes the configured database**
@@ -52,3 +114,11 @@ progress (one club fully, one partly, one not checked in). The file lists the
 logins at the top. The database and data path are resolved like for the
 server; use `--demo` / `DEMO_DATA` for another file. Tests can load it with
 `demo::DemoData`.
+
+The demo songs are by [TheFatRat](https://www.thefatrat.com/downloads), used
+under their [terms](https://www.thefatrat.com/terms-and-conditions). The terms
+don't allow passing the files on, so they aren't in the repository: the first
+run downloads them (about 80 MB, needs `curl`) into `demo-songs/` next to the
+demo file (`--songs` / `DEMO_SONGS` for another directory) and later runs
+reuse them. Songs that can't be downloaded, and all songs in the tests, are
+short generated tones.

@@ -60,7 +60,9 @@ impl Mailer {
             .body(body.to_string())
             .unwrap();
 
-        self.transport.send(email).await?;
+        let result = self.transport.send(email).await;
+        crate::metrics::metrics().mail_sent(result.is_ok());
+        result?;
         Ok(())
     }
 }

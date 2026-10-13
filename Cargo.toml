@@ -16,9 +16,14 @@ path = "src/bin/gen_openapi.rs"
 name = "seed_demo"
 path = "src/bin/seed_demo.rs"
 
+[[bin]]
+name = "cup-player"
+path = "src/bin/cup_player.rs"
+required-features = ["cli-player"]
+
 [dependencies]
 askama = "0.16.0"
-axum = { version = "0.8", features = ["macros", "multipart"] }
+axum = { version = "0.8", features = ["macros", "multipart", "ws"] }
 axum-embed = "0.1.0"
 axum-extra = { version = "0.12", features = ["cookie"] }
 clap = { version = "4.6.1", features = ["derive", "env"] }
@@ -67,9 +72,29 @@ utoipa = { version = "6", features = [
 ] }
 utoipa-axum = { version = "0.3", features = ["debug"] }
 utoipa-swagger-ui = { version = "10", features = ["axum", "vendored"] }
-uuid = { version = "1.23.1", features = ["serde", "v7"] }
+uuid = { version = "1.23.1", features = ["serde", "v5", "v7"] }
+prometheus-client = "0.25.1"
+rodio = { version = "0.23.0", optional = true, default-features = false, features = ["playback", "mp3", "wav"] }
+# The command-line player's connection to the server (feature player-client).
+futures-util = { version = "0.3", optional = true, features = ["sink"] }
+reqwest = { version = "0.13", optional = true, default-features = false, features = ["rustls-no-provider"] }
+rustls = { version = "0.23", optional = true, default-features = false, features = ["ring", "std"] }
+tokio-tungstenite = { version = "0.30.0", optional = true, features = ["rustls-tls-native-roots"] }
 
 [dev-dependencies]
+futures-util = { version = "0.3", features = ["sink"] }
 reqwest = { version = "0.13", default-features = false, features = ["json"] }
 testcontainers = "0.28"
+tokio-tungstenite = "0.30.0"
 tower = { version = "0.5.3", features = ["util"] }
+
+[features]
+# The server player (remote music playback on the server's own sound card).
+# Needs the ALSA headers (libasound2-dev) on Linux.
+local-audio = ["dep:rodio"]
+# The command-line player's connection to the server, without the sound card,
+# so its tests run without the ALSA headers.
+player-client = ["dep:futures-util", "dep:reqwest", "dep:rustls", "dep:tokio-tungstenite"]
+# The command-line player `cup-player`: plays on the sound card of the
+# computer it runs on. Needs the ALSA headers like local-audio.
+cli-player = ["player-client", "local-audio"]

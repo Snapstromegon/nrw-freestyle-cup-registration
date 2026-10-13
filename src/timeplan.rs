@@ -10,6 +10,7 @@ use std::collections::{HashMap, HashSet};
 
 use sqlx::SqliteConnection;
 use time::OffsetDateTime;
+use uuid::Uuid;
 
 /// A timeplan entry, as far as the warm-up rules care.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -81,6 +82,27 @@ impl LiveEntry {
     pub fn is_skipped(&self) -> bool {
         self.empty && self.started_at.is_some() && self.ended_at.is_some()
     }
+}
+
+/// Records that the music of a running act started `seconds_ago`, unless it
+/// did before: the act timer counts from the first start, not from pressing
+/// "Weiter". Returns whether it was recorded.
+pub async fn mark_music_started(
+    db: &sqlx::SqlitePool,
+    act_id: Uuid,
+    seconds_ago: f64,
+) -> sqlx::Result<bool> {
+    let result = sqlx::query!(
+        r#"
+        UPDATE acts SET music_started_at = datetime(julianday('now') - ? / 86400.0)
+        WHERE id = ? AND started_at IS NOT NULL AND ended_at IS NULL AND music_started_at IS NULL
+        "#,
+        seconds_ago,
+        act_id
+    )
+    .execute(db)
+    .await?;
+    Ok(result.rows_affected() > 0)
 }
 
 /// The categories that have at least one act.

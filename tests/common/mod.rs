@@ -23,6 +23,7 @@ use nrw_freestyle_cup_registration::{
     http_server::{HttpServerOptions, routes::get_api_router},
     jwt::JWTConfig,
     mailer::Mailer,
+    player::PlayerHub,
     reloadable_sqlite::ReloadableSqlite,
     seed,
     system_status::StatusOptions,
@@ -37,6 +38,7 @@ use uuid::Uuid;
 use mailpit::{FROM_ADDRESS, Mail, Mailpit};
 
 pub const BASE_URL: &str = "http://cup.test";
+pub const METRICS_TOKEN: &str = "test-metrics-token";
 pub const RELOAD_DB_TOKEN: &str = "test-reload-token";
 pub const PASSWORD: &str = "Sicheres-Passwort1";
 
@@ -46,6 +48,7 @@ pub struct TestApp {
     mailpit: Option<Mailpit>,
     data_dir: TempDir,
     router: Router,
+    pub player_hub: Arc<PlayerHub>,
 }
 
 /// Directory removed again when dropped.
@@ -169,12 +172,16 @@ impl TestApp {
             base_url: BASE_URL.into(),
             data_path: data_dir.0.clone(),
             reload_db_token: RELOAD_DB_TOKEN.into(),
+            metrics_token: Some(METRICS_TOKEN.into()),
         };
+        let reloadable = ReloadableSqlite::new(db.clone(), String::new());
+        let player_hub = PlayerHub::new(reloadable.clone());
         let router = get_api_router(
             Arc::new(options),
-            ReloadableSqlite::new(db.clone(), String::new()),
+            reloadable,
             Arc::new(mailer),
             jwt.clone(),
+            player_hub.clone(),
         );
         Self {
             db,
@@ -182,6 +189,7 @@ impl TestApp {
             mailpit,
             data_dir,
             router,
+            player_hub,
         }
     }
 
@@ -266,6 +274,42 @@ impl TestApp {
 
     pub async fn get(&self, uri: &str, cookie: Option<&str>) -> TestResponse {
         self.request(Method::GET, uri, None, cookie).await
+    }
+
+    /// Serves the app on a free local port, e.g. for websocket tests, with
+    /// the songs at `/songs` like the real server. The server stops with the
+    /// test.
+    pub async fn serve(&self) -> std::net::SocketAddr {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let router = self.router.clone().nest_service(
+            "/songs",
+            tower_http::services::ServeDir::new(self.data_path()),
+        );
+        tokio::spawn(async move {
+            axum::serve(listener, router).await.unwrap();
+        });
+        address
+    }
+
+    /// A GET with an `Authorization: Bearer` header, e.g. for `/metrics`.
+    pub async fn get_with_bearer(&self, uri: &str, token: &str) -> TestResponse {
+        let request = Request::builder()
+            .uri(uri)
+            .header(header::AUTHORIZATION, format!("Bearer {token}"))
+            .body(Body::empty())
+            .unwrap();
+        let response = self.router.clone().oneshot(request).await.unwrap();
+        let status = response.status();
+        let headers = response.headers().clone();
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        TestResponse {
+            status,
+            headers,
+            body: Value::String(String::from_utf8_lossy(&bytes).into_owned()),
+        }
     }
 
     pub async fn post(&self, uri: &str, body: Value, cookie: Option<&str>) -> TestResponse {

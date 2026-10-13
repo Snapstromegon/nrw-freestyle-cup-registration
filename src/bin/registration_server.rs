@@ -7,6 +7,7 @@ use nrw_freestyle_cup_registration::{
     jwt::JWTConfig,
     mailer::Mailer,
     normalize,
+    player::PlayerHub,
     reloadable_sqlite::{self, ReloadableSqlite},
     seed, utils,
 };
@@ -97,16 +98,23 @@ async fn main() -> eyre::Result<()> {
     // Songs uploaded while the server was down or before normalization existed.
     normalize::resume(&db, &settings.data_path).await?;
 
+    let player_hub = PlayerHub::new(db.clone());
+    if let Some(name) = settings.local_player {
+        start_local_player(&player_hub, &settings.data_path, name);
+    }
+
     HttpServer::new(
         HttpServerOptions {
             bind_address: settings.http_address,
             base_url: settings.base_url.to_string(),
             data_path: settings.data_path,
             reload_db_token: settings.reload_db_token,
+            metrics_token: settings.metrics_token,
         },
         db,
         Arc::new(jwt_config),
         Arc::new(mailer),
+        player_hub,
     )
     .start(shutdown_signal())
     .await?;
@@ -175,4 +183,16 @@ async fn shutdown_signal() {
         _ = ctrl_c => {},
         _ = terminate => {},
     }
+}
+
+#[cfg(feature = "local-audio")]
+fn start_local_player(hub: &Arc<PlayerHub>, data_path: &std::path::Path, name: String) {
+    nrw_freestyle_cup_registration::player::local::start(hub.clone(), data_path.to_owned(), name);
+}
+
+#[cfg(not(feature = "local-audio"))]
+fn start_local_player(_hub: &Arc<PlayerHub>, _data_path: &std::path::Path, name: String) {
+    warn!(
+        "LOCAL_PLAYER is set to {name:?}, but this server was built without the local-audio feature; the server player is off."
+    );
 }

@@ -57,7 +57,8 @@ export default defineConfig(({ mode }) => ({
   },
   server: {
     proxy: {
-      "/api": backend,
+      // Includes the websocket of remote playback (/api/ws/player).
+      "/api": { target: backend, ws: true },
       "/songs": backend,
       "/openapi.json": backend,
       "/swagger": backend,

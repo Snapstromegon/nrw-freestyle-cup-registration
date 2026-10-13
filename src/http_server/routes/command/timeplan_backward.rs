@@ -1,11 +1,14 @@
+use std::sync::Arc;
+
 use axum::{Extension, Json, http::StatusCode};
 use serde::Serialize;
-use tracing::instrument;
+use tracing::{instrument, warn};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
     http_server::{ClientError, HttpError, extractor::auth::Auth},
+    player::PlayerHub,
     reloadable_sqlite::{ReloadableSqlite, begin_write},
     timeplan::live_entries,
 };
@@ -27,10 +30,11 @@ pub struct SetTimeplanBackwardResponse {}
         (status=500, content_type="application/json", body=ClientError),
     ),
 )]
-#[instrument(skip(db))]
+#[instrument(skip(db, player_hub))]
 #[axum::debug_handler]
 pub async fn timeplan_backward(
     Extension(db): Extension<ReloadableSqlite>,
+    Extension(player_hub): Extension<Arc<PlayerHub>>,
     auth: Auth,
 ) -> Result<Json<SetTimeplanBackwardResponse>, HttpError> {
     if !auth.is_admin() {
@@ -65,7 +69,7 @@ pub async fn timeplan_backward(
             };
             if let Some(running_act_id) = running_act {
                 sqlx::query!(
-                    "UPDATE acts SET started_at = NULL WHERE id = ?",
+                    "UPDATE acts SET started_at = NULL, music_started_at = NULL WHERE id = ?",
                     running_act_id
                 )
                 .execute(&mut *tx)
@@ -117,6 +121,10 @@ pub async fn timeplan_backward(
     }
 
     tx.commit().await?;
+    // A remote player gets the song of the act now due; it doesn't start.
+    if let Err(e) = player_hub.cue_from_timeplan().await {
+        warn!("Couldn't cue the next song: {e}");
+    }
 
     Ok(Json(SetTimeplanBackwardResponse {}))
 }

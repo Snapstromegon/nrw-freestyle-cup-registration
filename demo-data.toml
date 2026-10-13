@@ -338,7 +338,13 @@ members = ["Felix Braun", "Leon Lehmann"]
 # every group; each entry selects one by a participant (starter) and act_type,
 # or a group by its name (group). Optional: name, description, song (file name
 # shown; a short tone is generated unless song_source points to an audio file
-# relative to this file), song_checked, order, started_at, ended_at.
+# relative to this file), song_url, song_checked, order, started_at, ended_at.
+#
+# The songs are by TheFatRat (https://www.thefatrat.com/downloads), used under
+# their terms (https://www.thefatrat.com/terms-and-conditions). Those don't
+# allow passing the files on, so they aren't in the repository: seed_demo
+# downloads each song_url into demo-songs/ once (with curl). Without the
+# download, e.g. offline and in the tests, the acts get the generated tone.
 #
 # EMU11 is finished and EMU13 is running (see the timeplan below), so the info
 # board and the live startlist have something to show.
@@ -347,7 +353,8 @@ members = ["Felix Braun", "Leon Lehmann"]
 starter = "Ben Fischer"
 act_type = "single"
 name = "Kleiner Drache"
-song = "kleiner-drache.wav"
+song = "TheFatRat - Rise Up.mp3"
+song_url = "https://static.wixstatic.com/mp3/80cc5d_2f628ff8443e491db6bfb8b2505669ff.mp3"
 song_checked = true
 order = 1
 started_at = 2027-06-05T10:10:00+02:00
@@ -358,7 +365,8 @@ starter = "Noah Fischer"
 act_type = "single"
 name = "Piratenfahrt"
 description = "Mit Augenklappe und Hut."
-song = "piraten.wav"
+song = "TheFatRat - Sail Away.mp3"
+song_url = "https://static.wixstatic.com/mp3/80cc5d_2d12755ba406458781fae060d9f91efc.mp3"
 song_checked = true
 order = 2
 started_at = 2027-06-05T10:17:00+02:00
@@ -368,7 +376,8 @@ ended_at = 2027-06-05T10:20:00+02:00
 starter = "Luca Weber"
 act_type = "single"
 name = "Roboter"
-song = "roboter-remix.wav"
+song = "TheFatRat - Electrified.mp3"
+song_url = "https://static.wixstatic.com/mp3/80cc5d_e9ef35926aa740989316a0a1b8fd39b4.mp3"
 song_checked = true
 order = 1
 started_at = 2027-06-05T10:30:00+02:00
@@ -378,7 +387,8 @@ ended_at = 2027-06-05T10:33:00+02:00
 starter = "Elias Weber"
 act_type = "single"
 name = "Dschungelbuch"
-song = "dschungelbuch.wav"
+song = "TheFatRat - Monkeys.mp3"
+song_url = "https://static.wixstatic.com/mp3/80cc5d_7dc0d272543749f391104f1b53fd624d.mp3"
 order = 2
 started_at = 2027-06-05T10:37:00+02:00
 
@@ -387,7 +397,8 @@ started_at = 2027-06-05T10:37:00+02:00
 starter = "Finn Meyer"
 act_type = "single"
 name = "Feuerwehr"
-song = "feuerwehr.wav"
+song = "TheFatRat - Fire.mp3"
+song_url = "https://static.wixstatic.com/mp3/80cc5d_cc85cc2cf99640a79886bba86b51b53a.mp3"
 order = 3
 
 [[acts]]
@@ -395,7 +406,8 @@ starter = "Mia Schneider"
 act_type = "pair"
 name = "Zwei Schmetterlinge"
 description = "Beide in bunten Kostümen, Start von der Mitte."
-song = "schmetterlinge.wav"
+song = "TheFatRat - Fly Away.mp3"
+song_url = "https://static.wixstatic.com/mp3/80cc5d_b829b317d8824b3fa08f305a82620696.mp3"
 song_checked = true
 
 # Name only, no song yet.
@@ -409,26 +421,30 @@ starter = "Hannah Klein"
 act_type = "single"
 name = "Schwanensee"
 description = "Klassisch, mit Tutu."
-song = "schwanensee.wav"
+song = "TheFatRat - Elegy.mp3"
+song_url = "https://static.wixstatic.com/mp3/80cc5d_b27bcee24e8243c5bb04b08d16309c63.mp3"
 song_checked = true
 
 [[acts]]
 starter = "Karl Richter"
 act_type = "single"
 name = "Immer noch auf Rädern"
-song = "oldie.wav"
+song = "TheFatRat - Still Here With You.mp3"
+song_url = "https://static.wixstatic.com/mp3/80cc5d_33b52f2271c24927a6168fa50c262d31.mp3"
 
 [[acts]]
 starter = "Julia Krüger"
 act_type = "pair"
 name = "Geschwister"
-song = "geschwister.wav"
+song = "TheFatRat - Never Be Alone.mp3"
+song_url = "https://static.wixstatic.com/mp3/80cc5d_0e46a274e15e471d81e0a52b219f1e9c.mp3"
 
 [[acts]]
 group = "Rollende Rebellen"
 name = "Räder im Wind"
 description = "Mit Fahnen, Aufstellung im Halbkreis."
-song = "raeder-im-wind.wav"
+song = "TheFatRat - Upwind.mp3"
+song_url = "https://static.wixstatic.com/mp3/80cc5d_2558c754c00a4eaf9595c18626c99529.mp3"
 song_checked = true
 order = 1
 
@@ -436,7 +452,8 @@ order = 1
 [[acts]]
 group = "Einrad-Express"
 name = "Zug um Zug"
-song = "zug-um-zug.wav"
+song = "TheFatRat - Time Lapse.mp3"
+song_url = "https://static.wixstatic.com/mp3/80cc5d_264f11bf7810447d963be4db35086e19.mp3"
 order = 1
 
 [[acts]]

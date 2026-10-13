@@ -72,6 +72,10 @@ impl Mailpit {
                 .await
             {
                 Ok(container) => {
+                    // With the player-client feature, reqwest uses rustls
+                    // without a crypto provider of its own.
+                    #[cfg(feature = "player-client")]
+                    let _ = rustls::crypto::ring::default_provider().install_default();
                     return Self {
                         _container: container,
                         smtp_url: format!("smtp://127.0.0.1:{smtp_port}"),

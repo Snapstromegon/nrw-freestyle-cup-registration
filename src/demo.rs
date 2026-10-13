@@ -14,7 +14,7 @@ use std::{
 use password_auth::generate_hash;
 use serde::Deserialize;
 use time::{Date, OffsetDateTime, UtcOffset};
-use tracing::info;
+use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::{
@@ -162,6 +162,9 @@ pub struct DemoAct {
     pub song: Option<String>,
     /// Audio file to store as the song, relative to the demo file.
     pub song_source: Option<PathBuf>,
+    /// Where to download the song from, if there is no `song_source` (see
+    /// [`DemoData::fetch_songs`]). Without the download, the tone is stored.
+    pub song_url: Option<String>,
     #[serde(default)]
     pub song_checked: bool,
     pub order: Option<i64>,
@@ -183,6 +186,40 @@ impl DemoData {
             .map_err(|e| format!("Invalid demo file {}: {e}", path.display()))?;
         data.base_dir = path.parent().map(Path::to_path_buf).unwrap_or_default();
         Ok(data)
+    }
+
+    /// Downloads the songs with a `song_url` into `cache`, unless they are
+    /// there already, and uses them as `song_source`. Songs that can't be
+    /// downloaded (e.g. offline or without curl) stay generated tones.
+    pub fn fetch_songs(&mut self, cache: &Path) -> Result<(), String> {
+        std::fs::create_dir_all(cache)
+            .map_err(|e| format!("Couldn't create song cache {}: {e}", cache.display()))?;
+        // `apply` resolves relative sources against the demo file's directory.
+        let cache = std::path::absolute(cache)
+            .map_err(|e| format!("Couldn't resolve song cache {}: {e}", cache.display()))?;
+        for act in &mut self.acts {
+            let Some(url) = act.song_url.as_deref() else {
+                continue;
+            };
+            if act.song_source.is_some() {
+                continue;
+            }
+            let file = url::Url::parse(url)
+                .ok()
+                .and_then(|url| Some(url.path_segments()?.next_back()?.to_string()))
+                .filter(|file| !file.is_empty())
+                .ok_or_else(|| format!("song_url {url} has no file name"))?;
+            let path = cache.join(file);
+            if !path.exists() {
+                info!("Downloading {url}");
+                if let Err(e) = download(url, &path) {
+                    warn!("Couldn't download {url}, using a tone instead: {e}");
+                    continue;
+                }
+            }
+            act.song_source = Some(path);
+        }
+        Ok(())
     }
 
     /// Writes the demo data into an empty, migrated database. Song files are
@@ -657,6 +694,25 @@ impl<'a> StarterIds<'a> {
     }
 }
 
+/// Downloads `url` to `target` with curl, so a broken download never ends up
+/// at `target`.
+fn download(url: &str, target: &Path) -> Result<(), String> {
+    let partial = target.with_extension("part");
+    let status = std::process::Command::new("curl")
+        .args(["--fail", "--location", "--silent", "--show-error"])
+        .args(["--max-time", "300", "--output"])
+        .arg(&partial)
+        .arg(url)
+        .status()
+        .map_err(|e| format!("Couldn't run curl: {e}"))?;
+    if !status.success() {
+        std::fs::remove_file(&partial).ok();
+        return Err(format!("curl failed ({status})"));
+    }
+    std::fs::rename(&partial, target)
+        .map_err(|e| format!("Couldn't move the download to {}: {e}", target.display()))
+}
+
 /// A mono 16-bit PCM WAV file with a sine tone.
 fn tone_wav(frequency: f64, seconds: u32) -> Vec<u8> {
     const SAMPLE_RATE: u32 = 8000;
@@ -807,6 +863,59 @@ mod tests {
         incomplete.members.push("Emma Wagner".into());
         let err = data.apply(&db, &data_dir()).await.unwrap_err();
         assert!(err.contains("„Emma Wagner“"), "{err}");
+    }
+
+    #[sqlx::test]
+    async fn fetched_songs_are_stored(db: sqlx::SqlitePool) {
+        let mut data = DemoData::parse(DEMO).unwrap();
+        // No downloads in tests: one song is in the cache already, the
+        // other's download fails.
+        for act in &mut data.acts {
+            act.song_url = None;
+        }
+        let cache = data_dir();
+        std::fs::create_dir_all(&cache).unwrap();
+        std::fs::write(cache.join("cached.mp3"), b"cached song").unwrap();
+        let (cached, missing) = {
+            let mut with_song = data.acts.iter_mut().filter(|act| act.song.is_some());
+            let cached = with_song.next().unwrap();
+            cached.song_url = Some("https://example.org/songs/cached.mp3".into());
+            let missing = with_song.next().unwrap();
+            missing.song_url = Some(format!("file://{}", cache.join("not-there.mp3").display()));
+            (cached.song.clone(), missing.song.clone())
+        };
+
+        data.fetch_songs(&cache).unwrap();
+        let missing_act = data.acts.iter().find(|act| act.song == missing).unwrap();
+        assert_eq!(missing_act.song_source, None);
+        assert!(!cache.join("not-there.mp3").exists());
+        assert!(!cache.join("not-there.part").exists());
+
+        let data_path = data_dir();
+        data.apply(&db, &data_path).await.unwrap();
+        let file: String =
+            sqlx::query_scalar("SELECT song_file FROM acts WHERE song_file_name = ?")
+                .bind(&cached)
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert!(file.ends_with(".mp3"), "{file}");
+        assert_eq!(std::fs::read(data_path.join(file)).unwrap(), b"cached song");
+        std::fs::remove_dir_all(data_path).unwrap();
+        std::fs::remove_dir_all(cache).unwrap();
+    }
+
+    #[test]
+    fn song_url_needs_a_file_name() {
+        let mut data = DemoData::parse(DEMO).unwrap();
+        for act in &mut data.acts {
+            act.song_url = None;
+        }
+        data.acts[0].song_url = Some("https://example.org/".into());
+        let cache = data_dir();
+        let err = data.fetch_songs(&cache).unwrap_err();
+        assert!(err.contains("https://example.org/"), "{err}");
+        std::fs::remove_dir_all(cache).unwrap();
     }
 
     #[test]

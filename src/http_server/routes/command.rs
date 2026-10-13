@@ -28,6 +28,7 @@ mod request_password_reset;
 mod resend_mail_validation;
 mod reset_password;
 mod save_act_song;
+mod set_act_music_started;
 mod set_act_order;
 mod set_act_withdrawn;
 mod set_checked_in;
@@ -70,6 +71,7 @@ pub fn get_command_router() -> OpenApiRouter {
         .routes(routes!(set_song_checked::set_song_checked))
         .routes(routes!(set_act_withdrawn::set_act_withdrawn))
         .routes(routes!(set_act_order::set_act_order))
+        .routes(routes!(set_act_music_started::set_act_music_started))
         .routes(routes!(set_checked_in::set_checked_in))
         .routes(routes!(timeplan_forward::timeplan_forward))
         .routes(routes!(timeplan_backward::timeplan_backward))

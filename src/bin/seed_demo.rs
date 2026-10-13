@@ -20,6 +20,10 @@ struct Args {
     /// Demo data file.
     #[clap(long, env = "DEMO_DATA", default_value = "./demo-data.toml")]
     demo: PathBuf,
+    /// Where the downloaded songs are kept. Defaults to `demo-songs` next to
+    /// the demo data file.
+    #[clap(long, env = "DEMO_SONGS")]
+    songs: Option<PathBuf>,
     /// Path to the TOML config file. Defaults to `./config.toml` if it exists.
     #[clap(long, env = "CONFIG")]
     config: Option<PathBuf>,
@@ -47,8 +51,13 @@ async fn main() -> eyre::Result<()> {
         .data
         .or(config_file.server.data_path)
         .unwrap_or_else(|| PathBuf::from(DEFAULT_DATA_PATH));
-    // Parse the demo data first, so a broken file doesn't cost the database.
-    let demo = DemoData::load(&args.demo).map_err(|e| eyre!(e))?;
+    // Parse the demo data and fetch the songs first, so a broken file or a
+    // cancelled download doesn't cost the database.
+    let mut demo = DemoData::load(&args.demo).map_err(|e| eyre!(e))?;
+    let songs = args
+        .songs
+        .unwrap_or_else(|| demo.base_dir.join("demo-songs"));
+    demo.fetch_songs(&songs).map_err(|e| eyre!(e))?;
 
     let options = SqliteConnectOptions::from_str(&database_url)?.create_if_missing(true);
     let filename = options.get_filename();

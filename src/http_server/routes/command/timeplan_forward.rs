@@ -1,11 +1,14 @@
+use std::sync::Arc;
+
 use axum::{Extension, Json, http::StatusCode};
 use serde::Serialize;
-use tracing::{info, instrument};
+use tracing::{info, instrument, warn};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
     http_server::{ClientError, HttpError, extractor::auth::Auth},
+    player::PlayerHub,
     reloadable_sqlite::{ReloadableSqlite, begin_write},
     timeplan::{LiveEntry, live_entries},
 };
@@ -27,10 +30,11 @@ pub struct SetTimeplanForwardResponse {}
         (status=500, content_type="application/json", body=ClientError),
     ),
 )]
-#[instrument(skip(db))]
+#[instrument(skip(db, player_hub))]
 #[axum::debug_handler]
 pub async fn timeplan_forward(
     Extension(db): Extension<ReloadableSqlite>,
+    Extension(player_hub): Extension<Arc<PlayerHub>>,
     auth: Auth,
 ) -> Result<Json<SetTimeplanForwardResponse>, HttpError> {
     if !auth.is_admin() {
@@ -117,6 +121,10 @@ pub async fn timeplan_forward(
     }
 
     tx.commit().await?;
+    // A remote player gets the song of the act now due; it doesn't start.
+    if let Err(e) = player_hub.cue_from_timeplan().await {
+        warn!("Couldn't cue the next song: {e}");
+    }
 
     Ok(Json(SetTimeplanForwardResponse {}))
 }

@@ -2,7 +2,7 @@ pub mod command;
 pub mod http_types;
 pub mod query;
 
-use axum::{Extension, Router, extract::Request, http::HeaderName};
+use axum::{Extension, Router, extract::Request, http::HeaderName, middleware, routing::get};
 use axum_embed::{FallbackBehavior, ServeEmbed};
 use rust_embed::RustEmbed;
 use std::sync::Arc;
@@ -17,7 +17,13 @@ use utoipa::{OpenApi as OpenApiTrait, openapi::OpenApi};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::{jwt::JWTConfig, mailer::Mailer, reloadable_sqlite::ReloadableSqlite};
+use crate::{
+    jwt::JWTConfig,
+    mailer::Mailer,
+    metrics,
+    player::{self, PlayerHub},
+    reloadable_sqlite::ReloadableSqlite,
+};
 
 use super::HttpServerOptions;
 
@@ -34,6 +40,15 @@ struct StaticAssets;
         description = "API for managing registrations",
         license(name = "AGPL-3.0-or-later", url = "https://www.gnu.org/licenses/agpl-3.0.html"),
     ),
+    // The messages of the remote playback websocket (`/api/ws/player`),
+    // so the frontend gets their types.
+    components(schemas(
+        player::ControllerMessage,
+        player::ToController,
+        player::PlayerMessage,
+        player::ToPlayer,
+        player::HubState,
+    )),
     servers(
         (url = "http://localhost:3000"),
         (url = "https://anmeldung.freestyle-cup.nrw"),
@@ -59,14 +74,19 @@ pub fn get_api_router(
     db: ReloadableSqlite,
     mailer: Arc<Mailer>,
     jwt_config: Arc<JWTConfig>,
+    player_hub: Arc<PlayerHub>,
 ) -> Router {
     let (router, openapi) = get_openapi_router();
     router
+        .route("/api/ws/player", get(player::ws::player_ws))
+        .route_layer(middleware::from_fn(metrics::track_http))
+        .route("/metrics", get(metrics::metrics_handler))
         .merge(SwaggerUi::new("/swagger").url("/openapi.json", openapi))
         .layer(Extension(db))
         .layer(Extension(mailer))
         .layer(Extension(jwt_config))
         .layer(Extension(http_options))
+        .layer(Extension(player_hub))
 }
 
 #[must_use]
@@ -79,6 +99,7 @@ pub fn get_router(
     db: ReloadableSqlite,
     mailer: Arc<Mailer>,
     jwt_config: Arc<JWTConfig>,
+    player_hub: Arc<PlayerHub>,
 ) -> Router {
     let request_id_layer = ServiceBuilder::new()
         .layer(SetRequestIdLayer::new(
@@ -117,6 +138,12 @@ pub fn get_router(
     Router::new()
         .fallback_service(serve_assets)
         .nest_service("/songs", ServeDir::new(http_options.data_path.clone()))
-        .merge(get_api_router(http_options, db, mailer, jwt_config))
+        .merge(get_api_router(
+            http_options,
+            db,
+            mailer,
+            jwt_config,
+            player_hub,
+        ))
         .layer(request_id_layer)
 }

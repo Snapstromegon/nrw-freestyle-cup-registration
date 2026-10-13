@@ -20,6 +20,7 @@ import {
   normalizationLabel,
   songFile,
 } from "../../utils";
+import "../elements/cup-waveform.js";
 import "../elements/cup-act-participants.js";
 
 type Act = components["schemas"]["Act"];
@@ -485,6 +486,14 @@ export default class CupViewAdminActsOverview extends LitElement {
     };
   }
 
+  /** The act time of an act's category in seconds; 0 without one. */
+  private actDuration(act: Act | undefined) {
+    return (
+      this.categories.find((c) => c.name === act?.category)
+        ?.act_duration_seconds ?? 0
+    );
+  }
+
   /** The acts of a category, in start order (as `list_acts` returns them). */
   private actsOf(category: string) {
     return this.acts.filter((act) => act.category === category);
@@ -776,13 +785,15 @@ export default class CupViewAdminActsOverview extends LitElement {
               : nothing
           }</span
         >
-        <audio
-          controls
-          preload="none"
-          @play=${this.onAudioPlay}
-          @pause=${this.onAudioPause}
-          @ended=${this.onAudioPause}
-        ></audio>
+        <cup-waveform compact .limit=${this.actDuration(playing)}
+          ><audio
+            controls
+            preload="none"
+            @play=${this.onAudioPlay}
+            @pause=${this.onAudioPause}
+            @ended=${this.onAudioPause}
+          ></audio
+        ></cup-waveform>
       </span>
     </div>`;
   }

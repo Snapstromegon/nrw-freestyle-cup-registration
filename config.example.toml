@@ -17,6 +17,11 @@
 # data_path = "./data"                               # DATA_PATH
 # insecure_cookies = false                           # INSECURE_COOKIES
 # reload_db_token = "…"                              # RELOAD_DB_TOKEN
+# Turns on GET /metrics for Prometheus (Authorization: Bearer <token>).
+# metrics_token = "…"                                # METRICS_TOKEN
+# Name of the server player: plays music on this server's sound card. Needs a
+# build with the local-audio feature (make event-release).
+# local_player = "Halle"                             # LOCAL_PLAYER
 
 [database]
 # url = "sqlite://./db.sqlite?mode=rwc"              # DATABASE_URL

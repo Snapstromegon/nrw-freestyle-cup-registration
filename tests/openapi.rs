@@ -31,6 +31,7 @@ const COMMANDS: &[&str] = &[
     "resend_mail_validation",
     "reset_password",
     "save_act_song",
+    "set_act_music_started",
     "set_act_order",
     "set_checked_in",
     "set_club_group_members",

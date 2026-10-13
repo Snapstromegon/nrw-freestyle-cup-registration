@@ -32,6 +32,16 @@ release: clean-frontend openapi frontend-release migrate-db
 centos-release: clean-frontend openapi frontend-release migrate-db
 	cargo build --release --target x86_64-unknown-linux-musl
 
+# Event server in the venue: release build with the server player (needs the
+# ALSA headers, libasound2-dev on Linux).
+event-release: clean-frontend openapi frontend-release migrate-db
+	cargo build --release --features local-audio
+
+# The command-line player for the sound desk, target/release/cup-player
+# (needs the ALSA headers, libasound2-dev on Linux).
+cup-player: migrate-db
+	cargo build --release --features cli-player --bin cup-player
+
 demo:
 	cargo run --bin seed_demo
 
@@ -48,7 +58,7 @@ endif
 endif
 
 test: migrate-db
-	cargo test
+	cargo test --features player-client
 	cd frontend && npm test
 
 lint:

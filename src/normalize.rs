@@ -56,7 +56,10 @@ pub fn spawn(
     tokio::spawn(async move {
         let _permit = JOBS.acquire().await.expect("semaphore is never closed");
         let target_path = data_path.join(&target);
+        let started = std::time::Instant::now();
         let result = normalize(&data_path.join(&source), &target_path).await;
+        crate::metrics::metrics()
+            .normalization_finished(result.is_ok(), started.elapsed().as_secs_f64());
         let status = match &result {
             Ok(()) => NormalizationStatus::Done,
             Err(e) => {
@@ -123,6 +126,7 @@ pub async fn resume(db: &ReloadableSqlite, data_path: &Path) -> sqlx::Result<()>
             target,
         );
     }
+
     Ok(())
 }
 

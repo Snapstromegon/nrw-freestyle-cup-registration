@@ -55,6 +55,14 @@ pub struct CliArgs {
     pub insecure_cookies: bool,
     #[clap(long, env = "RELOAD_DB_TOKEN")]
     pub reload_db_token: Option<String>,
+    /// Bearer token for `GET /metrics` (Prometheus); the endpoint is off
+    /// without one.
+    #[clap(long, env = "METRICS_TOKEN")]
+    pub metrics_token: Option<String>,
+    /// Name of the server player, which plays music on this server's sound
+    /// card (remote playback). Needs a build with the `local-audio` feature.
+    #[clap(long, env = "LOCAL_PLAYER")]
+    pub local_player: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -97,6 +105,8 @@ pub struct ServerConfig {
     pub data_path: Option<PathBuf>,
     pub insecure_cookies: Option<bool>,
     pub reload_db_token: Option<String>,
+    pub metrics_token: Option<String>,
+    pub local_player: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -337,6 +347,8 @@ pub struct Settings {
     pub admin: Option<AdminConfig>,
     pub insecure_cookies: bool,
     pub reload_db_token: String,
+    pub metrics_token: Option<String>,
+    pub local_player: Option<String>,
     pub competition: Option<CompetitionConfig>,
     pub categories: Vec<CategoryConfig>,
     pub timeplan: Vec<TimeplanEntryConfig>,
@@ -434,6 +446,14 @@ impl Settings {
             admin: cli.admin.or(file.admin),
             insecure_cookies: cli.insecure_cookies || file.server.insecure_cookies.unwrap_or(false),
             reload_db_token,
+            metrics_token: cli
+                .metrics_token
+                .or(file.server.metrics_token)
+                .filter(|token| !token.is_empty()),
+            local_player: cli
+                .local_player
+                .or(file.server.local_player)
+                .filter(|name| !name.trim().is_empty()),
             competition: file.competition,
             categories: file.categories,
             timeplan: file.timeplan,

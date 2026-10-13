@@ -4,7 +4,9 @@ use axum::{Json, response::IntoResponse};
 use serde::Serialize;
 use tracing::info;
 
-use crate::{jwt::JWTConfig, mailer::Mailer, reloadable_sqlite::ReloadableSqlite};
+use crate::{
+    jwt::JWTConfig, mailer::Mailer, player::PlayerHub, reloadable_sqlite::ReloadableSqlite,
+};
 
 pub mod extractor;
 pub mod routes;
@@ -87,6 +89,8 @@ pub struct HttpServerOptions {
     pub base_url: String,
     pub data_path: PathBuf,
     pub reload_db_token: String,
+    /// Bearer token for `GET /metrics`; without one the endpoint is off.
+    pub metrics_token: Option<String>,
 }
 
 pub struct HttpServer {
@@ -94,6 +98,7 @@ pub struct HttpServer {
     mailer: Arc<Mailer>,
     jwt: Arc<JWTConfig>,
     options: Arc<HttpServerOptions>,
+    player_hub: Arc<PlayerHub>,
 }
 
 impl HttpServer {
@@ -102,12 +107,14 @@ impl HttpServer {
         db: ReloadableSqlite,
         jwt: Arc<JWTConfig>,
         mailer: Arc<Mailer>,
+        player_hub: Arc<PlayerHub>,
     ) -> Self {
         Self {
             db,
             mailer,
             options: Arc::new(options),
             jwt,
+            player_hub,
         }
     }
 
@@ -120,6 +127,7 @@ impl HttpServer {
             self.db.clone(),
             self.mailer.clone(),
             self.jwt.clone(),
+            self.player_hub.clone(),
         );
         let address = self.options.bind_address.clone();
 

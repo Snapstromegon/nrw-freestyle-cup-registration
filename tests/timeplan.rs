@@ -511,3 +511,58 @@ async fn shared_warmup_of_an_empty_category_moves_to_the_next(db: SqlitePool) {
         ["Category"]["acts"];
     assert_eq!(acts[0]["status"], "Planned");
 }
+
+#[sqlx::test]
+async fn act_timer_starts_with_the_first_music_start(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let admin = app.create_admin().await;
+    let (owner, club_id) = app.create_club_owner("Owner", "RSV").await;
+    let act_id = app.add_single_act(&owner, club_id, "Anna").await;
+    replace_timeplan(&app, &admin, &[category_entry("EWU13", Some(START))]).await;
+
+    let music_started = async || {
+        let response = app.get("/api/query/predict_timeplan", None).await;
+        response.body["items"][0]["timeplan_entry"]["Category"]["acts"][0]["music_started_at"]
+            .clone()
+    };
+    let report = async |cookie: &str| {
+        app.post(
+            "/api/command/set_act_music_started",
+            json!({ "act_id": act_id }),
+            Some(cookie),
+        )
+        .await
+        .status
+    };
+
+    // During the warm-up, the act doesn't run yet.
+    step(&app, &admin, "timeplan_forward").await;
+    assert_eq!(report(&admin).await, StatusCode::OK);
+    assert!(music_started().await.is_null());
+
+    step(&app, &admin, "timeplan_forward").await;
+    assert!(music_started().await.is_null());
+    assert_eq!(report(&owner).await, StatusCode::FORBIDDEN);
+    assert!(music_started().await.is_null());
+    assert_eq!(report(&admin).await, StatusCode::OK);
+    assert!(music_started().await.is_string());
+
+    // Only the first start counts.
+    sqlx::query("UPDATE acts SET music_started_at = '2026-04-19 09:15:00' WHERE id = ?")
+        .bind(act_id)
+        .execute(&app.db)
+        .await
+        .unwrap();
+    assert_eq!(report(&admin).await, StatusCode::OK);
+    let kept = music_started().await;
+    assert!(
+        kept.as_str().unwrap().contains("2026-04-19T09:15:00"),
+        "{kept}"
+    );
+
+    // Undoing the act's start forgets it.
+    step(&app, &admin, "timeplan_backward").await;
+    assert!(music_started().await.is_null());
+    step(&app, &admin, "timeplan_forward").await;
+    assert!(music_started().await.is_null());
+}

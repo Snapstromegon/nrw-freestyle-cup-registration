@@ -15,7 +15,7 @@ mod list_groups;
 mod list_starters;
 mod list_timeplan;
 mod list_users;
-mod predict_timeplan;
+pub(crate) mod predict_timeplan;
 mod startlist;
 mod whoami;
 

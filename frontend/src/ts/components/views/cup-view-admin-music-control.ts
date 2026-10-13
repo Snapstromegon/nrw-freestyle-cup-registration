@@ -8,6 +8,20 @@ import { errorMessage, PollController, unwrap } from "../../api";
 import { client } from "../../apiClient";
 import type { components } from "../../bindings";
 import { type User, userContext } from "../../contexts/user";
+import {
+  BLOCKED_MESSAGE,
+  type ControllerMessage,
+  connectionLabel,
+  type HubState,
+  interpolatePosition,
+  type PlayerInfo,
+  PlayerSocket,
+  type PlayerStatus,
+  playbackLabels,
+  playbackTones,
+  playerSocketUrl,
+  type ToController,
+} from "../../player";
 import { adminStyles } from "../../styles/admin";
 import { iconStyles, resetStyles } from "../../styles/base";
 import {
@@ -24,6 +38,8 @@ import {
   normalizationLabel,
   songFile,
 } from "../../utils";
+import { formatClock } from "../../waveform";
+import "../elements/cup-waveform.js";
 import "../elements/cup-act-participants.js";
 import "../elements/cup-timeplan.js";
 
@@ -96,6 +112,11 @@ interface Live {
   /** Start of the current phase and its planned length in seconds. */
   since?: string | null;
   plannedSeconds?: number;
+  /**
+   * The running act's music hasn't started yet; its time runs from then, so
+   * `since` is only the act's start.
+   */
+  musicPending?: boolean;
 }
 
 const entryTitle = (item: TimeplanItem) =>
@@ -171,7 +192,8 @@ const liveState = (timeplan: Timeplan, now: number): Live => {
       category,
       act: running,
       next,
-      since: running.started_at,
+      since: running.music_started_at ?? running.started_at,
+      musicPending: !running.music_started_at,
       plannedSeconds: category.act_duration_seconds,
     };
   }
@@ -220,9 +242,42 @@ const MIN_BUSY_MS = 800;
 const delay = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+/** Seeks and volume changes while dragging are sent at most this often. */
+const DRAG_SEND_MS = 100;
+
+const playerKindLabel = (player: PlayerInfo) =>
+  ({ server: "Server", web: "Web", cli: "CLI" })[player.kind];
+
+/** What a player is, for its tooltip. */
+const playerKindTitles: Record<PlayerInfo["kind"], string> = {
+  server: "Soundkarte des Servers",
+  web: "Web-Player",
+  cli: "Kommandozeilen-Player (cup-player)",
+};
+
+const playerKindIcons: Record<PlayerInfo["kind"], string> = {
+  server: "dns",
+  web: "laptop",
+  cli: "terminal",
+};
+
+/** The last status of the active player and when it arrived. */
+interface RemoteAnchor {
+  playerId: string;
+  /** The status as JSON, to see whether a new state changed it. */
+  json: string;
+  status: PlayerStatus;
+  /** `performance.now()` when it arrived. */
+  at: number;
+}
+
 /**
  * Live competition control: what is running, the music, who comes next
  * (with check-in state) and the buttons that move the timeplan on.
+ *
+ * The music plays here in the browser, or on a player chosen above the song
+ * (remote playback, see `player.ts`): a web player (`/player`) or the
+ * server's sound card. That choice is shared by all music controls.
  */
 @customElement("cup-view-admin-music-control")
 export default class CupViewAdminMusicControl extends LitElement {
@@ -515,8 +570,113 @@ export default class CupViewAdminMusicControl extends LitElement {
         text-overflow: ellipsis;
       }
 
-      .error-banner .icon-btn {
+      .error-banner .icon-btn,
+      .warn-banner .icon-btn {
         color: inherit;
+      }
+
+      /* ---------- Where the music plays ---------- */
+
+      .players {
+        gap: 0.25rem 0.375rem;
+      }
+
+      .players .btn {
+        padding-inline: 6px;
+      }
+
+      .players .btn .material-icon {
+        font-size: 1.2em;
+      }
+
+      .players .btn[aria-pressed="true"] {
+        font-weight: 650;
+      }
+
+      .players .btn .kind {
+        color: var(--cup-muted);
+        font-size: 11px;
+        font-weight: 400;
+      }
+
+      /* A player and the button that removes it, if it's disconnected. */
+      .players .player {
+        display: inline-flex;
+        align-items: center;
+      }
+
+      .remote {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        padding: 0.375rem 0.625rem;
+        border: 1px solid var(--cup-border);
+        border-left: 6px solid var(--cup-blue);
+        border-radius: 4px;
+      }
+
+      .remote.offline {
+        border-left-color: var(--cup-red);
+        opacity: 0.85;
+      }
+
+      .remote .cue {
+        font-size: 1.1em;
+      }
+
+      .remote .cue .chip.state {
+        font-size: 13px;
+        line-height: 20px;
+        padding: 0 0.6em;
+      }
+
+      .remote .cue-label {
+        font-weight: 650;
+        overflow-wrap: anywhere;
+      }
+
+      .remote .cue-label.none {
+        color: var(--cup-muted);
+        font-weight: 400;
+        font-style: italic;
+      }
+
+      /* Not as big as the missing-rider banners; wrapped like any text. */
+      .remote :is(.error-banner, .warn-banner, .info-banner),
+      .current .remote-note {
+        margin: 0;
+        align-items: center;
+        border-left-width: 4px;
+        font-size: 1.05em;
+        font-weight: 650;
+        white-space: normal;
+      }
+
+      .remote :is(.error-banner, .warn-banner, .info-banner) .btn {
+        margin-left: auto;
+      }
+
+      .transport .btn {
+        min-height: 2.5rem;
+        padding: 0.25rem 0.875rem;
+        font-size: 1.15em;
+        font-weight: 650;
+      }
+
+      .transport .btn .material-icon {
+        font-size: 1.4em;
+      }
+
+      .transport .volume {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .transport .volume input {
+        width: 10rem;
+        accent-color: var(--cup-blue);
       }
 
       @media (max-width: 900px) {
@@ -596,10 +756,44 @@ export default class CupViewAdminMusicControl extends LitElement {
   @state() private now = Date.now();
   @state() private loaded = false;
   @state() private initialized = false;
+  /** Remote playback: the players and which one plays (shared by all views). */
+  @state() private hub?: HubState;
+  /** The last error of a remote playback command. */
+  @state() private remoteError = "";
+  /** The active player that disconnected, so the music plays here again. */
+  @state() private remoteLost = "";
+  /** The player removed here: its loss needs no banner. */
+  private removedPlayer?: string;
+  /**
+   * Plays here in the browser although the server (unreachable at the time)
+   * still has a player selected; sent once it is reachable again.
+   */
+  @state() private localOverride = false;
+  /** The volume slider's value while it is dragged and not yet confirmed. */
+  @state() private volumeDraft?: number;
 
   @queryAll("audio") private audios!: NodeListOf<HTMLAudioElement>;
 
+  private remote = new PlayerSocket<ToController, ControllerMessage>({
+    url: () => playerSocketUrl(location, "controller"),
+    onMessage: (message) => this.onRemoteMessage(message),
+    onChange: () => {
+      if (this.remote.state !== "open") {
+        this.volumeDraft = undefined;
+        this.volumeDragging = false;
+      }
+      this.requestUpdate();
+    },
+  });
+  private anchor?: RemoteAnchor;
+  private volumeDragging = false;
+  private lastVolumeSent = 0;
+  private pendingSeek?: number;
+  private seekTimer?: ReturnType<typeof setTimeout>;
+
   private actsById = new Map<string, Act>();
+  /** When a reload last looked for the music start of the running act. */
+  private musicPolledAt = 0;
   private lastJson: Record<string, string> = {};
   private loadSeq = 0;
   private appliedSeq = 0;
@@ -620,17 +814,27 @@ export default class CupViewAdminMusicControl extends LitElement {
       this.initialized = true;
       this.load();
     }
+    // Only admins may control the players; opening twice is a no-op.
+    if (this.user?.is_admin && this.isConnected) {
+      this.remote.open();
+    }
   }
 
   override connectedCallback() {
     super.connectedCallback?.();
     window.addEventListener("beforeunload", this.onBeforeUnload);
     this.load();
+    if (this.user?.is_admin) {
+      this.remote.open();
+    }
   }
 
   override disconnectedCallback() {
     super.disconnectedCallback?.();
     window.removeEventListener("beforeunload", this.onBeforeUnload);
+    this.remote.close();
+    clearTimeout(this.seekTimer);
+    this.seekTimer = undefined;
   }
 
   /**
@@ -711,6 +915,297 @@ export default class CupViewAdminMusicControl extends LitElement {
     return true;
   }
 
+  // ---------- Remote playback ----------
+
+  /** The player the music plays on; `undefined` plays it here. */
+  private get remotePlayer(): PlayerInfo | undefined {
+    const id = this.hub?.active_player;
+    if (!id || this.localOverride) {
+      return undefined;
+    }
+    return this.hub?.players.find((player) => player.id === id);
+  }
+
+  private onRemoteMessage(message: ToController) {
+    if (message.type === "error") {
+      this.remoteError = message.message;
+      return;
+    }
+    const previous = this.hub;
+    const lostId = previous?.active_player;
+    if (lostId && !message.active_player) {
+      // Disconnected, not deselected: say so, the music now plays here.
+      const lost =
+        lostId !== this.removedPlayer &&
+        !message.players.some((player) => player.id === lostId);
+      this.remoteLost = lost
+        ? (previous.players.find((player) => player.id === lostId)?.name ??
+          "Player")
+        : "";
+    } else if (message.active_player) {
+      this.remoteLost = "";
+    }
+    if (this.localOverride) {
+      if (message.active_player) {
+        // Chosen while the server was unreachable; tell it now.
+        this.remote.send({ type: "select_player", player_id: null });
+      } else {
+        this.localOverride = false;
+      }
+    } else if (message.active_player && !this.remotePlayer) {
+      // Switched to a player: the music no longer plays here.
+      for (const audio of this.audios) {
+        audio.pause();
+      }
+    }
+    const active = message.players.find(
+      (player) => player.id === message.active_player,
+    );
+    const live = this.timeplan ? liveState(this.timeplan, this.now) : undefined;
+    if (
+      active?.status.state === "playing" &&
+      live?.musicPending &&
+      message.cue?.act_id === live.act?.id &&
+      Date.now() - this.musicPolledAt > 1000
+    ) {
+      // The server records the music start once the song plays on; the act
+      // timer shows it sooner than the next poll.
+      this.musicPolledAt = Date.now();
+      void this.poll.runNow();
+    }
+    if (active) {
+      const json = JSON.stringify(active.status);
+      if (this.anchor?.playerId !== active.id || this.anchor.json !== json) {
+        this.anchor = {
+          playerId: active.id,
+          json,
+          status: active.status,
+          at: performance.now(),
+        };
+      }
+    } else {
+      this.anchor = undefined;
+    }
+    if (
+      this.volumeDraft !== undefined &&
+      !this.volumeDragging &&
+      Math.abs(message.volume - this.volumeDraft) < 0.001
+    ) {
+      this.volumeDraft = undefined;
+    }
+    this.hub = message;
+  }
+
+  /**
+   * Reports the running act's music start in this browser: its time runs
+   * from the first one. Not on `play`, which comes before a song that still
+   * loads plays. Remote players report it themselves.
+   */
+  private async onLocalPlaying() {
+    const live = this.timeplan ? liveState(this.timeplan, this.now) : undefined;
+    if (live?.phase !== "act" || !live.act || !live.musicPending) {
+      return;
+    }
+    try {
+      unwrap(
+        await client.POST("/api/command/set_act_music_started", {
+          body: { act_id: live.act.id },
+        }),
+      );
+      await this.reload();
+    } catch (error) {
+      this.commandError = `Start der Musik nicht gemeldet, die Kürzeit läuft noch nicht: ${errorMessage(error)}`;
+    }
+  }
+
+  /** The act time of an act's category in seconds; 0 if unknown. */
+  private actDuration(actId: string | undefined) {
+    for (const item of this.timeplan?.items ?? []) {
+      const entry = item.timeplan_entry;
+      if (
+        "Category" in entry &&
+        entry.Category.acts.some((a) => a.id === actId)
+      ) {
+        return entry.Category.act_duration_seconds;
+      }
+    }
+    return 0;
+  }
+
+  /** Sends a remote playback command; says so if it couldn't. */
+  private sendRemote(message: ControllerMessage) {
+    if (this.remote.send(message)) {
+      this.remoteError = "";
+      return true;
+    }
+    this.remoteError =
+      "Keine Verbindung zum Server – der Befehl wurde nicht gesendet.";
+    return false;
+  }
+
+  /** The active player's position now, between its reports. */
+  private remotePosition() {
+    const anchor = this.anchor;
+    return anchor
+      ? interpolatePosition(anchor.status, performance.now() - anchor.at)
+      : 0;
+  }
+
+  private localPlaying() {
+    return [...this.audios].some((audio) => !audio.paused && !audio.ended);
+  }
+
+  private onSelectPlayer(e: Event) {
+    const id = (e.currentTarget as HTMLElement).dataset.id;
+    const player = this.hub?.players.find((p) => p.id === id);
+    const current = this.remotePlayer;
+    if (!player || player.id === current?.id) {
+      return;
+    }
+    if (
+      this.localPlaying() &&
+      !confirm(
+        `Die Musik läuft hier im Browser. Auf „${player.name}“ umschalten und sie hier stoppen?`,
+      )
+    ) {
+      return;
+    }
+    if (
+      current?.status.state === "playing" &&
+      !confirm(
+        `Auf „${current.name}“ läuft Musik. Auf „${player.name}“ umschalten und sie dort stoppen?`,
+      )
+    ) {
+      return;
+    }
+    if (this.sendRemote({ type: "select_player", player_id: player.id })) {
+      this.localOverride = false;
+    }
+  }
+
+  /** Removes a player that lost its connection without waiting for it. */
+  private onRemovePlayer(e: Event) {
+    const id = (e.currentTarget as HTMLElement).dataset.id;
+    const player = this.hub?.players.find((p) => p.id === id);
+    if (!player) {
+      return;
+    }
+    const active = player.id === this.hub?.active_player;
+    if (
+      active &&
+      !confirm(
+        `„${player.name}“ ist der aktive Player. Entfernen? Die Musik spielt dann hier im Browser – läuft sie auf „${player.name}“ noch, dort stoppen.`,
+      )
+    ) {
+      return;
+    }
+    if (
+      this.sendRemote({ type: "remove_player", player_id: player.id }) &&
+      active
+    ) {
+      this.removedPlayer = player.id;
+    }
+  }
+
+  private selectLocal() {
+    const current = this.remotePlayer;
+    if (!current) {
+      return;
+    }
+    if (
+      current.status.state === "playing" &&
+      !confirm(
+        `Auf „${current.name}“ läuft Musik. Hier im Browser spielen und sie dort stoppen?`,
+      )
+    ) {
+      return;
+    }
+    if (this.remote.state === "open") {
+      this.sendRemote({ type: "select_player", player_id: null });
+    } else {
+      // The server is unreachable: play here now, tell it later.
+      this.localOverride = true;
+    }
+  }
+
+  private remotePlay() {
+    this.sendRemote({ type: "play" });
+  }
+
+  private remotePause() {
+    this.sendRemote({ type: "pause" });
+  }
+
+  private remoteStop() {
+    this.sendRemote({ type: "stop" });
+  }
+
+  private onCueClick(e: Event) {
+    const id = (e.currentTarget as HTMLElement).dataset.id;
+    if (id) {
+      this.sendRemote({
+        type: "cue",
+        act_id: id,
+        original: this.originalSongs.has(id),
+      });
+    }
+  }
+
+  /** Seeks; while dragging at most every `DRAG_SEND_MS`, and the last one. */
+  private onRemoteSeek(e: CustomEvent<number>) {
+    this.pendingSeek = e.detail;
+    if (this.anchor) {
+      // Show the new position before the player reports it.
+      this.anchor = {
+        ...this.anchor,
+        status: { ...this.anchor.status, position: e.detail },
+        at: performance.now(),
+      };
+      this.requestUpdate();
+    }
+    if (this.seekTimer === undefined) {
+      this.flushSeek();
+      this.seekTimer = setTimeout(() => {
+        this.seekTimer = undefined;
+        this.flushSeek();
+      }, DRAG_SEND_MS);
+    }
+  }
+
+  private flushSeek() {
+    const position = this.pendingSeek;
+    this.pendingSeek = undefined;
+    if (position !== undefined) {
+      this.sendRemote({ type: "seek", position });
+    }
+  }
+
+  private onVolumeInput(e: Event) {
+    const volume = Number((e.currentTarget as HTMLInputElement).value);
+    this.volumeDraft = volume;
+    this.volumeDragging = true;
+    const now = performance.now();
+    if (now - this.lastVolumeSent >= DRAG_SEND_MS) {
+      this.lastVolumeSent = now;
+      this.sendRemote({ type: "volume", volume });
+    }
+  }
+
+  private onVolumeChange(e: Event) {
+    const volume = Number((e.currentTarget as HTMLInputElement).value);
+    this.volumeDraft = volume;
+    this.volumeDragging = false;
+    this.sendRemote({ type: "volume", volume });
+  }
+
+  private clearRemoteError() {
+    this.remoteError = "";
+  }
+
+  private clearRemoteLost() {
+    this.remoteLost = "";
+  }
+
   override render() {
     const live = this.timeplan ? liveState(this.timeplan, this.now) : undefined;
     return html`<div id="wrapper">
@@ -730,7 +1225,9 @@ export default class CupViewAdminMusicControl extends LitElement {
         ${
           live
             ? html`${this.renderStatus(live)}
-              <section class="current">${this.renderCurrent(live)}</section>
+              <section class="current">
+                ${this.renderPlayback(live)} ${this.renderCurrent(live)}
+              </section>
               ${this.renderNext(live)}`
             : html`<section class="current placeholder">
               ${this.loaded ? "Kein Zeitplan geladen." : "Lade …"}
@@ -833,6 +1330,20 @@ export default class CupViewAdminMusicControl extends LitElement {
     if (!live.since) {
       return nothing;
     }
+    // An act's time runs from its music's start; without music from the
+    // act's start.
+    const act = live.act && this.actsById.get(live.act.id);
+    if (live.musicPending && act?.song_file) {
+      return html`<span
+          class="timer muted"
+          title="Die Kürzeit läuft ab dem Start der Musik"
+          >${formatDuration(0)}${
+            live.plannedSeconds
+              ? ` / ${formatDuration(live.plannedSeconds)}`
+              : nothing
+          }</span
+        ><span class="muted">wartet auf Musik</span>`;
+    }
     const elapsed = Math.max(
       0,
       (this.now - new Date(live.since).getTime()) / 1000,
@@ -863,16 +1374,20 @@ export default class CupViewAdminMusicControl extends LitElement {
     // It keeps its place in this template in both phases, so the playing
     // element isn't recreated when the act ends.
     const file = songFile(act, this.originalSongs.has(act.id));
+    // A remote player plays it instead (see `renderPlayback`).
     return html`${this.renderSong(act)}
       ${
-        file
+        file && !this.remotePlayer
           ? keyed(
               `${file}|${act.song_file_name ?? ""}`,
-              html`<audio
-              controls
-              preload="auto"
-              src="/songs/${file}"
-            ></audio>`,
+              html`<cup-waveform .limit=${this.actDuration(act.id)}
+              ><audio
+                controls
+                preload="auto"
+                src="/songs/${file}"
+                @playing=${this.onLocalPlaying}
+              ></audio
+            ></cup-waveform>`,
             )
           : nothing
       }
@@ -1093,6 +1608,323 @@ export default class CupViewAdminMusicControl extends LitElement {
     }
   }
 
+  /**
+   * The act whose song should be cued: the running act, otherwise the next
+   * one (as "Weiter" cues it on the active player).
+   */
+  private expectedAct(live?: Live) {
+    const act = live?.phase === "act" ? live.act : live?.next?.act;
+    return act ? this.actsById.get(act.id) : undefined;
+  }
+
+  /** Where the music plays and, on a remote player, its controls. */
+  private renderPlayback(live: Live) {
+    const remote = this.remotePlayer;
+    return html`${this.renderPlayerSelect(remote)}
+    ${
+      // E.g. a player that disconnected just before it was selected.
+      this.remoteError
+        ? html`<div class="error-banner remote-note" role="alert">
+            <span>${this.remoteError}</span>
+            <button
+              class="icon-btn"
+              title="Schließen"
+              aria-label="Schließen"
+              @click=${this.clearRemoteError}
+            >
+              close
+            </button>
+          </div>`
+        : nothing
+    }
+    ${
+      remote
+        ? this.renderRemote(live, remote)
+        : this.remoteLost
+          ? html`<div class="warn-banner remote-note" role="alert">
+              <span
+                >„${this.remoteLost}“ ist nicht mehr verbunden – die Musik läuft
+                wieder hier im Browser. Spielt der Player noch, dort stoppen.</span
+              >
+              <button
+                class="icon-btn"
+                title="Schließen"
+                aria-label="Schließen"
+                @click=${this.clearRemoteLost}
+              >
+                close
+              </button>
+            </div>`
+          : nothing
+    }`;
+  }
+
+  private renderPlayerSelect(remote?: PlayerInfo) {
+    const connected = this.remote.state === "open";
+    const players = this.hub?.players ?? [];
+    return html`<div class="players row" role="group" aria-label="Musik über">
+      <span class="muted">Musik über</span>
+      <button
+        class="btn small"
+        aria-pressed=${!remote}
+        title="Die Musik spielt in diesem Browser"
+        @click=${this.selectLocal}
+      >
+        <span class="material-icon" aria-hidden="true">computer</span>
+        Hier im Browser
+      </button>
+      ${repeat(
+        players,
+        (player) => player.id,
+        (player) => {
+          const status = player.status;
+          const time =
+            status.state === "playing" || status.state === "paused"
+              ? ` ${formatClock(
+                  player.id === remote?.id
+                    ? this.remotePosition()
+                    : status.position,
+                )}`
+              : "";
+          return html`<span class="player"
+            ><button
+            class="btn small"
+            aria-pressed=${player.id === remote?.id}
+            data-id=${player.id}
+            ?disabled=${!connected || !player.connected}
+            title="${player.name} (${playerKindTitles[player.kind]})${status.file ? ` · ${status.file}` : ""}${
+              status.error ? ` · Fehler: ${status.error}` : ""
+            }"
+            @click=${this.onSelectPlayer}
+          >
+            <span class="material-icon" aria-hidden="true"
+              >${playerKindIcons[player.kind]}</span
+            >
+            ${player.name}
+            <span class="kind">${playerKindLabel(player)}</span>
+            <span class="chip ${playbackTones[status.state]}"
+              >${playbackLabels[status.state]}${time}</span
+            >
+            ${
+              status.unlocked
+                ? nothing
+                : html`<span
+                    class="chip warn"
+                    title="Audio auf dem Player noch nicht aktiviert"
+                    >Audio gesperrt</span
+                  >`
+            }
+            ${
+              player.connected
+                ? nothing
+                : html`<span
+                    class="chip bad"
+                    title="Verbindung verloren – kommt der Player nicht gleich zurück, wird er entfernt"
+                    >getrennt</span
+                  >`
+            }
+          </button
+          >${
+            player.connected
+              ? nothing
+              : html`<button
+                  class="icon-btn danger"
+                  data-id=${player.id}
+                  title="„${player.name}“ entfernen"
+                  aria-label="„${player.name}“ entfernen"
+                  ?disabled=${!connected}
+                  @click=${this.onRemovePlayer}
+                >
+                  close
+                </button>`
+          }</span
+          >`;
+        },
+      )}
+      ${
+        connected && !players.length
+          ? html`<span class="muted small">kein Player verbunden</span>`
+          : nothing
+      }
+      <span
+        class="chip ${
+          connected ? "ok" : this.remote.state === "connecting" ? "info" : "bad"
+        }"
+        title="Verbindung der Fernsteuerung zum Server"
+        >Fernsteuerung ${connectionLabel(this.remote, this.now)}</span
+      >
+      <a
+        class="small"
+        href="/player"
+        target="_blank"
+        rel="noopener"
+        title="Den Web-Player in einem neuen Tab öffnen, z. B. am Tontisch"
+        >Player öffnen</a
+      >
+    </div>`;
+  }
+
+  private renderRemote(live: Live, player: PlayerInfo) {
+    const hub = this.hub;
+    if (!hub) {
+      return nothing;
+    }
+    const connected = this.remote.state === "open";
+    const status = player.status;
+    const cue = hub.cue;
+    const pending = hub.pending_cue;
+    const expected = this.expectedAct(live);
+    // "Weiter" cues it on its own, unless the act has no music.
+    const wrongCue =
+      expected?.song_file &&
+      cue?.act_id !== expected.id &&
+      pending?.act_id !== expected.id
+        ? expected
+        : undefined;
+    const whose = live.phase === "act" ? "aktuellen" : "nächsten";
+    const playing = status.state === "playing";
+    const volume = this.volumeDraft ?? hub.volume;
+    return html`<section class="remote ${connected ? "" : "offline"}">
+      ${
+        connected
+          ? nothing
+          : html`<div class="error-banner" role="alert">
+              <span
+                >Keine Verbindung zum Server
+                (${connectionLabel(this.remote, this.now)}) – „${player.name}“
+                lässt sich gerade nicht steuern, die Musik dort läuft weiter.</span
+              >
+              <button class="btn small" @click=${this.selectLocal}>
+                Hier im Browser abspielen
+              </button>
+            </div>`
+      }
+      <div class="row cue">
+        <span class="chip state ${playbackTones[status.state]}"
+          >${playbackLabels[status.state]}</span
+        >
+        <span class="material-icon inline" aria-hidden="true">music_note</span>
+        ${
+          cue
+            ? html`<span class="cue-label" title=${cue.file}>${cue.label}</span>
+                ${
+                  cue.original
+                    ? html`<span
+                        class="chip warn"
+                        title="Original statt der Version mit angeglichener Lautstärke"
+                        >Original</span
+                      >`
+                    : nothing
+                }`
+            : html`<span class="cue-label none">Kein Song geladen</span>`
+        }
+        <span class="muted small"
+          >auf „${player.name}“ (${playerKindLabel(player)})</span
+        >
+      </div>
+      ${
+        status.error
+          ? html`<div class="error-banner" role="alert">
+              ${player.name}: ${status.error}
+            </div>`
+          : nothing
+      }
+      ${
+        // A blocked play already says it.
+        status.unlocked || status.error === BLOCKED_MESSAGE
+          ? nothing
+          : html`<div class="warn-banner" role="alert">
+              Audio auf dem Player noch nicht aktiviert – dort „Audio
+              aktivieren“ klicken.
+            </div>`
+      }
+      ${
+        pending
+          ? html`<div class="info-banner" role="status">
+              <span
+                >Nächster Song wartet, bis die Musik endet:
+                <b>${pending.label}</b> – „Stopp“ lädt ihn sofort.</span
+              >
+            </div>`
+          : nothing
+      }
+      ${
+        wrongCue
+          ? html`<div class="warn-banner" role="alert">
+              <span
+                >${cue ? "Geladen ist nicht der Song der" : "Kein Song geladen –"}
+                ${whose} Kür:
+                <b>${actParticipantsLabel(wrongCue) || wrongCue.name}</b></span
+              >
+              <button
+                class="btn small"
+                data-id=${wrongCue.id}
+                ?disabled=${!connected}
+                title=${playing ? "Stoppt die laufende Musik" : ""}
+                @click=${this.onCueClick}
+              >
+                <span class="material-icon" aria-hidden="true">queue_music</span>
+                Song der ${whose} Kür laden
+              </button>
+            </div>`
+          : nothing
+      }
+      <cup-waveform
+        .src=${cue?.url ?? ""}
+        .limit=${this.actDuration(cue?.act_id)}
+        .position=${this.remotePosition()}
+        .playing=${playing && connected}
+        .duration=${status.duration ?? 0}
+        @seek=${this.onRemoteSeek}
+      ></cup-waveform>
+      <div class="row transport">
+        <button
+          class="btn primary"
+          ?disabled=${!connected || !cue || playing}
+          @click=${this.remotePlay}
+        >
+          <span class="material-icon" aria-hidden="true">play_arrow</span>
+          Abspielen
+        </button>
+        <button
+          class="btn"
+          ?disabled=${!connected || !playing}
+          @click=${this.remotePause}
+        >
+          <span class="material-icon" aria-hidden="true">pause</span>
+          Pause
+        </button>
+        <button
+          class="btn"
+          ?disabled=${!connected || !cue}
+          title="Anhalten und zurück an den Anfang"
+          @click=${this.remoteStop}
+        >
+          <span class="material-icon" aria-hidden="true">stop</span>
+          Stopp
+        </button>
+        <span class="spacer"></span>
+        <label class="volume" title="Lautstärke des Players">
+          <span class="material-icon inline" aria-hidden="true"
+            >${volume > 0 ? "volume_up" : "volume_off"}</span
+          >
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            aria-label="Lautstärke"
+            .value=${String(volume)}
+            ?disabled=${!connected}
+            @input=${this.onVolumeInput}
+            @change=${this.onVolumeChange}
+          />
+          ${Math.round(volume * 100)} %
+        </label>
+      </div>
+    </section>`;
+  }
+
   private renderSong(act: Act) {
     return html`<div class="song row">
       <span class="material-icon inline" aria-hidden="true"
@@ -1111,7 +1943,7 @@ export default class CupViewAdminMusicControl extends LitElement {
               title="Das Original statt der Version mit angeglichener Lautstärke abspielen"
               ><input
                 type="checkbox"
-                .checked=${this.originalSongs.has(act.id)}
+                .checked=${this.isOriginal(act.id)}
                 data-id=${act.id}
                 @change=${this.onOriginalChange}
               />
@@ -1128,6 +1960,14 @@ export default class CupViewAdminMusicControl extends LitElement {
     </div>`;
   }
 
+  /** Whether the original is played; remotely as the cued song says. */
+  private isOriginal(actId: string) {
+    const cue = this.hub?.cue;
+    return this.remotePlayer && cue?.act_id === actId
+      ? cue.original
+      : this.originalSongs.has(actId);
+  }
+
   private onOriginalChange(e: Event) {
     const input = e.currentTarget as HTMLInputElement;
     const id = input.dataset.id ?? "";
@@ -1138,6 +1978,14 @@ export default class CupViewAdminMusicControl extends LitElement {
       next.delete(id);
     }
     this.originalSongs = next;
+    // Remotely, the cued act's song (or the one to cue) is cued again.
+    const live = this.timeplan ? liveState(this.timeplan, this.now) : undefined;
+    if (
+      this.remotePlayer &&
+      (this.hub?.cue?.act_id === id || this.expectedAct(live)?.id === id)
+    ) {
+      this.sendRemote({ type: "cue", act_id: id, original: input.checked });
+    }
   }
 
   private renderSongChip(act: Act) {
