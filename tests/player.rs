@@ -467,6 +467,7 @@ async fn controller_sees_players_come_and_go(db: SqlitePool) {
             "pending_cue": null,
             "volume": 1.0,
             "original_acts": [],
+            "queue": [],
         })
     );
 
@@ -757,6 +758,163 @@ async fn closing_the_active_player_removes_it_after_a_while(db: SqlitePool) {
         .wait_for("an error", |m| m["type"] == "error")
         .await;
     assert_eq!(error["message"], "Dieser Player ist nicht mehr verbunden.");
+}
+
+/// The award ceremony queue as the controllers see it: `(label, played)`.
+fn queue(state: &Value) -> Vec<(String, bool)> {
+    state["queue"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| {
+            (
+                e["label"].as_str().unwrap().to_owned(),
+                e["played"].as_bool().unwrap(),
+            )
+        })
+        .collect()
+}
+
+#[sqlx::test]
+async fn the_award_queue_plays_songs_on_demand(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let admin = app.create_admin().await;
+    let acts = acts_with_songs(&app, &admin, &["Anna", "Berta"]).await;
+    let (anna, berta) = (acts[0], acts[1]);
+    let address = app.serve().await;
+    let (mut controller, _) = controller(address, &admin).await;
+
+    // Without a player, a music control plays it itself and marks it.
+    for act in [anna, berta] {
+        controller
+            .send(json!({ "type": "queue_add", "act_id": act, "original": true }))
+            .await;
+    }
+    let state = controller
+        .wait_state("two queued songs", |s| {
+            s["queue"].as_array().unwrap().len() == 2
+        })
+        .await;
+    assert_eq!(
+        queue(&state),
+        [
+            ("Anna Muster".to_owned(), false),
+            ("Berta Muster".to_owned(), false)
+        ]
+    );
+    let berta_entry = state["queue"][1]["id"].clone();
+    controller
+        .send(json!({ "type": "queue_move", "id": berta_entry, "to": 0 }))
+        .await;
+    controller
+        .wait_state("Berta first", |s| s["queue"][0]["id"] == berta_entry)
+        .await;
+    controller
+        .send(json!({ "type": "queue_play", "id": berta_entry }))
+        .await;
+    let error = controller
+        .wait_for("an error", |m| m["type"] == "error")
+        .await;
+    assert_eq!(error["message"], "Kein Player ausgewählt.");
+
+    // On the active player: loaded and started, stopping what played.
+    let (mut tonpult, id) = player(address, &admin, &mut controller, "Tonpult").await;
+    select(&mut controller, &id).await;
+    controller
+        .send(json!({ "type": "queue_play", "id": berta_entry }))
+        .await;
+    tonpult
+        .wait_for("Berta's cue", |m| {
+            m["type"] == "cue" && m["song"]["act_id"] == berta.to_string()
+        })
+        .await;
+    assert_eq!(tonpult.next().await, json!({ "type": "play" }));
+    let state = controller
+        .wait_state("Berta played", |s| s["queue"][0]["played"] == true)
+        .await;
+    assert_eq!(state["cue"]["act_id"], berta.to_string());
+
+    let anna_entry = state["queue"][1]["id"].clone();
+    controller
+        .send(json!({ "type": "queue_played", "id": anna_entry }))
+        .await;
+    let state = controller
+        .wait_state("Anna played", |s| s["queue"][1]["played"] == true)
+        .await;
+    assert_eq!(
+        queue(&state),
+        [
+            ("Berta Muster".to_owned(), true),
+            ("Anna Muster".to_owned(), true)
+        ]
+    );
+    controller
+        .send(json!({ "type": "queue_remove", "id": anna_entry }))
+        .await;
+    controller
+        .wait_state("one song left", |s| {
+            s["queue"].as_array().unwrap().len() == 1
+        })
+        .await;
+    controller.send(json!({ "type": "queue_clear" })).await;
+    controller
+        .wait_state("an empty queue", |s| {
+            s["queue"].as_array().unwrap().is_empty()
+        })
+        .await;
+
+    // Only acts with music.
+    controller
+        .send(json!({ "type": "queue_add", "act_id": Uuid::now_v7(), "original": false }))
+        .await;
+    let error = controller
+        .wait_for("an error", |m| m["type"] == "error")
+        .await;
+    assert_eq!(error["message"], "Für diese Kür gibt es keine Musik.");
+}
+
+#[sqlx::test]
+async fn the_playback_is_public(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let admin = app.create_admin().await;
+    let address = app.serve().await;
+    let (mut controller, _) = controller(address, &admin).await;
+    let idle = app.get("/api/query/get_playback", None).await;
+    assert_eq!(idle.status, StatusCode::OK);
+    assert_eq!(idle.body["state"], "idle");
+    assert_eq!(idle.body["act_id"], Value::Null);
+
+    // The music control plays in its own browser.
+    let act_id = Uuid::now_v7();
+    controller
+        .send(json!({
+            "type": "local_playback",
+            "act_id": act_id,
+            "original": false,
+            "state": "paused",
+            "position": 12.5,
+            "duration": 180.0,
+        }))
+        .await;
+    let deadline = Instant::now() + TIMEOUT;
+    let playback = loop {
+        let playback = app.get("/api/query/get_playback", None).await.body;
+        if playback["act_id"] == json!(act_id) {
+            break playback;
+        }
+        assert!(Instant::now() < deadline, "no playback within 5 s");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    };
+    assert_eq!(playback["state"], "paused");
+    assert_eq!(playback["position"], 12.5);
+
+    // Closing the music control ends it.
+    controller.close().await;
+    let deadline = Instant::now() + TIMEOUT;
+    while app.get("/api/query/get_playback", None).await.body["state"] != "idle" {
+        assert!(Instant::now() < deadline, "the playback stayed after closing");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
 }
 
 #[sqlx::test]

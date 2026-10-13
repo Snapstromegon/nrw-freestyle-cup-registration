@@ -59,6 +59,14 @@ export default class CupApp extends LitElement {
         ),
     },
     {
+      path: new URLPattern({ pathname: "/admin-awards" }),
+      load: loadAdmin(() => import("./views/cup-view-admin-awards.js")),
+      render: () =>
+        admin(() => html`<cup-view-admin-awards></cup-view-admin-awards>`, {
+          fullscreen: true,
+        }),
+    },
+    {
       // The web player of remote playback, e.g. on the sound-desk laptop.
       path: new URLPattern({ pathname: "/player" }),
       load: loadAdmin(() => import("./views/cup-view-player.js")),

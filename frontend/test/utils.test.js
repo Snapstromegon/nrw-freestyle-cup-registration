@@ -4,6 +4,7 @@ import { describe, test } from "node:test";
 import { ApiError, errorMessage, unwrap } from "../src/ts/api.ts";
 import {
   actClubNames,
+  actMatchesSearch,
   actParticipantsLabel,
   actTypeLabels,
   actTypeShort,
@@ -912,5 +913,31 @@ describe("songFile", () => {
   test("plays the original when asked or without a copy", () => {
     assert.equal(songFile(act, true), "a.mp3");
     assert.equal(songFile({ ...act, song_file_normalized: null }), "a.mp3");
+  });
+});
+
+describe("actMatchesSearch", () => {
+  const act = {
+    name: "Dschungelbuch",
+    group_name: null,
+    category: "EMU13",
+    song_file_name: "TheFatRat - Monkeys.mp3",
+    participants: [
+      { firstname: "Elias", lastname: "Weber", club_name: "RSC Köln" },
+    ],
+  };
+
+  test("finds the act, its riders, clubs and song", () => {
+    for (const search of [
+      "dschungel",
+      "elias weber",
+      "köln",
+      "emu13",
+      "MONKEYS",
+      " ",
+    ]) {
+      assert.ok(actMatchesSearch(act, search), search);
+    }
+    assert.ok(!actMatchesSearch(act, "Berta"));
   });
 });

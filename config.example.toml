@@ -1,6 +1,6 @@
 # Example configuration. Copy to config.toml (ignored by git) and adjust.
 #
-# Every setting in [server], [database], [smtp], [auth] and [admin] can also be
+# Every setting in [server], [database], [smtp], [auth], [admin] and [photos] can also be
 # set by a CLI flag or environment variable (including .env), which take
 # precedence over this file. Secrets are better kept in environment variables.
 #
@@ -34,6 +34,19 @@
 [auth]
 # jwt_secret = "…"                                   # JWT_SECRET
 
+# Optional: the photos of the info board, the newest after each act and random
+# recent ones in breaks; the music control previews the newest. The folder and
+# its direct subfolders count. One of:
+# - a folder in a Nextcloud account over WebDAV, with the user and an app
+#   password: https://cloud.example.org/remote.php/dav/files/anna/Fotos
+# - a Nextcloud share link (a password only if the share has one):
+#   https://cloud.example.org/s/AbC123
+# - a local folder, e.g. one the Nextcloud desktop client keeps in sync.
+# [photos]
+# source = "https://cloud.example.org/remote.php/dav/files/anna/Fotos"  # PHOTOS_SOURCE
+# user = "anna"                                      # PHOTOS_USER
+# password = "…"                                     # PHOTOS_PASSWORD
+
 # Only inserted if no admin exists yet.                # ADMIN (as JSON)
 # [admin]
 # name = "Admin"
@@ -62,6 +75,8 @@ max_fee_per_starter = 45
 venue = "Sporthalle Musterstadt, Musterstraße 1, 12345 Musterstadt"
 contact_email = "info@example.org"
 announcement_url = "https://example.org/ausschreibung/"
+# Optional: where the info board's photo QR code leads, e.g. a share link.
+photos_url = "https://fotos.hoeser.dev"
 
 [competition.payment]
 # Optional: leave it out until the deadline is decided.

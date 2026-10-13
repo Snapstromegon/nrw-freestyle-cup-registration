@@ -101,6 +101,28 @@ Event day setup:
 4. After the event, upload the database with `make sync-up` and make the
    online server load it with `POST /api/command/reload_db?token=<RELOAD_DB_TOKEN>`.
 
+## Info board, moderation screen and photos
+
+- **Info board** (`/info-board`, public): the big screen in the hall. After an
+  act it shows the newest photo, in breaks random recent ones, and a QR code
+  to the photos if `[competition] photos_url` is set.
+- **Photos:** set `[photos] source` (see `config.example.toml`): a Nextcloud
+  folder over WebDAV with a user and an app password, a Nextcloud share link,
+  or a local folder. The server lists it every 15 s (the folder and its direct
+  subfolders) and gets the images from Nextcloud scaled down to 1920 px where
+  it can. The music control shows the newest photo below the act ("Nach der
+  Kür auf dem Info-Board") and can hide it from the info board until the
+  server restarts.
+- **Moderation screen** (`/admin-moderation`, public): the clock, the delay
+  as a big timer, the current act with its riders, description and progress
+  (the act time from the music start, and the song's waveform while it plays),
+  what comes next, and the timeplan. It has no controls.
+- **Award ceremony** (`/admin-awards`, "Siegerehrung"): queues act songs
+  found by name, rider, club, category or song, and plays them on demand on
+  the player chosen in the music control, or else in its own browser. The
+  queue is kept on the server until it restarts, so every open view sees the
+  same.
+
 ## Demo data
 
 `cargo run --bin seed_demo` (or `make demo`) **deletes the configured database**

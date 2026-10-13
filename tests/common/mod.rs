@@ -23,6 +23,7 @@ use nrw_freestyle_cup_registration::{
     http_server::{HttpServerOptions, routes::get_api_router},
     jwt::JWTConfig,
     mailer::Mailer,
+    photos::{Photos, PhotosSettings},
     player::PlayerHub,
     reloadable_sqlite::ReloadableSqlite,
     seed,
@@ -49,6 +50,7 @@ pub struct TestApp {
     data_dir: TempDir,
     router: Router,
     pub player_hub: Arc<PlayerHub>,
+    pub photos: Arc<Photos>,
 }
 
 /// Directory removed again when dropped.
@@ -145,7 +147,14 @@ impl TestApp {
         seed_db(&db, &status).await;
         // Nothing listens on port 1, so any attempt to send a mail fails.
         let mailer = Mailer::from_url("smtp://127.0.0.1:1", FROM_ADDRESS).unwrap();
-        Self::build(db, mailer, None)
+        Self::build(db, mailer, None, None)
+    }
+
+    /// App showing the photos of `photos` on the info board.
+    pub async fn with_photos(db: SqlitePool, photos: PhotosSettings) -> Self {
+        seed_db(&db, &open_registration()).await;
+        let mailer = Mailer::from_url("smtp://127.0.0.1:1", FROM_ADDRESS).unwrap();
+        Self::build(db, mailer, None, Some(photos))
     }
 
     /// App sending mails to a dedicated Mailpit container.
@@ -153,10 +162,15 @@ impl TestApp {
         seed_db(&db, &open_registration()).await;
         let mailpit = Mailpit::start().await;
         let mailer = mailpit.mailer();
-        Self::build(db, mailer, Some(mailpit))
+        Self::build(db, mailer, Some(mailpit), None)
     }
 
-    fn build(db: SqlitePool, mailer: Mailer, mailpit: Option<Mailpit>) -> Self {
+    fn build(
+        db: SqlitePool,
+        mailer: Mailer,
+        mailpit: Option<Mailpit>,
+        photos: Option<PhotosSettings>,
+    ) -> Self {
         let mut validation = Validation::new(Algorithm::HS512);
         validation.validate_aud = false;
         let jwt = Arc::new(JWTConfig::new(
@@ -176,12 +190,14 @@ impl TestApp {
         };
         let reloadable = ReloadableSqlite::new(db.clone(), String::new());
         let player_hub = PlayerHub::new(reloadable.clone());
+        let photos = Photos::new(photos.as_ref()).unwrap();
         let router = get_api_router(
             Arc::new(options),
             reloadable,
             Arc::new(mailer),
             jwt.clone(),
             player_hub.clone(),
+            photos.clone(),
         );
         Self {
             db,
@@ -190,6 +206,7 @@ impl TestApp {
             data_dir,
             router,
             player_hub,
+            photos,
         }
     }
 

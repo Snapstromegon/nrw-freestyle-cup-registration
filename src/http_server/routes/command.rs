@@ -34,6 +34,7 @@ mod set_act_withdrawn;
 mod set_checked_in;
 mod set_club_group_members;
 mod set_payment;
+mod set_photo_hidden;
 mod set_song_checked;
 mod timeplan_backward;
 mod timeplan_forward;
@@ -68,6 +69,7 @@ pub fn get_command_router() -> OpenApiRouter {
         .routes(routes!(edit_club_act::edit_club_act))
         .routes(routes!(save_act_song::save_act_song))
         .routes(routes!(set_payment::set_payment))
+        .routes(routes!(set_photo_hidden::set_photo_hidden))
         .routes(routes!(set_song_checked::set_song_checked))
         .routes(routes!(set_act_withdrawn::set_act_withdrawn))
         .routes(routes!(set_act_order::set_act_order))

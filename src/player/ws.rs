@@ -160,7 +160,13 @@ impl Heartbeat {
     }
 }
 
-async fn controller(mut socket: WebSocket, hub: Arc<PlayerHub>) {
+async fn controller(socket: WebSocket, hub: Arc<PlayerHub>) {
+    let connection = hub.controller_connected();
+    run_controller(socket, &hub, connection).await;
+    hub.controller_gone(connection);
+}
+
+async fn run_controller(mut socket: WebSocket, hub: &PlayerHub, connection: u64) {
     let mut heartbeat = Heartbeat::new(hub.timing());
     let (state, mut updates) = hub.subscribe();
     if socket
@@ -198,6 +204,10 @@ async fn controller(mut socket: WebSocket, hub: Arc<PlayerHub>) {
                 heartbeat.seen();
                 let Message::Text(json) = message else { continue };
                 let reply = match serde_json::from_str::<ControllerMessage>(&json) {
+                    Ok(ControllerMessage::LocalPlayback(playback)) => {
+                        hub.local_playback(connection, playback);
+                        None
+                    }
                     Ok(command) => hub.command(command).await.err(),
                     Err(e) => Some(format!("Unbekannter Befehl: {e}")),
                 };

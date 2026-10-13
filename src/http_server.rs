@@ -5,7 +5,8 @@ use serde::Serialize;
 use tracing::info;
 
 use crate::{
-    jwt::JWTConfig, mailer::Mailer, player::PlayerHub, reloadable_sqlite::ReloadableSqlite,
+    jwt::JWTConfig, mailer::Mailer, photos::Photos, player::PlayerHub,
+    reloadable_sqlite::ReloadableSqlite,
 };
 
 pub mod extractor;
@@ -99,6 +100,7 @@ pub struct HttpServer {
     jwt: Arc<JWTConfig>,
     options: Arc<HttpServerOptions>,
     player_hub: Arc<PlayerHub>,
+    photos: Arc<Photos>,
 }
 
 impl HttpServer {
@@ -108,6 +110,7 @@ impl HttpServer {
         jwt: Arc<JWTConfig>,
         mailer: Arc<Mailer>,
         player_hub: Arc<PlayerHub>,
+        photos: Arc<Photos>,
     ) -> Self {
         Self {
             db,
@@ -115,6 +118,7 @@ impl HttpServer {
             options: Arc::new(options),
             jwt,
             player_hub,
+            photos,
         }
     }
 
@@ -128,6 +132,7 @@ impl HttpServer {
             self.mailer.clone(),
             self.jwt.clone(),
             self.player_hub.clone(),
+            self.photos.clone(),
         );
         let address = self.options.bind_address.clone();
 

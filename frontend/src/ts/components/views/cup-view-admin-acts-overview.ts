@@ -7,6 +7,7 @@ import { adminStyles } from "../../styles/admin";
 import { iconStyles, resetStyles } from "../../styles/base";
 import {
   actClubNames,
+  actMatchesSearch,
   actParticipantsLabel,
   actTypeLabels,
   actTypeShort,
@@ -561,22 +562,9 @@ export default class CupViewAdminActsOverview extends LitElement {
     }
   }
 
-  private matchesSearch(act: Act) {
-    const needle = this.search.trim().toLocaleLowerCase("de");
-    if (!needle) {
-      return true;
-    }
-    return [
-      act.name,
-      act.group_name ?? "",
-      ...act.participants.map((p) => `${p.firstname} ${p.lastname}`),
-      ...act.participants.map((p) => p.club_name),
-    ].some((text) => text.toLocaleLowerCase("de").includes(needle));
-  }
-
   private isVisible(act: Act) {
     return (
-      this.matchesSearch(act) &&
+      actMatchesSearch(act, this.search) &&
       [...this.filters].every((filter) => this.matchesFilter(act, filter))
     );
   }
@@ -744,7 +732,7 @@ export default class CupViewAdminActsOverview extends LitElement {
       <input
         class="inline"
         type="search"
-        placeholder="Suche: Kür, Gruppe, Fahrer, Verein"
+        placeholder="Suche: Kür, Gruppe, Fahrer, Verein, Song"
         aria-label="Suche"
         .value=${this.search}
         @input=${this.onSearchInput}

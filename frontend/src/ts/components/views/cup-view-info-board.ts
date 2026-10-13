@@ -8,6 +8,7 @@ import "../elements/cup-timeplan.js";
 import "../elements/cup-clock.js";
 import "../elements/cup-countdown.js";
 import "../elements/cup-fotobox.js";
+import "../elements/cup-qr.js";
 import {
   type SystemStatus,
   systemStatusContext,
@@ -149,12 +150,21 @@ export default class CupViewInfoBoard extends LitElement {
       #qrcode {
         grid-area: qrcode;
         place-self: center;
-        img {
-          height: 15dvh;
+        display: grid;
+        justify-items: center;
+        cup-qr {
+          width: 15dvh;
         }
         h2 {
           text-align: center;
           margin-bottom: 1vh;
+        }
+        .url {
+          margin-top: 0.5vh;
+          font-size: 1.6vh;
+          max-width: 22vw;
+          overflow-wrap: anywhere;
+          text-align: center;
         }
       }
     }
@@ -424,7 +434,7 @@ export default class CupViewInfoBoard extends LitElement {
           <cup-fotobox
             src=${
               lastEntry
-                ? "http://nrw-cup-fotos:8080/random"
+                ? "/api/photos/random"
                 : "/assets/images/logo_with_blobs.svg"
             }
             auto-reload
@@ -460,9 +470,7 @@ export default class CupViewInfoBoard extends LitElement {
       case TimeplanStatus.Judging:
         return html`<div class="judging">
           <cup-fotobox
-            src="http://nrw-cup-fotos:8080/newest?date=${Math.floor(
-              Date.now() / 1000 / 60,
-            )}"
+            src="/api/photos/newest?date=${Math.floor(Date.now() / 1000 / 60)}"
           ></cup-fotobox>
           <section>
             <h3>Das war...</h3>
@@ -485,6 +493,19 @@ export default class CupViewInfoBoard extends LitElement {
     return nothing;
   }
 
+  /** The QR code to the photos, if the event config has a link. */
+  renderPhotosQr() {
+    const url = this.systemStatus?.competition?.photos_url;
+    if (!url) {
+      return nothing;
+    }
+    return html`<div id="qrcode">
+      <h2>Fotos</h2>
+      <cup-qr .value=${url} label="QR-Code zu den Fotos"></cup-qr>
+      <span class="url">${url.replace(/^https?:\/\//, "").replace(/\/$/, "")}</span>
+    </div>`;
+  }
+
   override render() {
     return html`
       <div id="wrapper">
@@ -495,13 +516,7 @@ export default class CupViewInfoBoard extends LitElement {
             src="/assets/images/nrw-freestyle-cup.svg"
             alt=${competitionName(this.systemStatus?.competition)}
           />
-          <div id="qrcode">
-            <h2>Fotos</h2>
-            <img
-              src="/assets/images/qrcode-fotos.svg"
-              alt="${competitionName(this.systemStatus?.competition)} Fotos QR Code"
-            />
-          </div>
+          ${this.renderPhotosQr()}
           <cup-timeplan .timeplan=${this.predictedTimeplan}></cup-timeplan>
         </aside>
         <main>${this.renderMain()}</main>

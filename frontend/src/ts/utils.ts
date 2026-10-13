@@ -494,6 +494,38 @@ export const actClubNames = (act: {
   participants: Pick<ParticipantLike, "club_name">[];
 }) => [...new Set(act.participants.map((p) => p.club_name))];
 
+/**
+ * Whether an act matches a search (case-insensitive): its name, group,
+ * category, riders, their clubs or the uploaded song's name. An empty search
+ * matches.
+ */
+export const actMatchesSearch = (
+  act: {
+    name: string;
+    group_name?: string | null;
+    category?: string | null;
+    song_file_name?: string | null;
+    participants: Pick<
+      ParticipantLike,
+      "firstname" | "lastname" | "club_name"
+    >[];
+  },
+  search: string,
+) => {
+  const needle = search.trim().toLocaleLowerCase("de");
+  if (!needle) {
+    return true;
+  }
+  return [
+    act.name,
+    act.group_name ?? "",
+    act.category ?? "",
+    act.song_file_name ?? "",
+    ...act.participants.map((p) => `${p.firstname} ${p.lastname}`),
+    ...act.participants.map((p) => p.club_name),
+  ].some((text) => text.toLocaleLowerCase("de").includes(needle));
+};
+
 /** Check-in time per starter id; a missing or empty entry means not checked in. */
 export type CheckInMap = ReadonlyMap<string, string | null | undefined>;
 

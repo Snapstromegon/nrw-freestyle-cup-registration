@@ -32,204 +32,29 @@ import {
   formatDuration,
   formatTime,
   isGroupActType,
-  judgingAfterBlockEnd,
-  lastTimeplanEntry,
   nextTimeplanEntry,
   normalizationLabel,
   songFile,
 } from "../../utils";
+import {
+  entryTitle,
+  type Live,
+  liveState,
+  phaseLabels,
+  phaseTimer,
+  phaseTones,
+  scheduleOffset,
+  type Timeplan,
+  type TimeplanAct,
+} from "../../live";
 import { formatClock } from "../../waveform";
 import "../elements/cup-waveform.js";
 import "../elements/cup-act-participants.js";
 import "../elements/cup-timeplan.js";
 
 type Act = components["schemas"]["Act"];
-type Timeplan = components["schemas"]["Timeplan"];
-type TimeplanItem = components["schemas"]["TimeplanItem"];
-type TimeplanAct = components["schemas"]["TimeplanAct"];
-type CategoryEntry = Extract<
-  components["schemas"]["TimeplanEntry"],
-  { Category: unknown }
->["Category"];
-
-/** What is happening right now. */
-type Phase =
-  | "before"
-  | "pause"
-  | "done"
-  | "warmup"
-  | "act"
-  | "judging"
-  | "empty"
-  | "custom";
-
-const phaseLabels: Record<Phase, string> = {
-  before: "Nicht gestartet",
-  pause: "Pause",
-  done: "Beendet",
-  warmup: "Einfahrzeit",
-  act: "Kür",
-  judging: "Bewertung",
-  empty: "Ohne Küren",
-  custom: "Programmpunkt",
-};
-
-const phaseTones: Record<Phase, string> = {
-  before: "muted",
-  pause: "muted",
-  done: "muted",
-  warmup: "info",
-  act: "ok",
-  judging: "warn",
-  empty: "muted",
-  custom: "info",
-};
-
-interface NextAct {
-  item: TimeplanItem;
-  category: CategoryEntry;
-  act: TimeplanAct;
-}
-
-interface Live {
-  phase: Phase;
-  /** The running timeplan entry. */
-  entry?: TimeplanItem;
-  /**
-   * The block shown as the title: the running entry, or the block that just
-   * ended while its last act is still being judged.
-   */
-  block?: TimeplanItem;
-  category?: CategoryEntry;
-  /** The running act, or the act being judged. */
-  act?: TimeplanAct;
-  /** The next act to start, possibly in a later block. */
-  next?: NextAct;
-  /** The next timeplan entry to start, if none is running. */
-  nextEntry?: TimeplanItem;
-  /** The last ended timeplan entry, if none is running. */
-  lastEntry?: TimeplanItem;
-  /** Start of the current phase and its planned length in seconds. */
-  since?: string | null;
-  plannedSeconds?: number;
-  /**
-   * The running act's music hasn't started yet; its time runs from then, so
-   * `since` is only the act's start.
-   */
-  musicPending?: boolean;
-}
-
-const entryTitle = (item: TimeplanItem) =>
-  "Category" in item.timeplan_entry
-    ? item.timeplan_entry.Category.description
-    : item.timeplan_entry.Custom.label;
-
-const findNextAct = (timeplan: Timeplan): NextAct | undefined => {
-  for (const item of timeplan.items) {
-    if (item.status === "Ended" || !("Category" in item.timeplan_entry)) {
-      continue;
-    }
-    const category = item.timeplan_entry.Category;
-    const act = category.acts.find((a) => a.status === "Planned");
-    if (act) {
-      return { item, category, act };
-    }
-  }
-  return undefined;
-};
-
-/**
- * Derives the live state the same way `timeplan_forward` sees it. `now` (ms)
- * decides whether the last act of an ended block is still being judged.
- */
-const liveState = (timeplan: Timeplan, now: number): Live => {
-  const next = findNextAct(timeplan);
-  const entry = timeplan.items.find((item) => item.status === "Started");
-  if (!entry) {
-    // Skipped empty blocks are neither the last nor the next entry.
-    const lastEntry = lastTimeplanEntry(timeplan);
-    const nextEntry = nextTimeplanEntry(timeplan);
-    // Ending the last act ends its block at once, but it is judged afterwards.
-    const judging = judgingAfterBlockEnd(timeplan, now);
-    if (judging) {
-      return {
-        phase: "judging",
-        block: judging.entry,
-        category: judging.category,
-        act: judging.act,
-        next,
-        nextEntry,
-        lastEntry,
-        since: judging.act.ended_at,
-        plannedSeconds: judging.category.judge_duration_seconds,
-      };
-    }
-    return {
-      phase: !lastEntry ? "before" : nextEntry ? "pause" : "done",
-      next,
-      nextEntry,
-      lastEntry,
-      since: lastEntry?.ended_at,
-    };
-  }
-  if ("Custom" in entry.timeplan_entry) {
-    return {
-      phase: "custom",
-      entry,
-      block: entry,
-      next,
-      since: entry.started_at,
-      plannedSeconds: entry.timeplan_entry.Custom.duration_seconds,
-    };
-  }
-  const category = entry.timeplan_entry.Category;
-  const running = category.acts.find((a) => a.status === "Started");
-  if (running) {
-    return {
-      phase: "act",
-      entry,
-      block: entry,
-      category,
-      act: running,
-      next,
-      since: running.music_started_at ?? running.started_at,
-      musicPending: !running.music_started_at,
-      plannedSeconds: category.act_duration_seconds,
-    };
-  }
-  const judged = category.acts.findLast((a) => a.status === "Ended");
-  if (judged) {
-    return {
-      phase: "judging",
-      entry,
-      block: entry,
-      category,
-      act: judged,
-      next,
-      since: judged.ended_at,
-      plannedSeconds: category.judge_duration_seconds,
-    };
-  }
-  return {
-    phase: category.acts.length ? "warmup" : "empty",
-    entry,
-    block: entry,
-    category,
-    next,
-    since: entry.started_at,
-    plannedSeconds: category.acts.length ? category.warmup_seconds : undefined,
-  };
-};
-
-/**
- * How far the running plan is off, worded and coloured like the timeplan
- * view (/admin-timeplan): amber when behind, red from 15 minutes on.
- */
-const scheduleOffset = (seconds: number) => ({
-  label: seconds > 0 ? "Verzug" : seconds < 0 ? "Vorsprung" : "im Plan",
-  value: formatDuration(Math.abs(seconds)),
-  tone: seconds <= 0 ? "ok" : seconds <= 15 * 60 ? "warn" : "bad",
-});
+type Playback = components["schemas"]["Playback"];
+type PhotosOverview = components["schemas"]["PhotosOverview"];
 
 /** Lets a reload after a command release the buttons after this long. */
 const RELOAD_TIMEOUT_MS = 5000;
@@ -369,6 +194,35 @@ export default class CupViewAdminMusicControl extends LitElement {
         flex: 1 1 auto;
         min-height: 0;
         overflow: auto;
+      }
+
+      /*
+       * The photo the info board shows after the act: below the act, filling
+       * the space down to "Als Nächstes".
+       */
+      .photo-preview {
+        flex: 1 1 auto;
+        min-height: 10rem;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        margin: 0;
+      }
+
+      .photo-preview figcaption {
+        font-weight: 650;
+      }
+
+      .photo-preview img {
+        flex: 1 1 auto;
+        min-height: 0;
+        width: 100%;
+        object-fit: contain;
+        object-position: left center;
+      }
+
+      .photo-preview .row {
+        flex: none;
       }
 
       /* ---------- Main ---------- */
@@ -771,6 +625,8 @@ export default class CupViewAdminMusicControl extends LitElement {
   @state() private localOverride = false;
   /** The volume slider's value while it is dragged and not yet confirmed. */
   @state() private volumeDraft?: number;
+  /** The info board's photos (`[photos]`). */
+  @state() private photos?: PhotosOverview;
 
   @queryAll("audio") private audios!: NodeListOf<HTMLAudioElement>;
 
@@ -803,10 +659,18 @@ export default class CupViewAdminMusicControl extends LitElement {
   private timeplanSeq = 0;
 
   poll = new PollController(this, 3000, (signal) => this.load(signal));
+  photosPoll = new PollController(this, 15_000, (signal) =>
+    this.loadPhotos(signal),
+  );
   // Ticks the phase timer.
   clock = new PollController(this, 1000, () => {
     this.now = Date.now();
   });
+  /**
+   * Unlike the polls, it goes on in a hidden tab: the song plays on there,
+   * and the moderation screen shows it.
+   */
+  private reportTimer?: ReturnType<typeof setInterval>;
 
   override updated(changed: Map<PropertyKey, unknown>) {
     super.updated(changed);
@@ -824,14 +688,17 @@ export default class CupViewAdminMusicControl extends LitElement {
     super.connectedCallback?.();
     window.addEventListener("beforeunload", this.onBeforeUnload);
     this.load();
+    void this.photosPoll.runNow();
     if (this.user?.is_admin) {
       this.remote.open();
     }
+    this.reportTimer = setInterval(() => this.reportLocalPlayback(), 1000);
   }
 
   override disconnectedCallback() {
     super.disconnectedCallback?.();
     window.removeEventListener("beforeunload", this.onBeforeUnload);
+    clearInterval(this.reportTimer);
     this.remote.close();
     clearTimeout(this.seekTimer);
     this.seekTimer = undefined;
@@ -1015,6 +882,118 @@ export default class CupViewAdminMusicControl extends LitElement {
       await this.reload();
     } catch (error) {
       this.commandError = `Start der Musik nicht gemeldet, die Kürzeit läuft noch nicht: ${errorMessage(error)}`;
+    }
+  }
+
+  /**
+   * Tells the server what plays in this browser, for the moderation screen,
+   * as long as no player plays remotely.
+   */
+  private reportLocalPlayback() {
+    if (this.remotePlayer || this.remote.state !== "open") {
+      return;
+    }
+    const audio = [...this.audios].find((element) => element.dataset.act);
+    const playback: Playback = audio
+      ? {
+          act_id: audio.dataset.act ?? null,
+          original: audio.dataset.original === "true",
+          state: audio.ended
+            ? "ended"
+            : !audio.paused
+              ? "playing"
+              : audio.currentTime > 0
+                ? "paused"
+                : "ready",
+          position: audio.currentTime,
+          duration: Number.isFinite(audio.duration) ? audio.duration : null,
+        }
+      : {
+          act_id: null,
+          original: false,
+          state: "idle",
+          position: 0,
+          duration: null,
+        };
+    this.remote.send({ type: "local_playback", ...playback });
+  }
+
+  private async loadPhotos(signal: AbortSignal) {
+    this.photos = unwrap(await client.GET("/api/query/get_photos", { signal }));
+  }
+
+  /**
+   * The newest photo, which the info board shows after the act, with a hint
+   * if it was taken before the act started.
+   */
+  private renderPhotoPreview(live: Live) {
+    const photos = this.photos;
+    if (!photos?.configured) {
+      return nothing;
+    }
+    const newest = photos.newest;
+    const minutes = newest
+      ? Math.floor((this.now - Date.parse(newest.modified)) / 60_000)
+      : 0;
+    const actStart = live.act?.started_at;
+    const older =
+      newest && actStart && Date.parse(newest.modified) < Date.parse(actStart);
+    return html`<figure class="photo-preview">
+      <figcaption>
+        ${live.phase === "judging" ? "Jetzt" : "Nach der Kür"} auf dem
+        Info-Board
+      </figcaption>
+      ${
+        newest
+          ? html`<img src=${newest.url} alt="Neuestes Foto" />
+            <div class="row small">
+              <span
+                >${formatTime(newest.modified)}
+                <span class="muted"
+                  >(${minutes < 1 ? "gerade eben" : `vor ${minutes} min`})</span
+                ></span
+              >
+              <button
+                class="btn small"
+                data-id=${newest.id}
+                title="Das Info-Board zeigt dann das nächstneuere Foto"
+                @click=${this.hidePhoto}
+              >
+                Nicht zeigen
+              </button>
+            </div>`
+          : html`<span class="muted small">Noch keine Fotos.</span>`
+      }
+      ${
+        older
+          ? html`<span class="text-warn small">Noch kein Foto von dieser Kür</span>`
+          : nothing
+      }
+      ${
+        photos.error
+          ? html`<span class="text-bad small" title=${photos.error}
+              >Fotos nicht erreichbar</span
+            >`
+          : nothing
+      }
+    </figure>`;
+  }
+
+  /** Hides the newest photo from the info board. */
+  private async hidePhoto(e: Event) {
+    const id = (e.currentTarget as HTMLElement).dataset.id;
+    if (!id) {
+      return;
+    }
+    try {
+      unwrap(
+        await client.POST("/api/command/set_photo_hidden", {
+          body: { id, hidden: true },
+        }),
+      );
+      await this.photosPoll.runNow();
+    } catch (error) {
+      this.commandError = `Foto nicht ausgeblendet: ${errorMessage(error)}`;
     }
   }
 
@@ -1333,22 +1312,20 @@ export default class CupViewAdminMusicControl extends LitElement {
     // An act's time runs from its music's start; without music from the
     // act's start.
     const act = live.act && this.actsById.get(live.act.id);
-    if (live.musicPending && act?.song_file) {
+    const timer = phaseTimer(live, this.now, !!act?.song_file);
+    if (!timer) {
+      return nothing;
+    }
+    const { elapsed, planned } = timer;
+    if (timer.waiting) {
       return html`<span
           class="timer muted"
           title="Die Kürzeit läuft ab dem Start der Musik"
           >${formatDuration(0)}${
-            live.plannedSeconds
-              ? ` / ${formatDuration(live.plannedSeconds)}`
-              : nothing
+            planned ? ` / ${formatDuration(planned)}` : nothing
           }</span
         ><span class="muted">wartet auf Musik</span>`;
     }
-    const elapsed = Math.max(
-      0,
-      (this.now - new Date(live.since).getTime()) / 1000,
-    );
-    const planned = live.plannedSeconds;
     if (!planned) {
       return html`<span class="timer muted" title="Dauer bisher"
         >seit ${formatDuration(elapsed)}</span
@@ -1385,7 +1362,13 @@ export default class CupViewAdminMusicControl extends LitElement {
                 controls
                 preload="auto"
                 src="/songs/${file}"
+                data-act=${act.id}
+                data-original=${this.originalSongs.has(act.id) ? "true" : "false"}
                 @playing=${this.onLocalPlaying}
+                @play=${this.reportLocalPlayback}
+                @pause=${this.reportLocalPlayback}
+                @ended=${this.reportLocalPlayback}
+                @seeked=${this.reportLocalPlayback}
               ></audio
             ></cup-waveform>`,
             )
@@ -1412,7 +1395,8 @@ export default class CupViewAdminMusicControl extends LitElement {
         act.description
           ? html`<p class="description">${act.description}</p>`
           : nothing
-      }`;
+      }
+      ${this.renderPhotoPreview(live)}`;
   }
 
   /** Phases without an act; the status line above already names them. */
@@ -1435,6 +1419,7 @@ export default class CupViewAdminMusicControl extends LitElement {
               <span
                 >Geplant bis ca. ${formatTime(live.entry.predicted_end)}</span
               >
+              <a href="/admin-awards">Musik für die Siegerehrung</a>
             </div>`
           : nothing;
       case "done":
@@ -1775,10 +1760,12 @@ export default class CupViewAdminMusicControl extends LitElement {
     const pending = hub.pending_cue;
     const expected = this.expectedAct(live);
     // "Weiter" cues it on its own, unless the act has no music.
+    // Nor while a song from the award queue is loaded.
     const wrongCue =
       expected?.song_file &&
       cue?.act_id !== expected.id &&
-      pending?.act_id !== expected.id
+      pending?.act_id !== expected.id &&
+      !hub.queue.some((entry) => entry.act_id === cue?.act_id)
         ? expected
         : undefined;
     const whose = live.phase === "act" ? "aktuellen" : "nächsten";

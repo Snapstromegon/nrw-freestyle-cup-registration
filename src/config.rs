@@ -63,6 +63,17 @@ pub struct CliArgs {
     /// card (remote playback). Needs a build with the `local-audio` feature.
     #[clap(long, env = "LOCAL_PLAYER")]
     pub local_player: Option<String>,
+    /// The photos for the info board: a Nextcloud folder (WebDAV URL), a
+    /// Nextcloud share link or a local folder.
+    #[clap(long, env = "PHOTOS_SOURCE")]
+    pub photos_source: Option<String>,
+    /// Nextcloud user for a WebDAV folder.
+    #[clap(long, env = "PHOTOS_USER")]
+    pub photos_user: Option<String>,
+    /// Nextcloud app password for a WebDAV folder, or a share link's
+    /// password.
+    #[clap(long, env = "PHOTOS_PASSWORD", hide_env_values = true)]
+    pub photos_password: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -73,6 +84,7 @@ pub struct ConfigFile {
     pub smtp: SmtpConfig,
     pub auth: AuthConfig,
     pub admin: Option<AdminConfig>,
+    pub photos: PhotosConfig,
     pub competition: Option<CompetitionConfig>,
     pub categories: Vec<CategoryConfig>,
     pub timeplan: Vec<TimeplanEntryConfig>,
@@ -107,6 +119,15 @@ pub struct ServerConfig {
     pub reload_db_token: Option<String>,
     pub metrics_token: Option<String>,
     pub local_player: Option<String>,
+}
+
+/// Where the info board's photos come from; see `crate::photos`.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct PhotosConfig {
+    pub source: Option<String>,
+    pub user: Option<String>,
+    pub password: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -174,6 +195,9 @@ pub struct CompetitionConfig {
     /// Link to the official announcement (Ausschreibung).
     #[serde(default)]
     pub announcement_url: Option<String>,
+    /// Where the info board's photo QR code leads, e.g. the photo gallery.
+    #[serde(default)]
+    pub photos_url: Option<String>,
     #[serde(default)]
     pub payment: PaymentConfig,
 }
@@ -349,6 +373,8 @@ pub struct Settings {
     pub reload_db_token: String,
     pub metrics_token: Option<String>,
     pub local_player: Option<String>,
+    /// Where the info board's photos come from, if anywhere.
+    pub photos: Option<crate::photos::PhotosSettings>,
     pub competition: Option<CompetitionConfig>,
     pub categories: Vec<CategoryConfig>,
     pub timeplan: Vec<TimeplanEntryConfig>,
@@ -454,6 +480,15 @@ impl Settings {
                 .local_player
                 .or(file.server.local_player)
                 .filter(|name| !name.trim().is_empty()),
+            photos: cli
+                .photos_source
+                .or(file.photos.source)
+                .filter(|source| !source.trim().is_empty())
+                .map(|source| crate::photos::PhotosSettings {
+                    source: source.trim().to_string(),
+                    user: cli.photos_user.or(file.photos.user),
+                    password: cli.photos_password.or(file.photos.password),
+                }),
             competition: file.competition,
             categories: file.categories,
             timeplan: file.timeplan,

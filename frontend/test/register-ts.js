@@ -5,6 +5,22 @@ import { registerHooks } from "node:module";
 import ts from "typescript";
 
 registerHooks({
+  // Relative imports without an extension (`./utils`) mean the `.ts` file,
+  // as for Vite.
+  resolve(specifier, context, nextResolve) {
+    try {
+      return nextResolve(specifier, context);
+    } catch (error) {
+      if (
+        error?.code === "ERR_MODULE_NOT_FOUND" &&
+        specifier.startsWith(".") &&
+        !/\.[a-z]+$/i.test(specifier)
+      ) {
+        return nextResolve(`${specifier}.ts`, context);
+      }
+      throw error;
+    }
+  },
   load(url, context, nextLoad) {
     if (!url.endsWith(".ts")) {
       return nextLoad(url, context);

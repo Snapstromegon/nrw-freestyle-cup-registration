@@ -32,6 +32,7 @@ const adminLinks: NavLink[] = [
   { href: "/admin-categories", label: "Kategorien" },
   { href: "/admin-timeplan", label: "Zeitplan" },
   { href: "/admin-music-control", label: "Musik" },
+  { href: "/admin-awards", label: "Siegerehrung" },
   { href: "/admin-medals", label: "Medaillen" },
 ];
 

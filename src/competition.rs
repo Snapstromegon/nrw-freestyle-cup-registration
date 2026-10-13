@@ -32,6 +32,8 @@ pub struct Competition {
     pub contact_email: Option<String>,
     /// Link to the official announcement (Ausschreibung).
     pub announcement_url: Option<String>,
+    /// Where the info board's photo QR code leads.
+    pub photos_url: Option<String>,
     #[serde(with = "iso_date::option")]
     pub payment_deadline: Option<Date>,
     pub payment_account_holder: Option<String>,
@@ -62,6 +64,7 @@ impl Competition {
                 venue,
                 contact_email,
                 announcement_url,
+                photos_url,
                 payment_deadline as "payment_deadline: Date",
                 payment_account_holder,
                 payment_iban,
@@ -95,9 +98,9 @@ pub async fn upsert_competition(
         INSERT INTO competition (
             id, name, location, start_date, end_date, determining_day,
             registration_start, registration_end, music_upload_end,
-            fee_per_start, max_fee_per_starter, venue, contact_email, announcement_url,
+            fee_per_start, max_fee_per_starter, venue, contact_email, announcement_url, photos_url,
             payment_deadline, payment_account_holder, payment_iban, payment_bic, payment_reference
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (id) DO UPDATE SET
             name = excluded.name,
             location = excluded.location,
@@ -112,6 +115,7 @@ pub async fn upsert_competition(
             venue = excluded.venue,
             contact_email = excluded.contact_email,
             announcement_url = excluded.announcement_url,
+            photos_url = excluded.photos_url,
             payment_deadline = excluded.payment_deadline,
             payment_account_holder = excluded.payment_account_holder,
             payment_iban = excluded.payment_iban,
@@ -132,6 +136,7 @@ pub async fn upsert_competition(
         config.venue,
         config.contact_email,
         config.announcement_url,
+        config.photos_url,
         config.payment.deadline,
         config.payment.account_holder,
         config.payment.iban,

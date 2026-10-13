@@ -7,6 +7,7 @@ use nrw_freestyle_cup_registration::{
     jwt::JWTConfig,
     mailer::Mailer,
     normalize,
+    photos::Photos,
     player::PlayerHub,
     reloadable_sqlite::{self, ReloadableSqlite},
     seed, utils,
@@ -102,6 +103,8 @@ async fn main() -> eyre::Result<()> {
     if let Some(name) = settings.local_player {
         start_local_player(&player_hub, &settings.data_path, name);
     }
+    let photos = Photos::new(settings.photos.as_ref()).map_err(|e| eyre!(e))?;
+    photos.start();
 
     HttpServer::new(
         HttpServerOptions {
@@ -115,6 +118,7 @@ async fn main() -> eyre::Result<()> {
         Arc::new(jwt_config),
         Arc::new(mailer),
         player_hub,
+        photos,
     )
     .start(shutdown_signal())
     .await?;

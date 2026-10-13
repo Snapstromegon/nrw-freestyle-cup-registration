@@ -1,5 +1,6 @@
 pub mod command;
 pub mod http_types;
+mod photos;
 pub mod query;
 
 use axum::{Extension, Router, extract::Request, http::HeaderName, middleware, routing::get};
@@ -21,6 +22,7 @@ use crate::{
     jwt::JWTConfig,
     mailer::Mailer,
     metrics,
+    photos::Photos,
     player::{self, PlayerHub},
     reloadable_sqlite::ReloadableSqlite,
 };
@@ -75,10 +77,14 @@ pub fn get_api_router(
     mailer: Arc<Mailer>,
     jwt_config: Arc<JWTConfig>,
     player_hub: Arc<PlayerHub>,
+    photos: Arc<Photos>,
 ) -> Router {
     let (router, openapi) = get_openapi_router();
     router
         .route("/api/ws/player", get(player::ws::player_ws))
+        .route("/api/photos/newest", get(photos::newest))
+        .route("/api/photos/random", get(photos::random))
+        .route("/api/photos/{id}", get(photos::image))
         .route_layer(middleware::from_fn(metrics::track_http))
         .route("/metrics", get(metrics::metrics_handler))
         .merge(SwaggerUi::new("/swagger").url("/openapi.json", openapi))
@@ -87,6 +93,7 @@ pub fn get_api_router(
         .layer(Extension(jwt_config))
         .layer(Extension(http_options))
         .layer(Extension(player_hub))
+        .layer(Extension(photos))
 }
 
 #[must_use]
@@ -100,6 +107,7 @@ pub fn get_router(
     mailer: Arc<Mailer>,
     jwt_config: Arc<JWTConfig>,
     player_hub: Arc<PlayerHub>,
+    photos: Arc<Photos>,
 ) -> Router {
     let request_id_layer = ServiceBuilder::new()
         .layer(SetRequestIdLayer::new(
@@ -144,6 +152,7 @@ pub fn get_router(
             mailer,
             jwt_config,
             player_hub,
+            photos,
         ))
         .layer(request_id_layer)
 }

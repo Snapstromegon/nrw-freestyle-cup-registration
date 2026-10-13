@@ -2,6 +2,8 @@ use utoipa_axum::{router::OpenApiRouter, routes};
 
 mod get_act;
 mod get_club;
+mod get_photos;
+mod get_playback;
 mod get_startlist_csv;
 mod get_system_status;
 mod list_acts;
@@ -23,6 +25,8 @@ pub fn get_query_router() -> OpenApiRouter {
     OpenApiRouter::new()
         .routes(routes!(get_act::get_act))
         .routes(routes!(get_club::get_club))
+        .routes(routes!(get_photos::get_photos))
+        .routes(routes!(get_playback::get_playback))
         .routes(routes!(list_club_starters::list_club_starters))
         .routes(routes!(list_users::list_users))
         .routes(routes!(whoami::whoami))

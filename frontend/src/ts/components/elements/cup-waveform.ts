@@ -61,7 +61,8 @@ const loadPeaks = (url: string) => {
  * The waveform of a song with the played part, a playhead, elapsed and
  * remaining time, the loudest moment highlighted and marked (with a chip below
  * that jumps there), the end of the act's time marked (`limit`) and silence at
- * the start and end shaded. Clicking or dragging seeks.
+ * the start and end shaded. Clicking or dragging seeks, unless `readonly`.
+ * Its height is `--wave-height` (4rem by default).
  *
  * Wrap an `<audio>` element to follow and control it:
  * `<cup-waveform><audio src="/songs/x.mp3" controls></audio></cup-waveform>`.
@@ -99,7 +100,7 @@ export default class CupWaveform extends LitElement {
       canvas {
         display: block;
         width: 100%;
-        height: 4rem;
+        height: var(--wave-height, 4rem);
         cursor: pointer;
         touch-action: none;
       }
@@ -176,8 +177,13 @@ export default class CupWaveform extends LitElement {
       }
 
       :host([compact]) .times,
-      :host([compact]) .marks {
+      :host([compact]) .marks,
+      :host([readonly]) .marks {
         display: none;
+      }
+
+      :host([readonly]) canvas {
+        cursor: default;
       }
     `,
   ];
@@ -205,6 +211,8 @@ export default class CupWaveform extends LitElement {
   @property({ type: Number }) limit = 0;
   /** A small, single-line variant for toolbars. */
   @property({ type: Boolean, reflect: true }) compact = false;
+  /** Only shows the song: no seeking, no button to the loudest moment. */
+  @property({ type: Boolean, reflect: true }) readonly = false;
 
   @state() private peaks: Peaks | null = null;
   @state() private audioSrc = "";
@@ -243,7 +251,8 @@ export default class CupWaveform extends LitElement {
           aria-valuemax=${Math.round(this.total)}
           aria-valuenow=${Math.round(this.now)}
           aria-valuetext="${formatClock(this.now)} von ${formatClock(this.total)}"
-          title="Klicken oder ziehen zum Springen"
+          aria-readonly=${this.readonly ? "true" : "false"}
+          title=${this.readonly ? nothing : "Klicken oder ziehen zum Springen"}
           @pointerdown=${this.onPointerDown}
           @pointermove=${this.onPointerMove}
           @pointerup=${this.onPointerUp}
@@ -455,6 +464,9 @@ export default class CupWaveform extends LitElement {
   }
 
   private onPointerDown(e: PointerEvent) {
+    if (this.readonly) {
+      return;
+    }
     this.seeking = true;
     (e.target as Element).setPointerCapture(e.pointerId);
     this.seekToPointer(e);

@@ -12,9 +12,13 @@
 //! disconnected, and comes back with the same id (`?id=`): it keeps its
 //! active role and gets the volume and the cue again. Commands sent while it
 //! is away are lost. A controller can remove it before that.
+//!
+//! For award ceremonies the controllers share a queue of act songs, played on
+//! demand: on the active player through the hub, or by a music control in
+//! its own browser.
 
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -53,6 +57,12 @@ pub const RECONNECT_GRACE: Duration = Duration::from_secs(20);
 pub const PING_EVERY: Duration = Duration::from_secs(10);
 /// A websocket that sent nothing for this long, not even a pong, is closed.
 pub const IDLE_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// How long a music control's report of its own playback counts, as a
+/// backstop: a closed connection drops its report at once. Music controls
+/// report every second, also from a hidden tab, but browsers slow the timers
+/// of a tab that is hidden and silent for minutes to once a minute.
+const LOCAL_PLAYBACK_FRESH: Duration = Duration::from_secs(75);
 
 /// The timeouts of remote playback; the tests shorten them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -114,6 +124,32 @@ impl PlaybackState {
     }
 }
 
+/// What plays: an act's song, its state and position. A music control
+/// reports it for its own browser; [`PlayerHub::playback`] tells it the
+/// moderation screen.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct Playback {
+    /// The act whose song is loaded, if any.
+    pub act_id: Option<Uuid>,
+    /// The original upload instead of the normalized copy.
+    pub original: bool,
+    pub state: PlaybackState,
+    /// In seconds.
+    pub position: f64,
+    /// In seconds, once known.
+    pub duration: Option<f64>,
+}
+
+impl Playback {
+    const IDLE: Self = Self {
+        act_id: None,
+        original: false,
+        state: PlaybackState::Idle,
+        position: 0.0,
+        duration: None,
+    };
+}
+
 /// What a player reports about itself.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
 pub struct PlayerStatus {
@@ -167,6 +203,19 @@ pub struct PlayerInfo {
     pub status: PlayerStatus,
 }
 
+/// A song in the award ceremony queue.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+pub struct QueueEntry {
+    pub id: Uuid,
+    pub act_id: Uuid,
+    /// The original upload instead of the normalized copy.
+    pub original: bool,
+    /// The act, e.g. "Sternenstaub – Anna Muster".
+    pub label: String,
+    /// Played already, on a player or in a music control's browser.
+    pub played: bool,
+}
+
 /// The state every controller sees.
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 pub struct HubState {
@@ -182,6 +231,8 @@ pub struct HubState {
     /// The acts whose original upload plays instead of the normalized copy,
     /// as cued last by a controller.
     pub original_acts: Vec<Uuid>,
+    /// The award ceremony queue, in order.
+    pub queue: Vec<QueueEntry>,
 }
 
 /// Controller → server.
@@ -214,6 +265,34 @@ pub enum ControllerMessage {
     Volume {
         volume: f64,
     },
+    /// What the music control plays in its own browser, for the moderation
+    /// screen; sent every second, also while it shows no song. The websocket
+    /// hands it to [`PlayerHub::local_playback`] with its connection.
+    LocalPlayback(Playback),
+    /// Adds an act's song to the end of the award ceremony queue.
+    QueueAdd {
+        act_id: Uuid,
+        original: bool,
+    },
+    QueueRemove {
+        id: Uuid,
+    },
+    /// Moves an entry to position `to` (0 is the first).
+    QueueMove {
+        id: Uuid,
+        to: usize,
+    },
+    /// Plays the entry on the active player: loads and starts it, stopping
+    /// what plays.
+    QueuePlay {
+        id: Uuid,
+    },
+    /// Marks the entry as played, e.g. after the music control played it in
+    /// its own browser.
+    QueuePlayed {
+        id: Uuid,
+    },
+    QueueClear,
 }
 
 /// Server → controller.
@@ -277,6 +356,8 @@ struct PlayerEntry {
     sender: mpsc::UnboundedSender<ToPlayer>,
     /// The serial of the player's latest connection.
     serial: u64,
+    /// When the player last reported its status.
+    reported_at: std::time::Instant,
 }
 
 struct Inner {
@@ -292,6 +373,10 @@ struct Inner {
     /// The act whose song the active player was told to play, the song's
     /// position and the time then; see [`PlayerHub::track_music_start`].
     music_start: Option<(Uuid, f64, std::time::Instant)>,
+    /// What each music control plays in its own browser, by connection, and
+    /// when it said so.
+    local_playback: BTreeMap<u64, (Playback, std::time::Instant)>,
+    queue: Vec<QueueEntry>,
     next_serial: u64,
     timing: Timing,
 }
@@ -316,6 +401,8 @@ impl PlayerHub {
                 prefetch: None,
                 originals: BTreeSet::new(),
                 music_start: None,
+                local_playback: BTreeMap::new(),
+                queue: vec![],
                 next_serial: 0,
                 timing: Timing::default(),
             }),
@@ -345,6 +432,7 @@ impl PlayerHub {
             pending_cue: inner.pending_cue.clone(),
             volume: inner.volume,
             original_acts: inner.originals.iter().copied().collect(),
+            queue: inner.queue.clone(),
         }
     }
 
@@ -371,6 +459,26 @@ impl PlayerHub {
             });
         }
         inner.prefetch = Some(songs);
+    }
+
+    /// A number for a new controller connection, for
+    /// [`Self::local_playback`] and [`Self::controller_gone`].
+    pub fn controller_connected(&self) -> u64 {
+        let mut inner = self.lock();
+        inner.next_serial += 1;
+        inner.next_serial
+    }
+
+    /// What the music control on `controller` plays in its own browser.
+    pub fn local_playback(&self, controller: u64, playback: Playback) {
+        self.lock()
+            .local_playback
+            .insert(controller, (playback, std::time::Instant::now()));
+    }
+
+    /// Forgets what the closed controller connection played.
+    pub fn controller_gone(&self, controller: u64) {
+        self.lock().local_playback.remove(&controller);
     }
 
     /// The current state and the updates after it.
@@ -409,6 +517,7 @@ impl PlayerHub {
                 // Ends the commands of the previous connection.
                 player.sender = sender.clone();
                 player.serial = serial;
+                player.reported_at = std::time::Instant::now();
                 player.info.id
             }
             None => {
@@ -426,6 +535,7 @@ impl PlayerHub {
                     },
                     sender: sender.clone(),
                     serial,
+                    reported_at: std::time::Instant::now(),
                 });
                 id
             }
@@ -531,6 +641,7 @@ impl PlayerHub {
         let takes_next = status.state.takes_next();
         let was_playing = player.info.status.state == PlaybackState::Playing;
         player.info.status = status;
+        player.reported_at = std::time::Instant::now();
         if inner.active == Some(id) {
             self.track_music_start(&mut inner, id, was_playing);
         }
@@ -593,6 +704,55 @@ impl PlayerHub {
                 Err(e) => warn!("Couldn't record the music start of act {act_id}: {e}"),
             }
         });
+    }
+
+    /// What plays now, for the moderation screen: the song on the active
+    /// player, or else what a music control plays in its own browser if it
+    /// said so lately. With several music controls, one that plays goes
+    /// first, then one with a song, then the latest report. The position
+    /// moves on by the time since the report.
+    pub fn playback(&self) -> Playback {
+        let inner = self.lock();
+        let active = inner
+            .active
+            .and_then(|id| inner.players.iter().find(|p| p.info.id == id));
+        let (mut playback, reported_at) = if let Some(player) = active {
+            let status = &player.info.status;
+            let cued = inner
+                .cue
+                .as_ref()
+                .filter(|song| status.file.as_ref() == Some(&song.file));
+            let playback = Playback {
+                act_id: cued.map(|song| song.act_id),
+                original: cued.is_some_and(|song| song.original),
+                state: status.state,
+                position: status.position,
+                duration: status.duration,
+            };
+            (playback, player.reported_at)
+        } else if let Some((playback, at)) = inner
+            .local_playback
+            .values()
+            .filter(|(_, at)| at.elapsed() < LOCAL_PLAYBACK_FRESH)
+            .max_by_key(|(playback, at)| {
+                (
+                    playback.state == PlaybackState::Playing,
+                    playback.act_id.is_some(),
+                    *at,
+                )
+            })
+        {
+            (playback.clone(), *at)
+        } else {
+            return Playback::IDLE;
+        };
+        if playback.state == PlaybackState::Playing {
+            playback.position += reported_at.elapsed().as_secs_f64();
+            if let Some(duration) = playback.duration {
+                playback.position = playback.position.min(duration);
+            }
+        }
+        playback
     }
 
     /// Whether the active player plays or is paused mid-song, as it reported
@@ -675,6 +835,69 @@ impl PlayerHub {
                 Self::remove(&mut inner, player_id);
                 self.publish(&inner);
             }
+            ControllerMessage::QueueAdd { act_id, original } => {
+                let song = self
+                    .song(act_id, original)
+                    .await
+                    .map_err(|e| e.to_string())?
+                    .ok_or("Für diese Kür gibt es keine Musik.")?;
+                let mut inner = self.lock();
+                inner.queue.push(QueueEntry {
+                    id: Uuid::now_v7(),
+                    act_id,
+                    original,
+                    label: song.label,
+                    played: false,
+                });
+                self.publish(&inner);
+            }
+            ControllerMessage::QueueRemove { id } => {
+                let mut inner = self.lock();
+                inner.queue.retain(|entry| entry.id != id);
+                self.publish(&inner);
+            }
+            ControllerMessage::QueueMove { id, to } => {
+                let mut inner = self.lock();
+                if let Some(from) = inner.queue.iter().position(|entry| entry.id == id) {
+                    let entry = inner.queue.remove(from);
+                    let to = to.min(inner.queue.len());
+                    inner.queue.insert(to, entry);
+                    self.publish(&inner);
+                }
+            }
+            ControllerMessage::QueuePlay { id } => {
+                let Some(entry) = self.lock().queue.iter().find(|e| e.id == id).cloned() else {
+                    return Err("Dieser Song ist nicht mehr in der Liste.".into());
+                };
+                let song = self
+                    .song(entry.act_id, entry.original)
+                    .await
+                    .map_err(|e| e.to_string())?
+                    .ok_or("Für diese Kür gibt es keine Musik.")?;
+                let mut inner = self.lock();
+                if inner.active.is_none() {
+                    return Err("Kein Player ausgewählt.".into());
+                }
+                inner.pending_cue = None;
+                inner.cue = Some(song.clone());
+                Self::send_active(&inner, ToPlayer::Cue { song });
+                Self::send_active(&inner, ToPlayer::Play);
+                Self::mark_played(&mut inner, id);
+                self.publish(&inner);
+            }
+            ControllerMessage::QueuePlayed { id } => {
+                let mut inner = self.lock();
+                Self::mark_played(&mut inner, id);
+                self.publish(&inner);
+            }
+            ControllerMessage::QueueClear => {
+                let mut inner = self.lock();
+                inner.queue.clear();
+                self.publish(&inner);
+            }
+            ControllerMessage::LocalPlayback(_) => {
+                return Err("Die eigene Wiedergabe gilt nur mit einer Verbindung".into());
+            }
             ControllerMessage::Play => self.forward(ToPlayer::Play),
             ControllerMessage::Pause => self.forward(ToPlayer::Pause),
             ControllerMessage::Stop => self.forward(ToPlayer::Stop),
@@ -692,6 +915,12 @@ impl PlayerHub {
             }
         }
         Ok(())
+    }
+
+    fn mark_played(inner: &mut Inner, id: Uuid) {
+        if let Some(entry) = inner.queue.iter_mut().find(|entry| entry.id == id) {
+            entry.played = true;
+        }
     }
 
     fn forward(&self, message: ToPlayer) {
@@ -1159,6 +1388,71 @@ mod tests {
         // Selecting the active one again changes nothing.
         select(&hub, a.id).await;
         assert_eq!(hub.subscribe().0.active_player, Some(a.id));
+    }
+
+    #[sqlx::test]
+    async fn playback_is_the_active_players_or_else_the_local_one(db: sqlx::SqlitePool) {
+        let hub = hub(db);
+        assert_eq!(hub.playback(), Playback::IDLE);
+
+        let local = Playback {
+            act_id: Some(Uuid::from_u128(2)),
+            original: true,
+            state: PlaybackState::Paused,
+            position: 12.0,
+            duration: Some(180.0),
+        };
+        let control = hub.controller_connected();
+        hub.local_playback(control, local.clone());
+        assert_eq!(hub.playback(), local);
+
+        // An active player goes first; its position moves on while it plays.
+        let (a, _a_rx) = connect(&hub, "A").await;
+        select(&hub, a).await;
+        hub.lock().cue = Some(song(1));
+        hub.status(
+            a,
+            PlayerStatus {
+                file: Some(song(1).file),
+                position: 30.0,
+                duration: Some(200.0),
+                ..playing()
+            },
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let playback = hub.playback();
+        assert_eq!(playback.act_id, Some(Uuid::from_u128(1)));
+        assert_eq!(playback.state, PlaybackState::Playing);
+        assert!((30.1..31.0).contains(&playback.position), "{playback:?}");
+    }
+
+    #[sqlx::test]
+    async fn the_music_control_that_plays_goes_first(db: sqlx::SqlitePool) {
+        let hub = hub(db);
+        let report = |state, position| Playback {
+            act_id: Some(Uuid::from_u128(2)),
+            original: false,
+            state,
+            position,
+            duration: Some(180.0),
+        };
+        let playing = hub.controller_connected();
+        let ready = hub.controller_connected();
+        let idle = hub.controller_connected();
+        hub.local_playback(playing, report(PlaybackState::Paused, 40.0));
+        hub.local_playback(playing, report(PlaybackState::Playing, 40.0));
+        // Reports from the other music controls come later.
+        hub.local_playback(ready, report(PlaybackState::Ready, 0.0));
+        hub.local_playback(idle, Playback::IDLE);
+        let playback = hub.playback();
+        assert_eq!(playback.state, PlaybackState::Playing);
+        assert!((40.0..41.0).contains(&playback.position), "{playback:?}");
+
+        // Closing the music control forgets its report.
+        hub.controller_gone(playing);
+        assert_eq!(hub.playback(), report(PlaybackState::Ready, 0.0));
+        hub.controller_gone(ready);
+        assert_eq!(hub.playback(), Playback::IDLE);
     }
 
     #[sqlx::test]

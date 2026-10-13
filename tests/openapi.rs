@@ -36,6 +36,7 @@ const COMMANDS: &[&str] = &[
     "set_checked_in",
     "set_club_group_members",
     "set_payment",
+    "set_photo_hidden",
     "set_song_checked",
     "set_act_withdrawn",
     "timeplan_backward",
@@ -46,6 +47,8 @@ const COMMANDS: &[&str] = &[
 const QUERIES: &[&str] = &[
     "get_act",
     "get_club",
+    "get_photos",
+    "get_playback",
     "get_startlist_csv",
     "get_system_status",
     "list_acts",
