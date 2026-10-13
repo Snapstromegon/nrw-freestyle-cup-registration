@@ -17,6 +17,8 @@ import {
   formatAge,
   isGroupActType,
   MIN_GROUP_SIZE,
+  normalizationLabel,
+  songFile,
 } from "../../utils";
 import "../elements/cup-act-participants.js";
 
@@ -195,7 +197,7 @@ export default class CupViewAdminActsOverview extends LitElement {
 
       /* Column classes are prefixed: .ci etc. are taken by adminStyles. */
       col.w-move {
-        width: 5.25em;
+        width: 7.75em;
       }
 
       col.w-order {
@@ -231,7 +233,7 @@ export default class CupViewAdminActsOverview extends LitElement {
       /* Medium screens: narrower text columns leave room for the riders. */
       @media (max-width: 1100px) {
         col.w-move {
-          width: 4.5em;
+          width: 6.75em;
         }
 
         col.w-name,
@@ -280,7 +282,8 @@ export default class CupViewAdminActsOverview extends LitElement {
         border-radius: 4px;
       }
 
-      .icon-btn.playing {
+      .icon-btn.playing,
+      .icon-btn.active {
         color: var(--cup-blue);
         background: var(--tone-info-bg);
       }
@@ -311,7 +314,15 @@ export default class CupViewAdminActsOverview extends LitElement {
   /** The act whose song is loaded into the shared player. */
   @state() private playingId: string | null = null;
   /** The song file loaded into the player, and its original name. */
-  @state() private playingFile: { file: string; name: string } | null = null;
+  /**
+   * What the player plays: `file` is the normalized copy or the original,
+   * `source` the uploaded original it belongs to.
+   */
+  @state() private playingFile: {
+    file: string;
+    source: string;
+    name: string;
+  } | null = null;
   @state() private paused = true;
 
   @query("audio") private audio?: HTMLAudioElement | null;
@@ -567,6 +578,11 @@ export default class CupViewAdminActsOverview extends LitElement {
 
   /** Why an act didn't get a category. */
   private uncategorizedReason(act: Act) {
+    if (act.withdrawn) {
+      return act.fee_waived
+        ? "abgemeldet · Gebühr erlassen"
+        : "abgemeldet · Gebühr bleibt";
+    }
     if (act.type_conflict) {
       // A rider is also in another group of the same type.
       const ids = new Set(act.participants.map((p) => p.id));
@@ -713,7 +729,8 @@ export default class CupViewAdminActsOverview extends LitElement {
   private renderToolbar() {
     const playing = this.acts.find((act) => act.id === this.playingId);
     // The club may have uploaded new music (or removed it) meanwhile.
-    const outdated = !!playing && playing.song_file !== this.playingFile?.file;
+    const outdated =
+      !!playing && playing.song_file !== this.playingFile?.source;
     return html`<div class="toolbar">
       <input
         class="inline"
@@ -983,6 +1000,16 @@ export default class CupViewAdminActsOverview extends LitElement {
                     >
                       arrow_downward
                     </button>
+                    <button
+                      class="icon-btn"
+                      title="Abmelden: die Kür startet nicht, die Startgebühr bleibt"
+                      aria-label="Abmelden"
+                      data-id=${act.id}
+                      data-withdrawn="true"
+                      @click=${this.onWithdrawClick}
+                    >
+                      person_remove
+                    </button>
                   </td>
                   <td class="num">
                     ${act.act_order ?? html`<span class="muted" title="Keine Startnummer">–</span>`}
@@ -1049,7 +1076,9 @@ export default class CupViewAdminActsOverview extends LitElement {
                       >${actTypeShort[act.act_type]}</span
                     >
                   </td>
-                  <td class="reason" title=${reason}>${reason}</td>
+                  <td class="reason" title=${reason}>
+                    ${act.withdrawn ? this.renderWithdrawnActions(act) : nothing}${reason}
+                  </td>
                   ${this.renderActCells(act)}
                 </tr>`;
               },
@@ -1065,7 +1094,7 @@ export default class CupViewAdminActsOverview extends LitElement {
     const clubs = actClubNames(act).join(", ");
     const playing =
       this.playingId === act.id &&
-      this.playingFile?.file === act.song_file &&
+      this.playingFile?.source === act.song_file &&
       !this.paused;
     const ci = this.checkInOf(act);
     return html`<td class="trunc" title=${act.name}>
@@ -1084,13 +1113,25 @@ export default class CupViewAdminActsOverview extends LitElement {
           hasMusic(act)
             ? html`<button
               class="icon-btn ${playing ? "playing" : ""}"
-              title="${playing ? "Pause" : "Abspielen"}: ${act.song_file_name ?? act.song_file}"
+              title="${playing ? "Pause" : "Abspielen"}: ${act.song_file_name ?? act.song_file}${
+                act.normalization_status
+                  ? ` (${normalizationLabel(act.normalization_status)})`
+                  : ""
+              }"
               aria-label=${playing ? "Pause" : "Abspielen"}
               data-id=${act.id}
               @click=${this.onPlayClick}
             >
               ${playing ? "pause" : "play_arrow"}
-            </button>`
+            </button>${
+              act.normalization_status === "failed"
+                ? html`<span
+                    class="chip warn"
+                    title=${normalizationLabel(act.normalization_status)}
+                    >!</span
+                  >`
+                : nothing
+            }`
             : html`<span class="chip bad">fehlt</span>`
         }
       </td>
@@ -1123,8 +1164,40 @@ export default class CupViewAdminActsOverview extends LitElement {
       </td>`;
   }
 
+  /** Undo the withdrawal, and waive or charge the fee. */
+  private renderWithdrawnActions(act: Act) {
+    return html`<button
+        class="icon-btn"
+        title="Abmeldung zurücknehmen"
+        aria-label="Abmeldung zurücknehmen"
+        data-id=${act.id}
+        data-withdrawn="false"
+        @click=${this.onWithdrawClick}
+      >
+        undo</button
+      ><button
+        class="icon-btn ${act.fee_waived ? "active" : ""}"
+        title=${
+          act.fee_waived
+            ? "Startgebühr doch berechnen"
+            : "Startgebühr erlassen (z. B. mit Attest)"
+        }
+        aria-label="Startgebühr erlassen"
+        aria-pressed=${act.fee_waived ? "true" : "false"}
+        data-id=${act.id}
+        data-withdrawn="true"
+        data-waived=${act.fee_waived ? "false" : "true"}
+        @click=${this.onWithdrawClick}
+      >
+        money_off
+      </button> `;
+  }
+
   /** Something the club or the admin still has to do. */
   private isIncomplete(act: Act) {
+    if (act.withdrawn) {
+      return false;
+    }
     return !hasName(act) || !hasMusic(act) || !act.song_checked;
   }
 
@@ -1191,6 +1264,35 @@ export default class CupViewAdminActsOverview extends LitElement {
     } finally {
       // Polls that ran while the command was in flight may be stale too.
       this.version++;
+    }
+  }
+
+  private async onWithdrawClick(e: Event) {
+    const { id, withdrawn, waived } = (e.currentTarget as HTMLElement).dataset;
+    const act = this.acts.find((a) => a.id === id);
+    if (!act) {
+      return;
+    }
+    const body = {
+      act_id: act.id,
+      withdrawn: withdrawn === "true",
+      fee_waived: waived === "true",
+    };
+    if (
+      body.withdrawn &&
+      !act.withdrawn &&
+      !confirm(
+        `„${this.actLabel(act)}“ abmelden? Die Kür verschwindet aus Startliste und Zeitplan. Die Startgebühr bleibt, bis du sie erlässt.`,
+      )
+    ) {
+      return;
+    }
+    try {
+      unwrap(await client.POST("/api/command/set_act_withdrawn", { body }));
+      // The category changes on the server.
+      await this.load();
+    } catch (error) {
+      this.error = `Die Abmeldung konnte nicht gespeichert werden: ${errorMessage(error)}`;
     }
   }
 
@@ -1297,7 +1399,8 @@ export default class CupViewAdminActsOverview extends LitElement {
     if (!act?.song_file || !audio) {
       return;
     }
-    if (this.playingId === id && this.playingFile?.file === act.song_file) {
+    const file = songFile(act) ?? act.song_file;
+    if (this.playingId === id && this.playingFile?.file === file) {
       if (audio.paused) {
         this.play(audio);
       } else {
@@ -1307,10 +1410,11 @@ export default class CupViewAdminActsOverview extends LitElement {
     }
     this.playingId = id;
     this.playingFile = {
-      file: act.song_file,
+      file,
+      source: act.song_file,
       name: act.song_file_name ?? act.song_file,
     };
-    audio.src = `/songs/${act.song_file}`;
+    audio.src = `/songs/${file}`;
     this.play(audio);
   }
 

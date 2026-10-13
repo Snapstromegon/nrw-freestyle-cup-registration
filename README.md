@@ -2,6 +2,15 @@
 
 This project contains the registration system for the freestyle unicycling cup NRW.
 
+## Requirements
+
+- **ffmpeg** must be installed on the server (`ffmpeg` on the `PATH`, or the
+  binary in the `FFMPEG` environment variable). Every uploaded song gets a
+  loudness-normalized copy (−14 LUFS, EBU R128) made with ffmpeg in the
+  background; the music players use it and can fall back to the original.
+  Without ffmpeg the copies fail and the originals are played. Songs that have
+  no copy yet are normalized when the server starts.
+
 ## Configuration
 
 Settings come from CLI flags, environment variables (including `.env`) and an

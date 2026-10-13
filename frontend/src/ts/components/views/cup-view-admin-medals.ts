@@ -1,7 +1,6 @@
 import { Task } from "@lit/task";
 import { css, html, LitElement, nothing } from "lit";
 import { customElement } from "lit/decorators.js";
-import { classMap } from "lit/directives/class-map.js";
 import { repeat } from "lit/directives/repeat.js";
 import { errorMessage, unwrap } from "../../api";
 import { client, type components } from "../../apiClient";
@@ -268,20 +267,18 @@ export default class CupViewAdminMedals extends LitElement {
         </thead>
         <tbody>
           ${repeat(
-            summary,
+            summary.filter((c) => c.starts > 0),
             (c) => c.name,
             (c) =>
-              html`<tr class=${classMap({ muted: c.starts === 0 })}>
+              html`<tr>
                 <td><b>${c.name}</b></td>
                 <td>${c.label === c.name ? "" : c.label}</td>
                 <td class="num">${c.starts}</td>
                 <td class="num">
                   ${
-                    c.starts === 0
-                      ? ""
-                      : c.minPerStart === c.maxPerStart
-                        ? c.maxPerStart
-                        : `${c.minPerStart}–${c.maxPerStart}`
+                    c.minPerStart === c.maxPerStart
+                      ? c.maxPerStart
+                      : `${c.minPerStart}–${c.maxPerStart}`
                   }
                 </td>
                 <td class="num">${c.medals}</td>
@@ -309,6 +306,17 @@ export default class CupViewAdminMedals extends LitElement {
           </tr>
         </tfoot>
       </table>
+      ${
+        summary.some((c) => c.starts === 0)
+          ? html`<p class="small muted">
+              Kategorien ohne Starts:
+              ${summary
+                .filter((c) => c.starts === 0)
+                .map((c) => c.name)
+                .join(", ")}
+            </p>`
+          : nothing
+      }
       ${
         medals === 0
           ? html`<p class="empty">Noch keine Starts mit Kategorie.</p>`

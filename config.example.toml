@@ -36,10 +36,12 @@
 # password = "…"
 
 [competition]
-id = "einradevnet-demo-2027"
+id = "einradevent-demo-2027"
 name = "Einradevent Demo 2027"
 location = "SSV Nümbrecht"
-# Example dates: replace them with the real ones.
+# Example dates: replace them with the real ones. They are checked on startup:
+# registration and the music upload must end before start_date. Winter dates
+# need the +01:00 offset, summer dates +02:00.
 start_date = 2027-06-05
 end_date = 2027-06-05
 # All ages, and with them the categories, are counted against this day.
@@ -51,13 +53,21 @@ music_upload_end = 2027-05-15T23:59:59+02:00
 fee_per_start = 15
 # Maximum fee per starter in €, so only the first three starts are charged.
 max_fee_per_starter = 45
+# Optional, shown to clubs on their page.
+venue = "Sporthalle Musterstadt, Musterstraße 1, 12345 Musterstadt"
+contact_email = "info@example.org"
+announcement_url = "https://example.org/ausschreibung/"
 
 [competition.payment]
+# Optional: leave it out until the deadline is decided.
 deadline = 2027-05-15
-account_holder = "Peter Kaufmann"
-iban = "DE65 1203 0000 1060 4054 85"
+# Must match the account holder exactly: banks compare the payee name on
+# every transfer (Verification of Payee) and warn payers about a mismatch.
+account_holder = "Demo Kassenwart"
+iban = "DE02 1203 0000 0000 2020 51"
 bic = "BYLADEM1001"
-# The club name is appended, e.g. "Startgeld: SSV Nümbrecht".
+# The club name and its code are appended, e.g.
+# "Startgeld: SSV Nümbrecht (EV-K7Q3)". The QR code adds "QR" at the end.
 reference = "Startgeld"
 
 # Categories in timeplan order.
@@ -438,7 +448,7 @@ judge_duration_minutes = 3
 
 [[categories]]
 name = "KGU15"
-description = "Kleingruppe U15"
+description = "Kleingruppe Junior Expert (U15)"
 act_type = "group_small"
 under_age = 15
 einfahrzeit_minutes = 10
@@ -447,7 +457,7 @@ judge_duration_minutes = 3
 
 [[categories]]
 name = "KG15+"
-description = "Kleingruppe 15+"
+description = "Kleingruppe Expert (15+)"
 act_type = "group_small"
 min_age = 15
 einfahrzeit_minutes = 10
@@ -456,7 +466,7 @@ judge_duration_minutes = 3
 
 [[categories]]
 name = "GGU15"
-description = "Großgruppe U15"
+description = "Großgruppe Junior Expert (U15)"
 act_type = "group_large"
 under_age = 15
 einfahrzeit_minutes = 10
@@ -465,7 +475,7 @@ judge_duration_minutes = 3
 
 [[categories]]
 name = "GG15+"
-description = "Großgruppe 15+"
+description = "Großgruppe Expert (15+)"
 act_type = "group_large"
 min_age = 15
 einfahrzeit_minutes = 10

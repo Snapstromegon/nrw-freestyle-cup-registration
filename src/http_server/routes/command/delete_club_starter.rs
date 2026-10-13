@@ -120,7 +120,7 @@ pub async fn delete_club_starter(
 
     sqlx::query!(
         r#"
-        UPDATE starter SET partner_id = NULL WHERE partner_id = ?;
+        UPDATE starter SET partner_id = NULL, partner_name = NULL WHERE partner_id = ?;
         "#,
         body.starter_id
     )

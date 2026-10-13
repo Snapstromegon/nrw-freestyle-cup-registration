@@ -16,6 +16,7 @@ import {
   competitionName,
   formatDateRange,
   formatTime,
+  groupByDay,
   isGroupActType,
   participantName,
 } from "../../utils";
@@ -94,7 +95,9 @@ const buildStartlist = (
     for (const act of entry.acts) {
       actStarts.set(act.id, act.predicted_start);
     }
-    if (entry.einfahrzeit_seconds > 0) {
+    // The effective warm-up: empty blocks have none, and their warm-up moves
+    // to the next category sharing it.
+    if (entry.warmup_seconds > 0) {
       warmup = { start: item.predicted_start, categories: [] };
       warmups.push(warmup);
     }
@@ -180,6 +183,10 @@ export default class CupViewStartlist extends LitElement {
 
       h3 {
         margin-bottom: 1rem;
+      }
+
+      h2.day {
+        border-bottom: 2px solid currentColor;
       }
 
       h3:has(+ .warmup) {
@@ -293,11 +300,23 @@ export default class CupViewStartlist extends LitElement {
     if (sections.length === 0) {
       return html`<p>Die Startliste ist noch leer.</p>`;
     }
+    // Events over several days get a heading per day, if the times are known.
+    const first = (section: StartlistSection) => section.acts[0]?.start;
+    const days = sections.every(first)
+      ? groupByDay(sections, (section) => first(section) as string)
+      : [{ day: "", label: "", items: sections }];
     return html`
       ${repeat(
-        sections,
-        (section) => section.category.name,
-        (section) => this.renderSection(section),
+        days,
+        (day) => day.day,
+        (day) =>
+          html`${
+            day.day ? html`<h2 class="day">${day.label}</h2>` : nothing
+          }${repeat(
+            day.items,
+            (section) => section.category.name,
+            (section) => this.renderSection(section),
+          )}`,
       )}
     `;
   }

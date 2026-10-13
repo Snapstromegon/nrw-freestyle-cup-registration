@@ -32,8 +32,8 @@ start_date = 2027-04-01
 end_date = 2027-04-02
 determining_day = 2027-06-01
 registration_start = 2026-01-01T00:00:00+01:00
-registration_end = 2027-02-28T23:59:59+02:00
-music_upload_end = 2027-03-15T23:59:59+02:00
+registration_end = 2027-02-28T23:59:59+01:00
+music_upload_end = 2027-03-15T23:59:59+01:00
 fee_per_start = 15
 max_fee_per_starter = 45
 
@@ -812,7 +812,7 @@ judge_duration_minutes = 3
 
 [[categories]]
 name = "KGU15"
-description = "Kleingruppe U15"
+description = "Kleingruppe Junior Expert (U15)"
 act_type = "group_small"
 under_age = 15
 einfahrzeit_minutes = 10
@@ -821,7 +821,7 @@ judge_duration_minutes = 3
 
 [[categories]]
 name = "KG15+"
-description = "Kleingruppe 15+"
+description = "Kleingruppe Expert (15+)"
 act_type = "group_small"
 min_age = 15
 einfahrzeit_minutes = 10
@@ -830,7 +830,7 @@ judge_duration_minutes = 3
 
 [[categories]]
 name = "GGU15"
-description = "Großgruppe U15"
+description = "Großgruppe Junior Expert (U15)"
 act_type = "group_large"
 under_age = 15
 einfahrzeit_minutes = 10
@@ -839,7 +839,7 @@ judge_duration_minutes = 3
 
 [[categories]]
 name = "GG15+"
-description = "Großgruppe 15+"
+description = "Großgruppe Expert (15+)"
 act_type = "group_large"
 min_age = 15
 einfahrzeit_minutes = 10

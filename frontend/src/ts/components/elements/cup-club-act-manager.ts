@@ -18,11 +18,12 @@ import {
   formatDate,
   isGroupActType,
   MIN_GROUP_SIZE,
+  normalizationLabel,
 } from "../../utils";
 
 type Act = components["schemas"]["ClubAct"];
 
-/** The server accepts uploads up to 10 MiB, request overhead included. */
+/** The server accepts song files up to 10 MiB. */
 const MAX_SONG_SIZE = 10 * 1024 * 1024;
 
 /** Groups with more participants show them collapsed. */
@@ -90,6 +91,27 @@ export default class CupClubActManager extends LitElement {
   /** Acts whose song is being uploaded. */
   @state() uploading = new Set<string>();
   @state() error: string | null = null;
+  /** While printing, groups aren't collapsed, so the printout lists everyone. */
+  @state() printing = false;
+
+  private readonly onBeforePrint = () => {
+    this.printing = true;
+  };
+  private readonly onAfterPrint = () => {
+    this.printing = false;
+  };
+
+  override connectedCallback() {
+    super.connectedCallback?.();
+    window.addEventListener("beforeprint", this.onBeforePrint);
+    window.addEventListener("afterprint", this.onAfterPrint);
+  }
+
+  override disconnectedCallback() {
+    super.disconnectedCallback?.();
+    window.removeEventListener("beforeprint", this.onBeforePrint);
+    window.removeEventListener("afterprint", this.onAfterPrint);
+  }
 
   @query("#error") errorBanner?: HTMLElement;
 
@@ -239,14 +261,16 @@ export default class CupClubActManager extends LitElement {
             ? html`Aktuell: ${act.song_file_name} ✔️<br />`
             : html`Noch keine Musik.<br />`
         }
-        Bitte lade eine MP3 Datei mit max. 10MB hoch.
+        Nur mp3-Dateien, max. 10 MB. Bitte bring die Musik zusätzlich auf
+        einem USB-Stick mit. Wir gleichen die Lautstärke aller Küren an; du
+        kannst dir danach beide Versionen anhören.
         <form
           @submit=${
             // eslint-disable-next-line lit/no-template-arrow
             (e: SubmitEvent) => this.uploadSong(act, e)
           }
         >
-          <input type="file" accept="audio/*" ?disabled=${uploading} />
+          <input type="file" accept=".mp3,audio/mpeg" ?disabled=${uploading} />
           <button
             type="submit"
             class="blue material-icon"
@@ -300,17 +324,39 @@ export default class CupClubActManager extends LitElement {
       </td>
       <td>
         <label><span>Typ</span></label>
-        ${this.renderType(act)}
+        ${this.renderType(act)}${
+          act.withdrawn
+            ? html`<br /><small class="warn"
+                  >abgemeldet${act.fee_waived ? " · Startgebühr erlassen" : ""}</small
+                >`
+            : nothing
+        }
       </td>
       <td>
         <label><span>Musik</span></label>
         ${
           act.song_file
-            ? html`${act.song_file_name}<br /><audio
-                preload="none"
-                controls
-                src="/songs/${act.song_file}"
-              ></audio>`
+            ? html`${act.song_file_name}<br />
+                ${
+                  act.song_file_normalized
+                    ? html`<small>Angeglichene Lautstärke (so läuft sie beim
+                          Wettkampf):</small
+                        ><br /><audio
+                          preload="none"
+                          controls
+                          src="/songs/${act.song_file_normalized}"
+                        ></audio
+                        ><br /><small>Original:</small><br />`
+                    : act.normalization_status
+                      ? html`<small class="muted"
+                            >${normalizationLabel(act.normalization_status)}</small
+                          ><br />`
+                      : nothing
+                }<audio
+                  preload="none"
+                  controls
+                  src="/songs/${act.song_file}"
+                ></audio>`
             : "❌"
         }
       </td>
@@ -391,7 +437,8 @@ export default class CupClubActManager extends LitElement {
 
   /**
    * The riders, "(Verein)" for riders of other clubs and an "Ersatz" badge
-   * for replacement riders. Larger groups are collapsed to their size.
+   * for replacement riders. Larger groups are collapsed to their size,
+   * except in print.
    */
   renderParticipants(act: Act) {
     const list = html`<ul>
@@ -413,6 +460,7 @@ export default class CupClubActManager extends LitElement {
       )}
     </ul>`;
     if (
+      this.printing ||
       !isGroupActType(act.act_type) ||
       act.participants.length <= MAX_EXPANDED_PARTICIPANTS
     ) {
@@ -474,7 +522,12 @@ export default class CupClubActManager extends LitElement {
     if (!file) {
       return this.showError("Bitte wähle zuerst eine Musikdatei aus.");
     }
-    if (file.size >= MAX_SONG_SIZE) {
+    if (!file.name.toLowerCase().endsWith(".mp3")) {
+      return this.showError(
+        `„${file.name}“ ist keine mp3-Datei. Bitte lade die Musik als mp3 hoch.`,
+      );
+    }
+    if (file.size > MAX_SONG_SIZE) {
       return this.showError(
         `„${file.name}“ ist zu groß. Die Musik darf höchstens 10 MB groß sein.`,
       );
@@ -498,7 +551,12 @@ export default class CupClubActManager extends LitElement {
       }
       if (status === 400) {
         return this.showError(
-          `„${file.name}“ konnte nicht hochgeladen werden. Bitte lade eine Audiodatei (z. B. MP3) hoch.`,
+          `„${file.name}“ konnte nicht hochgeladen werden. Bitte lade die Musik als mp3 hoch.`,
+        );
+      }
+      if (status === 403) {
+        return this.showError(
+          "Der Musik-Meldeschluss ist vorbei. Musikänderungen sind nicht mehr möglich.",
         );
       }
       unwrap(resp);

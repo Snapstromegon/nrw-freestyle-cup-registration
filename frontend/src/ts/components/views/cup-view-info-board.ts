@@ -446,8 +446,7 @@ export default class CupViewInfoBoard extends LitElement {
             .time=${new Date(
               new Date(currentEntry?.predicted_start || "").getTime() +
                 (currentEntry && "Category" in currentEntry.timeplan_entry
-                  ? currentEntry.timeplan_entry.Category.einfahrzeit_seconds *
-                    1000
+                  ? currentEntry.timeplan_entry.Category.warmup_seconds * 1000
                   : 0),
             )}
           ></cup-countdown>

@@ -19,6 +19,10 @@ import {
   formatTime,
   isGroupActType,
   judgingAfterBlockEnd,
+  lastTimeplanEntry,
+  nextTimeplanEntry,
+  normalizationLabel,
+  songFile,
 } from "../../utils";
 import "../elements/cup-act-participants.js";
 import "../elements/cup-timeplan.js";
@@ -121,8 +125,9 @@ const liveState = (timeplan: Timeplan, now: number): Live => {
   const next = findNextAct(timeplan);
   const entry = timeplan.items.find((item) => item.status === "Started");
   if (!entry) {
-    const lastEntry = timeplan.items.findLast((i) => i.status === "Ended");
-    const nextEntry = timeplan.items.find((i) => i.status === "Planned");
+    // Skipped empty blocks are neither the last nor the next entry.
+    const lastEntry = lastTimeplanEntry(timeplan);
+    const nextEntry = nextTimeplanEntry(timeplan);
     // Ending the last act ends its block at once, but it is judged afterwards.
     const judging = judgingAfterBlockEnd(timeplan, now);
     if (judging) {
@@ -190,9 +195,7 @@ const liveState = (timeplan: Timeplan, now: number): Live => {
     category,
     next,
     since: entry.started_at,
-    plannedSeconds: category.acts.length
-      ? category.einfahrzeit_seconds
-      : undefined,
+    plannedSeconds: category.acts.length ? category.warmup_seconds : undefined,
   };
 };
 
@@ -583,6 +586,8 @@ export default class CupViewAdminMusicControl extends LitElement {
   @state() private checkIns?: CheckInMap;
   @state() private loadErrors: string[] = [];
   @state() private commandError = "";
+  /** Acts whose original song is played instead of the normalized copy. */
+  @state() private originalSongs = new Set<string>();
   @state() private busy = false;
   /** Riders being checked in from a "nicht eingecheckt" banner. */
   @state() private checkingIn: ReadonlySet<string> = new Set();
@@ -857,15 +862,16 @@ export default class CupViewAdminMusicControl extends LitElement {
     // The player comes first, so a large group can't push it out of view.
     // It keeps its place in this template in both phases, so the playing
     // element isn't recreated when the act ends.
+    const file = songFile(act, this.originalSongs.has(act.id));
     return html`${this.renderSong(act)}
       ${
-        act.song_file
+        file
           ? keyed(
-              `${act.song_file}|${act.song_file_name ?? ""}`,
+              `${file}|${act.song_file_name ?? ""}`,
               html`<audio
               controls
               preload="auto"
-              src="/songs/${act.song_file}"
+              src="/songs/${file}"
             ></audio>`,
             )
           : nothing
@@ -939,9 +945,7 @@ export default class CupViewAdminMusicControl extends LitElement {
     const next = live.next;
     if (!next) {
       // E.g. the award ceremony after the last block.
-      const after = this.timeplan?.items.find(
-        (item) => item.status === "Planned",
-      );
+      const after = this.timeplan && nextTimeplanEntry(this.timeplan);
       return html`<section class="next-card">
         <header>
           <b>Als Nächstes</b
@@ -1100,7 +1104,40 @@ export default class CupViewAdminMusicControl extends LitElement {
         }</span
       >
       ${this.renderSongChip(act)}
+      ${
+        act.song_file_normalized
+          ? html`<label
+              class="small"
+              title="Das Original statt der Version mit angeglichener Lautstärke abspielen"
+              ><input
+                type="checkbox"
+                .checked=${this.originalSongs.has(act.id)}
+                data-id=${act.id}
+                @change=${this.onOriginalChange}
+              />
+              Original</label
+            >`
+          : act.normalization_status === "failed"
+            ? html`<span
+                class="chip warn"
+                title=${normalizationLabel(act.normalization_status)}
+                >Original</span
+              >`
+            : nothing
+      }
     </div>`;
+  }
+
+  private onOriginalChange(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const id = input.dataset.id ?? "";
+    const next = new Set(this.originalSongs);
+    if (input.checked) {
+      next.add(id);
+    } else {
+      next.delete(id);
+    }
+    this.originalSongs = next;
   }
 
   private renderSongChip(act: Act) {
@@ -1155,13 +1192,10 @@ export default class CupViewAdminMusicControl extends LitElement {
       if ("Custom" in nextEntry.timeplan_entry) {
         return `Start ${nextEntry.timeplan_entry.Custom.label}`;
       }
+      // Empty blocks before it are skipped in the same step.
       const next = nextEntry.timeplan_entry.Category;
-      // An empty block only starts; there is no warm-up and no act.
-      if (!next.acts.length) {
-        return `Start ${next.description} (keine Küren)`;
-      }
       const first = next.acts.find((a) => a.status === "Planned");
-      if (next.einfahrzeit_seconds > 0) {
+      if (next.warmup_seconds > 0) {
         return `Einfahrzeit ${next.description}`;
       }
       return first

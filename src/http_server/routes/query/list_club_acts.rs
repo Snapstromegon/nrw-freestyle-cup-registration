@@ -6,6 +6,7 @@ use crate::{
     act_type::ActType,
     groups::ensure_club_access,
     http_server::{ClientError, HttpError, extractor::auth::Auth},
+    normalize::NormalizationStatus,
     reloadable_sqlite::ReloadableSqlite,
 };
 
@@ -20,10 +21,20 @@ pub struct ClubAct {
     description: Option<String>,
     song_file_name: Option<String>,
     song_file: Option<String>,
+    /// The loudness-normalized copy of the song, once it is ready. Clubs can
+    /// listen to both versions.
+    song_file_normalized: Option<String>,
+    /// `null` without a song.
+    normalization_status: Option<NormalizationStatus>,
     act_type: ActType,
     #[serde(with = "time::serde::iso8601")]
     created_at: time::OffsetDateTime,
     participants: Vec<ClubActParticipant>,
+    /// Withdrawn after the registration deadline: the act doesn't start and
+    /// has no category, but its riders still pay for it unless `fee_waived`.
+    withdrawn: bool,
+    /// An admin waived the fee of a withdrawn act (e.g. medical certificate).
+    fee_waived: bool,
 }
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
@@ -83,8 +94,12 @@ pub async fn list_club_acts(
             acts.description,
             acts.song_file_name,
             acts.song_file,
+            acts.song_file_normalized,
+            acts.normalization_status as "normalization_status: NormalizationStatus",
             acts.act_type as "act_type: ActType",
-            acts.created_at as "created_at!: time::OffsetDateTime"
+            acts.created_at as "created_at!: time::OffsetDateTime",
+            acts.withdrawn_at IS NOT NULL as "withdrawn!: bool",
+            acts.fee_waived
         FROM acts
         WHERE acts.owner_club_id = ?1
             OR EXISTS (
@@ -130,8 +145,14 @@ pub async fn list_club_acts(
             description: act.description,
             song_file_name: act.song_file_name,
             song_file: act.song_file,
+            song_file_normalized: act
+                .song_file_normalized
+                .filter(|_| act.normalization_status == Some(NormalizationStatus::Done)),
+            normalization_status: act.normalization_status,
             act_type: act.act_type,
             created_at: act.created_at,
+            withdrawn: act.withdrawn,
+            fee_waived: act.fee_waived,
             participants: participants
                 .into_iter()
                 .map(|participant| ClubActParticipant {

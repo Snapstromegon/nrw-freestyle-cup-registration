@@ -17,6 +17,7 @@ use uuid::Uuid;
 use crate::{
     groups::ensure_act_access,
     http_server::{ClientError, HttpError, HttpServerOptions, extractor::auth::Auth},
+    normalize,
     reloadable_sqlite::ReloadableSqlite,
     system_status::Capabilities,
 };
@@ -28,6 +29,11 @@ pub struct SaveActSongResponse {}
 pub struct SaveActSongQuery {
     act_id: Uuid,
 }
+
+/// The largest song file a club can upload.
+pub const MAX_SONG_SIZE: usize = 10 * 1024 * 1024;
+/// The request limit for commands: a song plus the multipart overhead.
+pub const MAX_REQUEST_SIZE: usize = MAX_SONG_SIZE + 1024 * 1024;
 
 pub type Metadata = HashMap<String, String>;
 
@@ -44,7 +50,9 @@ pub struct Upload {
 ///
 /// Replaces an earlier upload, which also resets `song_checked`: the new file
 /// hasn't been checked yet. Only clubs with a rider in the act, the club that
-/// created a group, and admins can upload.
+/// created a group, and admins can upload; clubs only until the music
+/// deadline. Only mp3 files up to 10 MiB are accepted. A loudness-normalized
+/// copy is made in the background (see `normalize`).
 #[utoipa::path(
     post,
     tags=["command", "club"],
@@ -68,12 +76,16 @@ pub async fn save_act_song(
     Query(query): Query<SaveActSongQuery>,
     mut body: Multipart,
 ) -> Result<Json<SaveActSongResponse>, HttpError> {
+    if !capabilities.can_upload_music {
+        return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
+    }
+    let reloadable_db = db.clone();
     let db = db.get().await.clone();
     ensure_act_access(&mut *db.acquire().await?, &auth, query.act_id).await?;
     let entry = body
         .next_field()
         .await
-        .map_err(|_e| HttpError::InternalServerError)?
+        .map_err(|e| HttpError::StatusCode(e.status()))?
         .ok_or(HttpError::StatusCode(StatusCode::BAD_REQUEST))?;
 
     let file_name = entry
@@ -81,17 +93,25 @@ pub async fn save_act_song(
         .ok_or(HttpError::StatusCode(StatusCode::BAD_REQUEST))?
         .to_string();
 
-    let extension = Path::new(&file_name)
+    // The announcement asks for mp3 files. The client shows the message.
+    let is_mp3 = Path::new(&file_name)
         .extension()
-        .ok_or(HttpError::StatusCode(StatusCode::BAD_REQUEST))?;
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("mp3"));
+    if !is_mp3 {
+        return Err(HttpError::StatusCode(StatusCode::BAD_REQUEST));
+    }
 
-    let save_file_name = format!("{}.{}", query.act_id, extension.to_string_lossy());
+    let save_file_name = format!("{}.mp3", query.act_id);
 
     let path = http_options.data_path.join(&save_file_name);
+    // A body over the request limit fails here, as 413.
     let data = entry
         .bytes()
         .await
-        .map_err(|_e| HttpError::InternalServerError)?;
+        .map_err(|e| HttpError::StatusCode(e.status()))?;
+    if data.len() > MAX_SONG_SIZE {
+        return Err(HttpError::StatusCode(StatusCode::PAYLOAD_TOO_LARGE));
+    }
     DirBuilder::new()
         .recursive(true)
         .create(path.parent().unwrap())
@@ -103,18 +123,38 @@ pub async fn save_act_song(
         .write_all(&data)
         .await
         .map_err(|e| HttpError::ErrorMessages(e.to_string()))?;
+    let previous_normalized = sqlx::query_scalar!(
+        "SELECT song_file_normalized FROM acts WHERE id = ?",
+        query.act_id
+    )
+    .fetch_optional(&db)
+    .await?
+    .flatten();
+    let normalized = normalize::normalized_file_name(query.act_id);
     sqlx::query!(
         r#"
         UPDATE acts
-        SET song_file_name = ?, song_file = ?, song_checked = FALSE
+        SET song_file_name = ?, song_file = ?, song_checked = FALSE,
+            song_file_normalized = ?, normalization_status = 'pending'
         WHERE id = ?
         "#,
         file_name,
         save_file_name,
+        normalized,
         query.act_id,
     )
     .execute(&db)
     .await?;
+    if let Some(previous) = previous_normalized {
+        normalize::remove_file(&http_options.data_path.join(previous)).await;
+    }
+    normalize::spawn(
+        reloadable_db,
+        http_options.data_path.clone(),
+        query.act_id,
+        save_file_name,
+        normalized,
+    );
 
     Ok(Json(SaveActSongResponse {}))
 }

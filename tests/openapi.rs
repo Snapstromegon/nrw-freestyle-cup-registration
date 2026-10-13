@@ -36,6 +36,7 @@ const COMMANDS: &[&str] = &[
     "set_club_group_members",
     "set_payment",
     "set_song_checked",
+    "set_act_withdrawn",
     "timeplan_backward",
     "timeplan_forward",
     "verify_email",

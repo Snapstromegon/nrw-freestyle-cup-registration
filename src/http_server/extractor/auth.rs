@@ -6,6 +6,7 @@ use axum::{
     response::IntoResponse,
 };
 use axum_extra::extract::CookieJar;
+use tracing::error;
 use uuid::Uuid;
 
 use crate::{
@@ -70,9 +71,13 @@ impl<S: Send + Sync> OptionalFromRequestParts<S> for Auth {
                 "#,
                 user_id,
             )
-            .fetch_one(&db.get().await.clone())
+            .fetch_optional(&db.get().await.clone())
             .await
-            .map_err(|_| Error::UserNotFound)?;
+            .map_err(|e| {
+                error!("Couldn't load the user: {e}");
+                Error::Database
+            })?
+            .ok_or(Error::UserNotFound)?;
             Ok(Some(Auth {
                 user_id,
                 email: user.email,
@@ -97,18 +102,22 @@ pub enum Error {
     JwtMissing,
     #[error("JWT invalid")]
     JwtInvalid,
+    /// The token is valid, but its user was deleted.
     #[error("User not found")]
     UserNotFound,
+    /// The user couldn't be loaded, e.g. because the database is busy.
+    #[error("Database error")]
+    Database,
 }
 
 impl IntoResponse for Error {
     fn into_response(self) -> axum::response::Response<axum::body::Body> {
         let status = match self {
             Error::AdminRequired => StatusCode::FORBIDDEN,
-            Error::CookiesMissing | Error::JwtInvalid | Error::JwtMissing => {
+            Error::CookiesMissing | Error::JwtInvalid | Error::JwtMissing | Error::UserNotFound => {
                 StatusCode::UNAUTHORIZED
             }
-            Error::UserNotFound => StatusCode::INTERNAL_SERVER_ERROR,
+            Error::Database => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (status, self.to_string()).into_response()
     }
@@ -125,7 +134,8 @@ mod tests {
             (Error::CookiesMissing, StatusCode::UNAUTHORIZED),
             (Error::JwtMissing, StatusCode::UNAUTHORIZED),
             (Error::JwtInvalid, StatusCode::UNAUTHORIZED),
-            (Error::UserNotFound, StatusCode::INTERNAL_SERVER_ERROR),
+            (Error::UserNotFound, StatusCode::UNAUTHORIZED),
+            (Error::Database, StatusCode::INTERNAL_SERVER_ERROR),
         ];
         for (error, expected) in cases {
             let message = error.to_string();

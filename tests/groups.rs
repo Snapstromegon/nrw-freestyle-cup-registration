@@ -1403,7 +1403,7 @@ async fn startlist_and_csv_show_groups_by_name(db: SqlitePool) {
     let csv = response.body.as_str().unwrap();
     let rows: Vec<_> = csv
         .lines()
-        .filter(|line| line.starts_with("Kleingruppe U15;"))
+        .filter(|line| line.starts_with("Kleingruppe Junior Expert (U15);"))
         .collect();
     assert_eq!(rows.len(), 1, "{csv}");
     let fields: Vec<_> = rows[0].split(';').collect();
@@ -1412,7 +1412,7 @@ async fn startlist_and_csv_show_groups_by_name(db: SqlitePool) {
     assert_eq!(
         fields[..7],
         [
-            "Kleingruppe U15",
+            "Kleingruppe Junior Expert (U15)",
             "3",
             "1",
             "Deutschland",

@@ -316,7 +316,7 @@ async fn jwt_for_deleted_user_is_rejected(db: SqlitePool) {
 
     let response = app.get("/api/query/whoami", Some(&cookie)).await;
 
-    assert_eq!(response.status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(response.status, StatusCode::UNAUTHORIZED);
     assert_eq!(response.body, "User not found");
 }
 

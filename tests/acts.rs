@@ -392,6 +392,50 @@ async fn save_act_song_rejects_file_without_extension(db: SqlitePool) {
 }
 
 #[sqlx::test]
+async fn save_act_song_accepts_only_mp3(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let (cookie, single, _) = club_with_acts(&app).await;
+    let uri = format!("/api/command/save_act_song?act_id={single}");
+
+    let wav = app
+        .post_file(&uri, "song.wav", b"data", Some(&cookie))
+        .await;
+    assert_eq!(wav.status, StatusCode::BAD_REQUEST);
+    assert_eq!(std::fs::read_dir(app.data_path()).unwrap().count(), 0);
+
+    let upper = app
+        .post_file(&uri, "Song.MP3", b"data", Some(&cookie))
+        .await;
+    assert_eq!(upper.status, StatusCode::OK, "{:?}", upper.body);
+    assert!(app.data_path().join(format!("{single}.mp3")).exists());
+}
+
+#[sqlx::test]
+async fn save_act_song_rejects_files_over_10_mib(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let (cookie, single, _) = club_with_acts(&app).await;
+    let uri = format!("/api/command/save_act_song?act_id={single}");
+
+    let largest = vec![0u8; 10 * 1024 * 1024];
+    let response = app
+        .post_file(&uri, "max.mp3", &largest, Some(&cookie))
+        .await;
+    assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+
+    let too_large = vec![0u8; 10 * 1024 * 1024 + 1];
+    let response = app
+        .post_file(&uri, "big.mp3", &too_large, Some(&cookie))
+        .await;
+    assert_eq!(response.status, StatusCode::PAYLOAD_TOO_LARGE);
+
+    let far_too_large = vec![0u8; 12 * 1024 * 1024];
+    let response = app
+        .post_file(&uri, "huge.mp3", &far_too_large, Some(&cookie))
+        .await;
+    assert_eq!(response.status, StatusCode::PAYLOAD_TOO_LARGE);
+}
+
+#[sqlx::test]
 async fn save_act_song_requires_login(db: SqlitePool) {
     let app = TestApp::new(db).await;
     let response = app
@@ -406,7 +450,6 @@ async fn save_act_song_requires_login(db: SqlitePool) {
 }
 
 #[sqlx::test]
-#[ignore = "known bug: save_act_song does not check can_upload_music"]
 async fn save_act_song_is_forbidden_after_music_deadline(db: SqlitePool) {
     let app = TestApp::with_status(db, closed_registration()).await;
     let owner = app.cookie_for(app.create_user("Owner", false).await);
@@ -528,6 +571,17 @@ async fn startlist_csv_contains_header_sections_and_acts(db: SqlitePool) {
         "Wettbewerb;Anzahl Fahrer;Startnummer/PK;Land;Kürtitel;Name;Verein;Startzeit"
     );
 
+    // Only categories with acts get a section header.
+    let headers: Vec<_> = lines.iter().filter(|l| l.starts_with("# ")).collect();
+    assert!(
+        headers.iter().any(|l| l.ends_with(" Einzel Weiblich U13")),
+        "{headers:?}"
+    );
+    assert!(
+        !headers.iter().any(|l| l.ends_with(" Einzel Männlich U13")),
+        "{headers:?}"
+    );
+
     let single_line = lines
         .iter()
         .find(|l| l.contains("Anna Muster"))
@@ -558,11 +612,13 @@ async fn startlist_csv_contains_header_sections_and_acts(db: SqlitePool) {
     );
     assert_eq!(fields[6], "RSV");
 
-    // Every timeplan entry gets a section line.
-    let timeplan_rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM timeplan")
-        .fetch_one(&app.db)
-        .await
-        .unwrap();
+    // Every timeplan entry gets a section line, except empty categories.
+    let timeplan_rows: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM timeplan WHERE category IS NULL OR category IN (SELECT category FROM view_act)",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
     let sections = lines.iter().filter(|l| l.starts_with("# ")).count();
     assert_eq!(sections as i64, timeplan_rows);
     assert!(
@@ -570,4 +626,119 @@ async fn startlist_csv_contains_header_sections_and_acts(db: SqlitePool) {
             .iter()
             .any(|l| l.starts_with("# ") && l.ends_with(" Mittagspause"))
     );
+}
+
+#[sqlx::test]
+async fn withdrawn_act_leaves_the_startlist_and_keeps_its_fee(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let (owner, single, _) = club_with_acts(&app).await;
+    let admin = app.create_admin().await;
+    let withdraw = |withdrawn: bool, fee_waived: bool| json!({ "act_id": single, "withdrawn": withdrawn, "fee_waived": fee_waived });
+
+    let forbidden = app
+        .post(
+            "/api/command/set_act_withdrawn",
+            withdraw(true, false),
+            Some(&owner),
+        )
+        .await;
+    assert_eq!(forbidden.status, StatusCode::FORBIDDEN);
+
+    let response = app
+        .post(
+            "/api/command/set_act_withdrawn",
+            withdraw(true, false),
+            Some(&admin),
+        )
+        .await;
+    assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+    let act = get_act(&app, single).await;
+    assert_eq!(act["withdrawn"], true);
+    assert_eq!(act["fee_waived"], false);
+    assert_eq!(act["category"], Value::Null);
+    let startlist = app.get("/api/query/startlist", None).await;
+    assert!(!startlist.body.to_string().contains(&single.to_string()));
+    let starters = app.get("/api/query/list_starters", Some(&admin)).await.body;
+    let anna = starters
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["firstname"] == "Anna")
+        .unwrap();
+    assert_eq!(anna["waived_count"], 0);
+
+    app.post(
+        "/api/command/set_act_withdrawn",
+        withdraw(true, true),
+        Some(&admin),
+    )
+    .await;
+    let starters = app.get("/api/query/list_starters", Some(&admin)).await.body;
+    let anna = starters
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["firstname"] == "Anna")
+        .unwrap();
+    assert_eq!(anna["waived_count"], 1);
+
+    // Taking the withdrawal back also takes back the waiver.
+    app.post(
+        "/api/command/set_act_withdrawn",
+        withdraw(false, true),
+        Some(&admin),
+    )
+    .await;
+    let act = get_act(&app, single).await;
+    assert_eq!(act["withdrawn"], false);
+    assert_eq!(act["fee_waived"], false);
+    assert_eq!(act["category"], "EWU13");
+
+    let unknown = app
+        .post(
+            "/api/command/set_act_withdrawn",
+            json!({ "act_id": Uuid::now_v7(), "withdrawn": true, "fee_waived": false }),
+            Some(&admin),
+        )
+        .await;
+    assert_eq!(unknown.status, StatusCode::NOT_FOUND);
+}
+
+#[sqlx::test]
+async fn uploaded_song_gets_a_normalized_copy(db: SqlitePool) {
+    // A short tone as mp3; without ffmpeg there is nothing to test.
+    let dir = std::env::temp_dir().join(format!("song-{}", Uuid::now_v7()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let source = dir.join("tone.mp3");
+    let generated = std::process::Command::new("ffmpeg")
+        .args(["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i"])
+        .arg("sine=frequency=440:duration=3")
+        .arg(&source)
+        .status();
+    if !generated.is_ok_and(|status| status.success()) {
+        eprintln!("Skipped: ffmpeg is not installed");
+        return;
+    }
+    let song = std::fs::read(&source).unwrap();
+    std::fs::remove_dir_all(&dir).unwrap();
+
+    let app = TestApp::new(db).await;
+    let (cookie, single, _) = club_with_acts(&app).await;
+    let admin = app.create_admin().await;
+    let uri = format!("/api/command/save_act_song?act_id={single}");
+    let response = app.post_file(&uri, "tone.mp3", &song, Some(&cookie)).await;
+    assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+
+    let mut act = get_act_as(&app, Some(&admin), single).await;
+    for _ in 0..100 {
+        if act["normalization_status"] != "pending" {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        act = get_act_as(&app, Some(&admin), single).await;
+    }
+    assert_eq!(act["normalization_status"], "done", "{act}");
+    let normalized = act["song_file_normalized"].as_str().unwrap();
+    assert!(app.data_path().join(normalized).exists());
+    assert!(app.data_path().join(format!("{single}.mp3")).exists());
 }

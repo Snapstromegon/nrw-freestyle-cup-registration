@@ -6,7 +6,8 @@ use nrw_freestyle_cup_registration::{
     http_server::{HttpServer, HttpServerOptions},
     jwt::JWTConfig,
     mailer::Mailer,
-    reloadable_sqlite::ReloadableSqlite,
+    normalize,
+    reloadable_sqlite::{self, ReloadableSqlite},
     seed, utils,
 };
 use password_auth::generate_hash;
@@ -47,7 +48,7 @@ async fn main() -> eyre::Result<()> {
 
     info!("Connecting to database");
 
-    let db = sqlx::sqlite::SqlitePool::connect(&settings.database_url)
+    let db = reloadable_sqlite::connect(&settings.database_url)
         .await
         .expect("Couldn't connect to database");
 
@@ -92,6 +93,10 @@ async fn main() -> eyre::Result<()> {
     );
 
     info!("Starting HTTP server");
+    let db = ReloadableSqlite::new(db, settings.database_url);
+    // Songs uploaded while the server was down or before normalization existed.
+    normalize::resume(&db, &settings.data_path).await?;
+
     HttpServer::new(
         HttpServerOptions {
             bind_address: settings.http_address,
@@ -99,7 +104,7 @@ async fn main() -> eyre::Result<()> {
             data_path: settings.data_path,
             reload_db_token: settings.reload_db_token,
         },
-        ReloadableSqlite::new(db, settings.database_url),
+        db,
         Arc::new(jwt_config),
         Arc::new(mailer),
     )

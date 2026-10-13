@@ -193,6 +193,13 @@ async fn admin_can_add_and_edit_category(db: SqlitePool) {
     let renamed = categories.iter().find(|c| c["name"] == "RENAMED").unwrap();
     assert_eq!(renamed["act_duration_seconds"], 999);
     assert_eq!(renamed["description"], "Testkategorie");
+    // New categories go to the end of the order.
+    let last = categories
+        .iter()
+        .map(|c| c["order"].as_i64().unwrap())
+        .max()
+        .unwrap();
+    assert_eq!(renamed["order"], last);
 }
 
 #[sqlx::test]
@@ -374,11 +381,21 @@ async fn timeplan_forward_starts_first_entry(db: SqlitePool) {
         .await;
     assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
 
+    // Without acts, every category block is empty: they are skipped up to
+    // the first custom entry, which starts.
     let timeplan = app.get("/api/query/predict_timeplan", None).await;
     let items = timeplan.body["items"].as_array().unwrap();
-    assert_eq!(items[0]["status"], "Started");
-    assert!(items[0]["started_at"].is_string());
-    assert!(items[1..].iter().all(|i| i["status"] == "Planned"));
+    let started = items
+        .iter()
+        .position(|i| i["status"] == "Started")
+        .expect("one entry started");
+    assert!(items[started]["timeplan_entry"]["Custom"].is_object());
+    assert!(items[..started].iter().all(|i| i["status"] == "Ended"));
+    assert!(
+        items[started + 1..]
+            .iter()
+            .all(|i| i["status"] == "Planned")
+    );
 }
 
 #[sqlx::test]

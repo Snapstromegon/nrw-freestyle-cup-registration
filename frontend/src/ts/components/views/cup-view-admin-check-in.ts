@@ -19,6 +19,7 @@ import {
   type CheckInMap,
   checkInStats,
   formatAge,
+  formatDate,
   formatDateTime,
   formatMoney,
   formatTime,
@@ -832,7 +833,9 @@ export default class CupViewAdminCheckIn extends LitElement {
             <th>Status</th>
             <th class="col-last">Nachname</th>
             <th class="col-first">Vorname</th>
-            <th class="num opt" title="Jahrgang">Jg.</th>
+            <th class="num opt" title="Geburtsdatum (für die Ausweiskontrolle)">
+              Geb.
+            </th>
             <th class="num opt" title="Alter am Stichtag">Alter</th>
             <th>Starts</th>
             <th
@@ -963,7 +966,6 @@ export default class CupViewAdminCheckIn extends LitElement {
     // Missing replacement riders are less urgent: amber at most.
     const replacementSoon =
       this.minutesUntil(row.nextReplacement) <= SOON_MINUTES;
-    const year = new Date(starter.birthdate).getUTCFullYear();
     const name = starterLabel(starter);
     return html`<tr
       class=${classMap({
@@ -995,7 +997,7 @@ export default class CupViewAdminCheckIn extends LitElement {
       </td>
       <td class="last">${starter.lastname}</td>
       <td>${starter.firstname}</td>
-      <td class="num opt">${Number.isNaN(year) ? "" : year}</td>
+      <td class="num opt">${formatDate(starter.birthdate)}</td>
       <td class="num opt">${formatAge(starter.age_on_competition)}</td>
       <td class="wrap">
         <span class="chips"

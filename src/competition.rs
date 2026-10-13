@@ -26,6 +26,12 @@ pub struct Competition {
     pub fee_per_start: f64,
     /// Maximum fee per starter; `None` means no cap.
     pub max_fee_per_starter: Option<f64>,
+    /// Where the event takes place.
+    pub venue: Option<String>,
+    /// Contact for clubs, e.g. about overpayments.
+    pub contact_email: Option<String>,
+    /// Link to the official announcement (Ausschreibung).
+    pub announcement_url: Option<String>,
     #[serde(with = "iso_date::option")]
     pub payment_deadline: Option<Date>,
     pub payment_account_holder: Option<String>,
@@ -53,6 +59,9 @@ impl Competition {
                 music_upload_end as "music_upload_end: OffsetDateTime",
                 fee_per_start,
                 max_fee_per_starter,
+                venue,
+                contact_email,
+                announcement_url,
                 payment_deadline as "payment_deadline: Date",
                 payment_account_holder,
                 payment_iban,
@@ -86,9 +95,9 @@ pub async fn upsert_competition(
         INSERT INTO competition (
             id, name, location, start_date, end_date, determining_day,
             registration_start, registration_end, music_upload_end,
-            fee_per_start, max_fee_per_starter,
+            fee_per_start, max_fee_per_starter, venue, contact_email, announcement_url,
             payment_deadline, payment_account_holder, payment_iban, payment_bic, payment_reference
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (id) DO UPDATE SET
             name = excluded.name,
             location = excluded.location,
@@ -100,6 +109,9 @@ pub async fn upsert_competition(
             music_upload_end = excluded.music_upload_end,
             fee_per_start = excluded.fee_per_start,
             max_fee_per_starter = excluded.max_fee_per_starter,
+            venue = excluded.venue,
+            contact_email = excluded.contact_email,
+            announcement_url = excluded.announcement_url,
             payment_deadline = excluded.payment_deadline,
             payment_account_holder = excluded.payment_account_holder,
             payment_iban = excluded.payment_iban,
@@ -117,6 +129,9 @@ pub async fn upsert_competition(
         config.music_upload_end,
         config.fee_per_start,
         config.max_fee_per_starter,
+        config.venue,
+        config.contact_email,
+        config.announcement_url,
         config.payment.deadline,
         config.payment.account_holder,
         config.payment.iban,

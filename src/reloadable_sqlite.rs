@@ -1,8 +1,26 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc, time::Duration};
 
 use tokio::sync::{RwLock, RwLockReadGuard};
 
-use sqlx::SqlitePool;
+use sqlx::{
+    SqlitePool,
+    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
+};
+
+/// How long a connection waits for a lock before it fails with "database is
+/// locked". Check-in desks, the music control and the info boards all poll at
+/// once on competition day.
+const BUSY_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// Opens the pool with the server's connection settings.
+///
+/// The journal mode stays the default rollback journal on purpose: the DB is
+/// copied between server and laptop as a single file (`make download` /
+/// `make sync-up`), which WAL mode's extra `-wal` file would break.
+pub async fn connect(url: &str) -> Result<SqlitePool, sqlx::Error> {
+    let options = SqliteConnectOptions::from_str(url)?.busy_timeout(BUSY_TIMEOUT);
+    SqlitePoolOptions::new().connect_with(options).await
+}
 
 #[derive(Debug, Clone)]
 pub struct ReloadableSqlite {
@@ -25,7 +43,7 @@ impl ReloadableSqlite {
     pub async fn reload(&self) -> Result<(), sqlx::Error> {
         let mut old_db = self.db.write().await;
         old_db.close().await;
-        let new_db = SqlitePool::connect(&self.path).await?;
+        let new_db = connect(&self.path).await?;
         *old_db = new_db;
         Ok(())
     }

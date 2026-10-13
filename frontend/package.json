@@ -45,5 +45,8 @@
     "openapi-typescript": {
       "typescript": "$typescript"
     }
+  },
+  "dependencies": {
+    "uqr": "0.1.3"
   }
 }

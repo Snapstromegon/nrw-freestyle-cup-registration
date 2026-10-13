@@ -524,8 +524,9 @@ export default class CupClubGroupManager extends LitElement {
         aber Startgeld: Jede Gruppe zählt für jede FahrerIn als ein Start${fee}.
       </li>
       <li>
-        Die <strong>Altersklasse</strong> (U15 oder 15+) richtet sich nach der
-        ältesten FahrerIn der Gruppe, ErsatzfahrerInnen eingeschlossen.
+        Die <strong>Altersklasse</strong> richtet sich nach der ältesten
+        FahrerIn der Gruppe, ErsatzfahrerInnen eingeschlossen: Junior Expert,
+        wenn alle unter 15 sind, sonst Expert.
       </li>
       <li>
         Jede FahrerIn kann in <strong>einer Kleingruppe und einer Großgruppe</strong>
@@ -1009,7 +1010,7 @@ export default class CupClubGroupManager extends LitElement {
   }
 
   /**
-   * "KG U15 · 7 Fahrer + 1 Ersatz", or a warning for incomplete groups and
+   * "KG Junior Expert · 7 Fahrer + 1 Ersatz", or a warning for incomplete groups and
    * groups without category. `category` is `undefined` for previews.
    */
   renderCategory(

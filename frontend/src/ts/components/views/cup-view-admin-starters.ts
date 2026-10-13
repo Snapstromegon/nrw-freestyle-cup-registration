@@ -369,7 +369,8 @@ export default class CupViewAdminStarters extends LitElement {
           </div>`
           : nothing
       }
-      ${this.renderToolbar()} ${this.renderStarters(sections, actsByStarter)}
+      ${this.renderToolbar(sections)}
+      ${this.renderStarters(sections, actsByStarter)}
       ${this.renderGroups()}
     </div>`;
   }
@@ -430,7 +431,11 @@ export default class CupViewAdminStarters extends LitElement {
     </div>`;
   }
 
-  private renderToolbar() {
+  private renderToolbar(sections: Section[]) {
+    // Only categories with starters can be filtered for.
+    const withStarters = new Set(
+      sections.filter((s) => s.rows.length > 0).map((s) => s.key),
+    );
     const types = [...new Set(this.categories.map((c) => c.act_type))];
     return html`<div class="toolbar">
       <input
@@ -460,7 +465,10 @@ export default class CupViewAdminStarters extends LitElement {
         </optgroup>
         <optgroup label="Kategorie">
           ${repeat(
-            this.categories,
+            this.categories.filter(
+              (c) =>
+                withStarters.has(c.name) || this.filter === `cat:${c.name}`,
+            ),
             (c) => c.name,
             (c) =>
               html`<option value="cat:${c.name}" ?selected=${this.filter === `cat:${c.name}`}>

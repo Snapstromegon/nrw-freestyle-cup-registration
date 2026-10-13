@@ -309,6 +309,7 @@ async fn list_clubs_shows_clubs_with_owners_to_admins(db: SqlitePool) {
             "owner_name": "Owner",
             "owner_email": "owner@cup.test",
             "owner_email_verified": true,
+            "code": nrw_freestyle_cup_registration::utils::club_code(&club_id),
         })
     );
     let whoami = app.get("/api/query/whoami", Some(&owner)).await;

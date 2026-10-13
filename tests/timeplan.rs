@@ -376,7 +376,7 @@ async fn timeplan_backward_without_progress_does_nothing(db: SqlitePool) {
 }
 
 #[sqlx::test]
-async fn timeplan_forward_finishes_category_without_acts(db: SqlitePool) {
+async fn timeplan_forward_skips_category_without_acts(db: SqlitePool) {
     let app = TestApp::new(db).await;
     let admin = app.create_admin().await;
     replace_timeplan(
@@ -389,12 +389,125 @@ async fn timeplan_forward_finishes_category_without_acts(db: SqlitePool) {
     )
     .await;
 
-    for _ in 0..3 {
-        app.post("/api/command/timeplan_forward", json!(null), Some(&admin))
-            .await;
-    }
+    // One step skips the empty block and starts the break.
+    app.post("/api/command/timeplan_forward", json!(null), Some(&admin))
+        .await;
 
     let entries = list_timeplan(&app).await;
+    assert!(entries[0]["started_at"].is_string(), "{entries:?}");
     assert!(entries[0]["ended_at"].is_string(), "{entries:?}");
     assert!(entries[1]["started_at"].is_string(), "{entries:?}");
+    assert!(entries[1]["ended_at"].is_null(), "{entries:?}");
+}
+
+async fn step(app: &TestApp, admin: &str, command: &str) -> Vec<String> {
+    let response = app
+        .post(&format!("/api/command/{command}"), json!(null), Some(admin))
+        .await;
+    assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+    progress(app).await.0
+}
+
+#[sqlx::test]
+async fn empty_blocks_are_skipped_in_one_step_and_restored(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let admin = app.create_admin().await;
+    let (owner, club_id) = app.create_club_owner("Owner", "RSV").await;
+    app.add_single_act(&owner, club_id, "Anna").await;
+    let carla = app
+        .add_starter(&owner, starter_body(club_id, "Carla", false, true))
+        .await;
+    let mut dora = starter_body(club_id, "Dora", false, true);
+    dora["partner_id"] = json!(carla);
+    app.add_starter(&owner, dora).await;
+    replace_timeplan(
+        &app,
+        &admin,
+        &[
+            category_entry("EWU13", Some(START)),
+            category_entry("EMU13", None),
+            category_entry("EMU15", None),
+            category_entry("PU13", None),
+        ],
+    )
+    .await;
+
+    let s = |states: [&str; 4]| states.map(String::from).to_vec();
+    // Warm-up, the act, its end (which ends the block).
+    step(&app, &admin, "timeplan_forward").await;
+    step(&app, &admin, "timeplan_forward").await;
+    let ended = step(&app, &admin, "timeplan_forward").await;
+    assert_eq!(ended, s(["Ended", "Planned", "Planned", "Planned"]));
+    // Both empty blocks are skipped; the pairs start with their warm-up.
+    let skipped = step(&app, &admin, "timeplan_forward").await;
+    assert_eq!(skipped, s(["Ended", "Ended", "Ended", "Started"]));
+    assert_eq!(progress(&app).await.1, ["Ended"]);
+
+    // One step back undoes the start and the skips together.
+    let back = step(&app, &admin, "timeplan_backward").await;
+    assert_eq!(back, ended);
+    // The next one reopens the last block that really ran.
+    let reopened = step(&app, &admin, "timeplan_backward").await;
+    assert_eq!(reopened, s(["Started", "Planned", "Planned", "Planned"]));
+    assert_eq!(progress(&app).await.1, ["Started"]);
+}
+
+#[sqlx::test]
+async fn forward_with_only_empty_blocks_left_changes_nothing(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let admin = app.create_admin().await;
+    replace_timeplan(
+        &app,
+        &admin,
+        &[
+            category_entry("EWU13", Some(START)),
+            category_entry("EMU13", None),
+        ],
+    )
+    .await;
+
+    let states = step(&app, &admin, "timeplan_forward").await;
+
+    assert_eq!(states, ["Planned", "Planned"]);
+}
+
+#[sqlx::test]
+async fn shared_warmup_of_an_empty_category_moves_to_the_next(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let admin = app.create_admin().await;
+    let (owner, club_id) = app.create_club_owner("Owner", "RSV").await;
+    app.add_single_act(&owner, club_id, "Anna").await;
+    // EWU13 shares the warm-up of the empty EMU13 before it.
+    sqlx::query(
+        "UPDATE categories SET einfahrzeit_seconds = CASE name WHEN 'EMU13' THEN 600 ELSE 0 END WHERE name IN ('EMU13', 'EWU13')",
+    )
+    .execute(&app.db)
+    .await
+    .unwrap();
+    replace_timeplan(
+        &app,
+        &admin,
+        &[
+            category_entry("EMU13", Some(START)),
+            category_entry("EWU13", None),
+        ],
+    )
+    .await;
+
+    let prediction = app.get("/api/query/predict_timeplan", None).await.body;
+    let items = prediction["items"].as_array().unwrap();
+    let empty = &items[0]["timeplan_entry"]["Category"];
+    let shared = &items[1]["timeplan_entry"]["Category"];
+    assert_eq!(empty["warmup_seconds"], 0);
+    assert_eq!(items[0]["planned_duration"], 0);
+    assert_eq!(shared["einfahrzeit_seconds"], 0);
+    assert_eq!(shared["warmup_seconds"], 600);
+    assert_eq!(items[1]["planned_start"], items[0]["planned_start"]);
+
+    // The rider warms up first instead of starting right away.
+    step(&app, &admin, "timeplan_forward").await;
+    assert_eq!(progress(&app).await.1, Vec::<String>::new());
+    let acts = &app.get("/api/query/predict_timeplan", None).await.body["items"][1]["timeplan_entry"]
+        ["Category"]["acts"];
+    assert_eq!(acts[0]["status"], "Planned");
 }

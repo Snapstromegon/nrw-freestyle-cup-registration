@@ -36,6 +36,8 @@ interface Data {
   entries: Entry[];
   categories: Map<string, Category>;
   actCounts: Map<string, number>;
+  /** Acts no category matches; no block ever calls them. */
+  uncategorized: number;
   /** The prediction per entry (same index), if it is available. */
   predictions: (TimeplanItem | undefined)[];
   /** Delay of the running timeplan in seconds, if predicted. */
@@ -200,9 +202,12 @@ export default class CupViewAdminTimeplan extends LitElement {
       ]);
       const list = unwrap(entries);
       const actCounts = new Map<string, number>();
+      let uncategorized = 0;
       for (const act of unwrap(acts)) {
         if (act.category) {
           actCounts.set(act.category, (actCounts.get(act.category) ?? 0) + 1);
+        } else if (!act.withdrawn) {
+          uncategorized++;
         }
       }
       // The prediction fails while the timeplan is incomplete; the list is
@@ -218,6 +223,7 @@ export default class CupViewAdminTimeplan extends LitElement {
         entries: list,
         categories: new Map(unwrap(categories).map((c) => [c.name, c])),
         actCounts,
+        uncategorized,
         predictions: matchPredictions(list, timeplan?.items),
         offset: timeplan?.offset ?? null,
         predictionError,
@@ -367,6 +373,16 @@ export default class CupViewAdminTimeplan extends LitElement {
           : nothing
       }
       ${
+        data.uncategorized
+          ? html`<span
+              class="kpi warn"
+              title="Diese Küren passen in keine Kategorie und werden nie aufgerufen (siehe Kürenübersicht)"
+              ><b>${data.uncategorized}</b>
+              ${data.uncategorized === 1 ? "Kür" : "Küren"} ohne Kategorie</span
+            >`
+          : nothing
+      }
+      ${
         missing.length
           ? html`<span class="kpi warn" title=${missing.join(", ")}
               ><b>${missing.length}</b>
@@ -378,8 +394,12 @@ export default class CupViewAdminTimeplan extends LitElement {
     </div>`;
   }
 
-  /** Planned length of an entry: the category block or the custom duration. */
-  private entryDuration(data: Data, entry: Entry) {
+  /**
+   * Planned length of an entry: the category block or the custom duration.
+   * The block's warm-up comes from the prediction, which knows about shared
+   * warm-ups; without one, the configured Einfahrzeit is used.
+   */
+  private entryDuration(data: Data, entry: Entry, prediction?: TimeplanItem) {
     if (!entry.category) {
       return { seconds: entry.duration_seconds ?? null, title: "" };
     }
@@ -389,16 +409,20 @@ export default class CupViewAdminTimeplan extends LitElement {
     }
     const acts = data.actCounts.get(entry.category) ?? 0;
     if (acts === 0) {
-      // timeplan_forward ends an empty category right away: no warm-up.
+      // timeplan_forward skips an empty category: no warm-up.
       return { seconds: 0, title: "Keine Küren: wird übersprungen" };
     }
     const per =
       (category.act_duration_seconds ?? 0) +
       (category.judge_duration_seconds ?? 0);
+    const warmup =
+      prediction && "Category" in prediction.timeplan_entry
+        ? prediction.timeplan_entry.Category.warmup_seconds
+        : (category.einfahrzeit_seconds ?? 0);
     return {
-      seconds: (category.einfahrzeit_seconds ?? 0) + acts * per,
+      seconds: warmup + acts * per,
       title:
-        `${formatDuration(category.einfahrzeit_seconds)} Einfahren + ${acts} × ` +
+        `${formatDuration(warmup)} Einfahren + ${acts} × ` +
         `(${formatDuration(category.act_duration_seconds)} Kür + ` +
         `${formatDuration(category.judge_duration_seconds)} Bewertung)`,
     };
@@ -408,12 +432,13 @@ export default class CupViewAdminTimeplan extends LitElement {
     const last = data.entries.length - 1;
     let totalActs = 0;
     let totalSeconds = 0;
-    for (const entry of data.entries) {
+    data.entries.forEach((entry, index) => {
       totalActs += entry.category
         ? (data.actCounts.get(entry.category) ?? 0)
         : 0;
-      totalSeconds += this.entryDuration(data, entry).seconds ?? 0;
-    }
+      totalSeconds +=
+        this.entryDuration(data, entry, data.predictions[index]).seconds ?? 0;
+    });
     return html`<table class="dense">
       <thead>
         <tr>
@@ -472,9 +497,13 @@ export default class CupViewAdminTimeplan extends LitElement {
     </table>`;
   }
 
-  private renderStatus(entry: Entry) {
+  private renderStatus(entry: Entry, empty = false) {
     const status = entryStatus(entry);
-    const chip = statusChips[status];
+    // An ended empty block was skipped by "Weiter", not run.
+    const chip =
+      empty && status === "ended"
+        ? { label: "übersprungen", tone: "muted" }
+        : statusChips[status];
     const title = [
       entry.started_at && `Gestartet ${formatDateTime(entry.started_at)}`,
       entry.ended_at && `Beendet ${formatDateTime(entry.ended_at)}`,
@@ -498,8 +527,9 @@ export default class CupViewAdminTimeplan extends LitElement {
   private renderRow(data: Data, entry: Entry, index: number, last: number) {
     const status = entryStatus(entry);
     const prediction = data.predictions[index];
-    const duration = this.entryDuration(data, entry);
+    const duration = this.entryDuration(data, entry, prediction);
     const acts = entry.category ? (data.actCounts.get(entry.category) ?? 0) : 0;
+    const empty = !!entry.category && !acts;
     const locked = this.busy || this.editing !== null;
     const plannedTitle = prediction
       ? `Geplant: ${formatDateTime(prediction.planned_start)} – ${formatDateTime(prediction.planned_end)}`
@@ -507,11 +537,11 @@ export default class CupViewAdminTimeplan extends LitElement {
     return html`<tr
       class=${classMap({
         current: status === "started",
-        muted: status === "ended",
+        muted: status === "ended" || empty,
       })}
     >
       <td class="num muted">${index + 1}</td>
-      <td>${this.renderStatus(entry)}</td>
+      <td>${this.renderStatus(entry, empty)}</td>
       <td>
         ${
           entry.earliest_start_time

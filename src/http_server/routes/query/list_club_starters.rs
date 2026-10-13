@@ -25,6 +25,9 @@ pub struct ClubStarter {
     resolved_partner_club: Option<String>,
     /// Number of groups the starter is in, as a regular or replacement rider.
     group_count: i64,
+    /// Starts whose fee an admin waived after a withdrawal. They count in
+    /// the flags and `group_count` above, but cost nothing.
+    waived_count: i64,
 }
 
 #[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
@@ -79,7 +82,14 @@ pub async fn list_club_starters(
               JOIN acts ON acts.id = act_participants.act_id
               WHERE act_participants.starter_id = starter.id
                 AND acts.act_type IN ('group_small', 'group_large')
-            ) as "group_count!: i64"
+            ) as "group_count!: i64",
+            (
+              SELECT COUNT(*) FROM act_participants
+              JOIN acts ON acts.id = act_participants.act_id
+              WHERE act_participants.starter_id = starter.id
+                AND acts.withdrawn_at IS NOT NULL
+                AND acts.fee_waived
+            ) as "waived_count!: i64"
         FROM starter LEFT JOIN starter as partner ON partner.id = starter.partner_id LEFT JOIN clubs as partner_club ON partner_club.id = partner.club_id
         WHERE starter.club_id = ?
         "#,

@@ -6,15 +6,17 @@ use uuid::Uuid;
 
 use crate::{
     http_server::{ClientError, HttpError, extractor::auth::Auth},
-    reloadable_sqlite::ReloadableSqlite,
+    reloadable_sqlite::{ReloadableSqlite, begin_write},
+    timeplan::{LiveEntry, live_entries},
 };
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct SetTimeplanForwardResponse {}
 
-/// EditClubAct a new user.
+/// Moves the live timeplan one step forward.
 ///
-/// This endpoint is used to create a new user.
+/// Ends the running act, starts the next act, or ends the running entry and
+/// starts the next one. Empty category blocks are skipped on the way.
 #[utoipa::path(
     post,
     tags=["command", "timeplan"],
@@ -37,23 +39,26 @@ pub async fn timeplan_forward(
 
     info!("Forwarding timeplan");
     let db = db.get().await.clone();
+    // One write transaction, so two operators pressing at the same moment
+    // can't both act on the same state and skip a step.
+    let mut tx = begin_write(&db).await?;
 
     let running_timeplan_entry = sqlx::query!(
         "SELECT id, category FROM timeplan WHERE started_at IS NOT NULL AND ended_at IS NULL ORDER BY id LIMIT 1"
-    ).fetch_optional(&db).await?.map(|row| (row.id, row.category));
+    ).fetch_optional(&mut *tx).await?.map(|row| (row.id, row.category));
 
     match running_timeplan_entry {
         Some((id, Some(category))) => {
             let running_act = sqlx::query!(
                 "SELECT id as 'id!: Uuid' FROM view_act WHERE category = ? AND started_at IS NOT NULL AND ended_at IS NULL ORDER BY `order` LIMIT 1",
                 category
-            ).fetch_optional(&db).await?.map(|row| row.id);
+            ).fetch_optional(&mut *tx).await?.map(|row| row.id);
             if let Some(running_act_id) = running_act {
                 sqlx::query!(
                     "UPDATE acts SET ended_at = datetime('now') WHERE id = ?",
                     running_act_id
                 )
-                .execute(&db)
+                .execute(&mut *tx)
                 .await?;
 
                 // Ende category if all acts are done
@@ -61,14 +66,14 @@ pub async fn timeplan_forward(
                     "SELECT id FROM view_act WHERE category = ? AND started_at IS NULL",
                     category
                 )
-                .fetch_all(&db)
+                .fetch_all(&mut *tx)
                 .await?;
                 if open_cat_acts.is_empty() {
                     sqlx::query!(
                         "UPDATE timeplan SET ended_at = datetime('now') WHERE id = ?",
                         id
                     )
-                    .execute(&db)
+                    .execute(&mut *tx)
                     .await?;
                 }
             } else {
@@ -76,14 +81,14 @@ pub async fn timeplan_forward(
                 let upcoming_starts = sqlx::query!(
                     "SELECT id as 'id!: Uuid' FROM view_act WHERE category = ? AND started_at IS NULL ORDER BY `order`",
                     category
-                ).fetch_all(&db).await?;
+                ).fetch_all(&mut *tx).await?;
                 info!("Upcoming starts: {upcoming_starts:?}");
                 if let Some(next_act) = upcoming_starts.first() {
                     sqlx::query!(
                         "UPDATE acts SET started_at = datetime('now') WHERE id = ?",
                         next_act.id
                     )
-                    .execute(&db)
+                    .execute(&mut *tx)
                     .await?;
                 } else {
                     // Nothing (left) to start, e.g. a category without acts:
@@ -92,7 +97,7 @@ pub async fn timeplan_forward(
                         "UPDATE timeplan SET ended_at = datetime('now') WHERE id = ?",
                         id
                     )
-                    .execute(&db)
+                    .execute(&mut *tx)
                     .await?;
                 }
             }
@@ -102,44 +107,54 @@ pub async fn timeplan_forward(
                 "UPDATE timeplan SET ended_at = datetime('now') WHERE id = ?",
                 id
             )
-            .execute(&db)
+            .execute(&mut *tx)
             .await?;
         }
         None => {
             info!("Starting Next timeplan entry");
-            start_next_timeplan_entry(&db).await?;
+            start_next_timeplan_entry(&mut tx).await?;
         }
     }
+
+    tx.commit().await?;
 
     Ok(Json(SetTimeplanForwardResponse {}))
 }
 
-async fn start_next_timeplan_entry(db: &sqlx::SqlitePool) -> Result<(), sqlx::Error> {
-    sqlx::query!(
-        "UPDATE timeplan SET started_at = datetime('now') WHERE id = (SELECT id FROM timeplan WHERE started_at IS NULL ORDER BY id LIMIT 1)"
-    ).execute(db).await?;
+/// Starts the next entry that isn't empty, and skips the empty category
+/// blocks before it. Its first act starts right away if it has no warm-up.
+/// If only empty blocks are left, nothing changes.
+async fn start_next_timeplan_entry(db: &mut sqlx::SqliteConnection) -> Result<(), sqlx::Error> {
+    let entries = live_entries(&mut *db).await?;
+    let upcoming: Vec<&LiveEntry> = entries.iter().filter(|e| e.started_at.is_none()).collect();
+    let Some(next) = upcoming.iter().position(|e| !e.empty) else {
+        return Ok(());
+    };
 
-    let category =
-        sqlx::query!("SELECT id, category FROM timeplan WHERE started_at IS NOT NULL AND ended_at IS NULL ORDER BY id LIMIT 1")
-            .fetch_optional(db)
-            .await?
-            .and_then(|row| row.category);
-
-    if let Some(category) = category {
-        let einfahrzeit_seconds = sqlx::query!(
-            "SELECT einfahrzeit_seconds FROM categories WHERE name = ?",
-            category
+    for skipped in &upcoming[..next] {
+        sqlx::query!(
+            "UPDATE timeplan SET started_at = datetime('now'), ended_at = datetime('now') WHERE id = ?",
+            skipped.id
         )
-        .fetch_one(db)
-        .await?
-        .einfahrzeit_seconds;
+        .execute(&mut *db)
+        .await?;
+    }
 
-        if einfahrzeit_seconds == 0 {
-            sqlx::query!(
-                "UPDATE acts SET started_at = datetime('now') WHERE id = (SELECT id FROM view_act WHERE category = ? AND started_at IS NULL ORDER BY `order` LIMIT 1)",
-                category
-            ).execute(db).await?;
-        }
+    let next = upcoming[next];
+    sqlx::query!(
+        "UPDATE timeplan SET started_at = datetime('now') WHERE id = ?",
+        next.id
+    )
+    .execute(&mut *db)
+    .await?;
+
+    if let Some(category) = &next.category
+        && next.warmup_seconds == 0
+    {
+        sqlx::query!(
+            "UPDATE acts SET started_at = datetime('now') WHERE id = (SELECT id FROM view_act WHERE category = ? AND started_at IS NULL ORDER BY `order` LIMIT 1)",
+            category
+        ).execute(&mut *db).await?;
     }
 
     Ok(())

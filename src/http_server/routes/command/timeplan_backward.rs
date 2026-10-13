@@ -6,15 +6,17 @@ use uuid::Uuid;
 
 use crate::{
     http_server::{ClientError, HttpError, extractor::auth::Auth},
-    reloadable_sqlite::ReloadableSqlite,
+    reloadable_sqlite::{ReloadableSqlite, begin_write},
+    timeplan::live_entries,
 };
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct SetTimeplanBackwardResponse {}
 
-/// EditClubAct a new user.
+/// Moves the live timeplan one step back, undoing the last forward step.
 ///
-/// This endpoint is used to create a new user.
+/// Undoing the start of an entry also undoes the skips of the empty category
+/// blocks right before it, since they were skipped in the same step.
 #[utoipa::path(
     post,
     tags=["command", "timeplan"],
@@ -35,61 +37,97 @@ pub async fn timeplan_backward(
         return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
     }
     let db = db.get().await.clone();
+    // One write transaction, so two operators pressing at the same moment
+    // can't both act on the same state and skip a step.
+    let mut tx = begin_write(&db).await?;
 
-    let running_timeplan_entry = sqlx::query!(
-        "SELECT id, category FROM timeplan WHERE started_at IS NOT NULL AND ended_at IS NULL ORDER BY id LIMIT 1"
-    ).fetch_optional(&db).await?.map(|row| (row.id, row.category));
+    let entries = live_entries(&mut tx).await?;
+    let running = entries
+        .iter()
+        .position(|e| e.started_at.is_some() && e.ended_at.is_none());
 
-    match running_timeplan_entry {
-        Some((id, Some(category))) => {
-            let running_act = sqlx::query!(
-                "SELECT id as 'id!: Uuid' FROM view_act WHERE category = ? AND started_at IS NOT NULL AND ended_at IS NULL ORDER BY `order` LIMIT 1",
-                category
-            ).fetch_optional(&db).await?.map(|row| row.id);
+    match running {
+        Some(index) => {
+            let entry = &entries[index];
+            let running_act = match &entry.category {
+                Some(category) => sqlx::query!(
+                    "SELECT id as 'id!: Uuid' FROM view_act WHERE category = ? AND started_at IS NOT NULL AND ended_at IS NULL ORDER BY `order` LIMIT 1",
+                    category
+                ).fetch_optional(&mut *tx).await?.map(|row| row.id),
+                None => None,
+            };
+            let last_finished_act = match &entry.category {
+                Some(category) => sqlx::query!(
+                    "SELECT id as 'id!: Uuid' FROM view_act WHERE category = ? AND ended_at IS NOT NULL ORDER BY `order` DESC LIMIT 1",
+                    category
+                ).fetch_optional(&mut *tx).await?.map(|row| row.id),
+                None => None,
+            };
             if let Some(running_act_id) = running_act {
                 sqlx::query!(
                     "UPDATE acts SET started_at = NULL WHERE id = ?",
                     running_act_id
                 )
-                .execute(&db)
+                .execute(&mut *tx)
                 .await?;
+            } else if let Some(last_act_id) = last_finished_act {
+                sqlx::query!("UPDATE acts SET ended_at = NULL WHERE id = ?", last_act_id)
+                    .execute(&mut *tx)
+                    .await?;
             } else {
-                let finished_acts = sqlx::query!(
-                    "SELECT id as 'id!: Uuid' FROM view_act WHERE category = ? AND ended_at IS NOT NULL ORDER BY `order` DESC",
-                    category
-                ).fetch_all(&db).await?;
-                if finished_acts.is_empty() {
-                    sqlx::query!("UPDATE timeplan SET started_at = NULL WHERE id = ?", id)
-                        .execute(&db)
-                        .await?;
-                } else {
-                    let last_act_id = finished_acts[0].id;
-                    sqlx::query!("UPDATE acts SET ended_at = NULL WHERE id = ?", last_act_id)
-                        .execute(&db)
-                        .await?;
+                // Nothing done in this entry yet: undo its start, together
+                // with the empty blocks skipped to get here.
+                sqlx::query!(
+                    "UPDATE timeplan SET started_at = NULL WHERE id = ?",
+                    entry.id
+                )
+                .execute(&mut *tx)
+                .await?;
+                let skipped = entries[..index].iter().rev().take_while(|e| e.is_skipped());
+                for skipped in skipped {
+                    reset_entry(&mut tx, skipped.id).await?;
                 }
             }
         }
-        Some((id, None)) => {
-            sqlx::query!("UPDATE timeplan SET started_at = NULL WHERE id = ?", id)
-                .execute(&db)
-                .await?;
-        }
         None => {
-            let category = sqlx::query!(
-                "UPDATE timeplan SET ended_at = NULL WHERE id = (SELECT id FROM timeplan WHERE ended_at IS NOT NULL ORDER BY id DESC LIMIT 1) RETURNING category"
-            ).fetch_optional(&db).await?.map(|row| row.category);
-
-            if let Some(category) = category {
+            // Reopen the last entry that really ran, and undo the skips after it.
+            let Some(index) = entries
+                .iter()
+                .rposition(|e| e.ended_at.is_some() && !e.is_skipped())
+            else {
+                tx.commit().await?;
+                return Ok(Json(SetTimeplanBackwardResponse {}));
+            };
+            let entry = &entries[index];
+            sqlx::query!("UPDATE timeplan SET ended_at = NULL WHERE id = ?", entry.id)
+                .execute(&mut *tx)
+                .await?;
+            if let Some(category) = &entry.category {
                 sqlx::query!(
                     "UPDATE acts SET ended_at = NULL WHERE id = (SELECT id FROM view_act WHERE category = ? ORDER BY `order` DESC LIMIT 1)",
                     category
                 )
-                .execute(&db)
+                .execute(&mut *tx)
                 .await?;
+            }
+            for skipped in entries[index + 1..].iter().filter(|e| e.is_skipped()) {
+                reset_entry(&mut tx, skipped.id).await?;
             }
         }
     }
 
+    tx.commit().await?;
+
     Ok(Json(SetTimeplanBackwardResponse {}))
+}
+
+/// Puts an entry back to planned.
+async fn reset_entry(db: &mut sqlx::SqliteConnection, id: i64) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "UPDATE timeplan SET started_at = NULL, ended_at = NULL WHERE id = ?",
+        id
+    )
+    .execute(db)
+    .await?;
+    Ok(())
 }

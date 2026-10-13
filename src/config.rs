@@ -155,8 +155,85 @@ pub struct CompetitionConfig {
     pub music_upload_end: OffsetDateTime,
     pub fee_per_start: f64,
     pub max_fee_per_starter: Option<f64>,
+    /// Where the event takes place, e.g. the hall's name and address.
+    #[serde(default)]
+    pub venue: Option<String>,
+    /// Shown to clubs for questions, e.g. about overpayments.
+    #[serde(default)]
+    pub contact_email: Option<String>,
+    /// Link to the official announcement (Ausschreibung).
+    #[serde(default)]
+    pub announcement_url: Option<String>,
     #[serde(default)]
     pub payment: PaymentConfig,
+}
+
+/// Whether `iban` passes the IBAN format and mod-97 check. Spaces and
+/// lower case are allowed, as in the config.
+pub fn is_valid_iban(iban: &str) -> bool {
+    let iban: String = iban
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect::<String>()
+        .to_ascii_uppercase();
+    if !(15..=34).contains(&iban.len())
+        || !iban.chars().all(|c| c.is_ascii_alphanumeric())
+        || !iban[..2].chars().all(|c| c.is_ascii_alphabetic())
+        || !iban[2..4].chars().all(|c| c.is_ascii_digit())
+    {
+        return false;
+    }
+    let rearranged = iban[4..].chars().chain(iban[..4].chars());
+    let mut remainder = 0u32;
+    for c in rearranged {
+        let value = c.to_digit(36).expect("alphanumeric");
+        remainder = if value >= 10 {
+            (remainder * 100 + value) % 97
+        } else {
+            (remainder * 10 + value) % 97
+        };
+    }
+    remainder == 1
+}
+
+impl CompetitionConfig {
+    /// Problems with the payment details that don't stop the server, but
+    /// break the payment QR code for clubs.
+    pub fn payment_warnings(&self) -> Vec<String> {
+        match &self.payment.iban {
+            Some(iban) if !is_valid_iban(iban) => vec![format!(
+                "[competition.payment] iban {iban:?} is not a valid IBAN; clubs get no payment QR code."
+            )],
+            _ => vec![],
+        }
+    }
+
+    /// Checks that the dates are in a sensible order, so a typo in a year or
+    /// a swapped date doesn't silently open or close registration.
+    pub fn validate(&self) -> Result<(), String> {
+        let mut errors = Vec::new();
+        let start = self.start_date.midnight().assume_utc();
+        if self.start_date > self.end_date {
+            errors.push("start_date must not be after end_date");
+        }
+        if self.registration_start >= self.registration_end {
+            errors.push("registration_start must be before registration_end");
+        }
+        if self.registration_end > start {
+            errors.push("registration_end must not be after start_date");
+        }
+        if self.music_upload_end > start {
+            errors.push("music_upload_end must not be after start_date");
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(format!(
+                "Invalid [competition] dates:\n- {}",
+                errors.join("\n- ")
+            ))
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -476,6 +553,66 @@ mod tests {
         assert_eq!(competition.payment.bic, None);
     }
 
+    fn competition(dates: &str) -> CompetitionConfig {
+        let file = ConfigFile::parse(&format!(
+            "[competition]\nid = \"c\"\nname = \"C\"\nlocation = \"L\"\nfee_per_start = 15\n{dates}"
+        ))
+        .unwrap();
+        file.competition.unwrap()
+    }
+
+    const VALID_DATES: &str = "start_date = 2027-02-12
+end_date = 2027-02-14
+determining_day = 2027-06-01
+registration_start = 2026-11-20T00:00:00+01:00
+registration_end = 2026-12-20T23:59:59+01:00
+music_upload_end = 2027-01-20T23:59:59+01:00";
+
+    #[test]
+    fn ibans_are_checked() {
+        assert!(is_valid_iban("DE02 1203 0000 0000 2020 51"));
+        assert!(is_valid_iban("de02120300000000202051"));
+        assert!(!is_valid_iban("DE03 1203 0000 0000 2020 51"));
+        assert!(!is_valid_iban("DE00"));
+    }
+
+    #[test]
+    fn valid_competition_dates_pass() {
+        competition(VALID_DATES).validate().unwrap();
+    }
+
+    #[test]
+    fn invalid_competition_dates_are_reported() {
+        let cases = [
+            (
+                "end_date = 2027-02-14",
+                "end_date = 2027-02-11",
+                "start_date must not be after end_date",
+            ),
+            (
+                "registration_start = 2026-11-20T00:00:00+01:00",
+                "registration_start = 2026-12-21T00:00:00+01:00",
+                "registration_start must be before registration_end",
+            ),
+            (
+                "registration_end = 2026-12-20T23:59:59+01:00",
+                "registration_end = 2027-12-20T23:59:59+01:00",
+                "registration_end must not be after start_date",
+            ),
+            (
+                "music_upload_end = 2027-01-20T23:59:59+01:00",
+                "music_upload_end = 2027-02-20T23:59:59+01:00",
+                "music_upload_end must not be after start_date",
+            ),
+        ];
+        for (from, to, expected) in cases {
+            let err = competition(&VALID_DATES.replace(from, to))
+                .validate()
+                .unwrap_err();
+            assert!(err.contains(expected), "{to}: {err}");
+        }
+    }
+
     #[test]
     fn datetime_without_offset_is_rejected() {
         let err = ConfigFile::parse(
@@ -505,6 +642,7 @@ mod tests {
             .competition
             .as_ref()
             .expect("example has a competition");
+        competition.validate().unwrap();
         let categories =
             crate::seed::resolve_categories(&file.categories, competition.determining_day).unwrap();
         let warnings = crate::seed::coverage_warnings(&categories);

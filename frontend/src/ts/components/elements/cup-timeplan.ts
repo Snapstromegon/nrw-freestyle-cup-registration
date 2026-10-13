@@ -11,6 +11,7 @@ import {
   type CheckInMap,
   checkInStats,
   formatTime,
+  groupByDay,
   isGroupActType,
   participantName,
 } from "../../utils";
@@ -67,6 +68,22 @@ export default class CupTimeplan extends LitElement {
         .event {
           background: linear-gradient(to right, #400 66%, #fff0);
         }
+      }
+
+      /* Day headings of events over several days. */
+      .day {
+        margin: 0;
+        padding: 0.5rem 1rem;
+        background: #fff;
+        color: #002d56;
+        font-size: 1.25rem;
+      }
+
+      .dense > .day {
+        padding: 2px 6px;
+        font-size: 0.8rem;
+        background: var(--tone-info-bg);
+        color: inherit;
       }
 
       /* ---------- Check-in markers and chips (admin) ---------- */
@@ -183,11 +200,11 @@ export default class CupTimeplan extends LitElement {
       }
 
       @container (max-width: 21rem) {
-        .dense > .cat:not(.empty) .long {
+        .dense > .cat .long {
           display: none;
         }
 
-        .dense > .cat:not(.empty) .short {
+        .dense > .cat .short {
           display: inline;
         }
       }
@@ -221,15 +238,6 @@ export default class CupTimeplan extends LitElement {
 
       .dense > .cat .chip {
         font-weight: 600;
-      }
-
-      /* Blocks without acts are skipped; they don't need attention. */
-      .dense > .cat.empty {
-        position: static;
-        background: var(--cup-surface-2);
-        color: var(--cup-muted);
-        font-weight: 400;
-        border-bottom-color: var(--cup-border);
       }
 
       .dense > .act.current {
@@ -342,17 +350,26 @@ export default class CupTimeplan extends LitElement {
       (this.includePast
         ? this.timeplan?.items
         : this.timeplan?.items.filter((item) => item.status !== "Ended")) || [];
+    // Events over several days get a heading per day.
+    const days = groupByDay(items, (item) => item.planned_start);
     return html`<div id="wrapper" class=${classMap({ dense: this.dense })}>
       ${repeat(
-        items,
-        (item) =>
-          "Category" in item.timeplan_entry
-            ? `category:${item.timeplan_entry.Category.name}`
-            : `custom:${item.planned_start}:${item.timeplan_entry.Custom.label}`,
-        (item) =>
-          "Category" in item.timeplan_entry
-            ? this.renderCategory(item, item.timeplan_entry.Category)
-            : this.renderCustom(item, item.timeplan_entry.Custom),
+        days,
+        (day) => day.day,
+        (day) =>
+          html`${
+            day.day ? html`<h2 class="day">${day.label}</h2>` : nothing
+          }${repeat(
+            day.items,
+            (item) =>
+              "Category" in item.timeplan_entry
+                ? `category:${item.timeplan_entry.Category.name}`
+                : `custom:${item.planned_start}:${item.timeplan_entry.Custom.label}`,
+            (item) =>
+              "Category" in item.timeplan_entry
+                ? this.renderCategory(item, item.timeplan_entry.Category)
+                : this.renderCustom(item, item.timeplan_entry.Custom),
+          )}`,
       )}
       ${
         this.dense && this.timeplan && !items.length
@@ -476,13 +493,13 @@ export default class CupTimeplan extends LitElement {
     category: CategoryEntry,
     shown: TimeplanAct[],
   ) {
-    // Empty upcoming blocks stay visible, so the operator knows they are
-    // skipped; blocks whose shown acts are all over are left out.
-    if (!shown.length && (category.acts.length || item.status === "Ended")) {
+    // Empty blocks are skipped, and blocks whose shown acts are all over
+    // need no attention either.
+    if (!shown.length) {
       return nothing;
     }
     return html`<div
-        class=${classMap({ cat: true, empty: !category.acts.length })}
+        class="cat"
         title=${
           category.description
             ? `${category.name} – ${category.description}`
@@ -500,16 +517,14 @@ export default class CupTimeplan extends LitElement {
         >
         ${
           // For admins the music chip ("♪ x/y") already counts the acts.
-          !category.acts.length
-            ? html`<span class="count">keine Küren</span>`
-            : this.isAdmin
-              ? nothing
-              : html`<span class="count"
-                  >${shown.length} ${shown.length === 1 ? "Kür" : "Küren"}</span
-                >`
+          this.isAdmin
+            ? nothing
+            : html`<span class="count"
+                >${shown.length} ${shown.length === 1 ? "Kür" : "Küren"}</span
+              >`
         }
         ${
-          this.isAdmin && shown.length
+          this.isAdmin
             ? html`${this.renderCategoryCheckIns(shown)}${this.renderCategorySongs(
                 shown,
               )}`

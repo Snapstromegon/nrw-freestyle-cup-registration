@@ -5,7 +5,7 @@ import { type Club, clubContext } from "../../contexts/club";
 import "./cup-club-starter-manager.js";
 import "./cup-club-group-manager.js";
 import "./cup-club-act-manager.js";
-import { Task } from "@lit/task";
+import { Task, TaskStatus } from "@lit/task";
 import { unwrap } from "../../api";
 import { client, type components } from "../../apiClient";
 import {
@@ -13,7 +13,11 @@ import {
   systemStatusContext,
 } from "../../contexts/systemStatus";
 import { resetStyles } from "../../styles/base";
+import { buildEpcPayload, paymentReference } from "../../epc";
 import { formatDate, formatMoney, getStarterPrice } from "../../utils";
+import "./cup-payment-qr.js";
+
+type Competition = components["schemas"]["Competition"];
 
 /**
  * Everything a club manages: acts, starters and groups. The managers depend
@@ -49,6 +53,27 @@ export default class CupClubManager extends LitElement {
       hr {
         margin-top: 1em;
         margin-bottom: 0.5em;
+      }
+
+      .payment {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        align-items: flex-start;
+      }
+
+      .qr {
+        margin: 0;
+        max-width: 200px;
+        break-inside: avoid;
+
+        figcaption {
+          font-size: 0.85em;
+        }
+      }
+
+      .event-info {
+        padding-left: 1.25em;
       }
 
       .zahlungsinformationen {
@@ -101,10 +126,145 @@ export default class CupClubManager extends LitElement {
     this.refresh++;
   };
 
-  override render() {
+  /**
+   * The bank details, the amounts and, while something is open, an EPC QR
+   * code ("GiroCode") for the open amount.
+   */
+  renderPayment(amount: number, paid: number) {
     const competition = this.systemStatus?.competition;
+    const club = this.club;
     const payment = (label: string, value: string | null | undefined) =>
       value ? html`<tr><th>${label}</th><td>${value}</td></tr>` : nothing;
+    const open = Math.round((amount - paid) * 100) / 100;
+    const reference = club
+      ? paymentReference(competition?.payment_reference, club.name, club.code)
+      : "";
+    // Only once the starters are loaded, so the amount is right.
+    const payload =
+      club &&
+      competition?.payment_account_holder &&
+      competition.payment_iban &&
+      this.starters.status === TaskStatus.COMPLETE &&
+      open >= 0.01
+        ? buildEpcPayload({
+            name: competition.payment_account_holder,
+            iban: competition.payment_iban,
+            bic: competition.payment_bic,
+            amount: open,
+            text: paymentReference(
+              competition.payment_reference,
+              club.name,
+              club.code,
+              { qr: true },
+            ),
+          })
+        : null;
+    const contact = competition?.contact_email;
+    return html`<h4>Zahlungsinformationen</h4>
+      <div class="payment">
+        <table class="zahlungsinformationen">
+          ${payment(
+            "Zahlungsfrist",
+            competition?.payment_deadline
+              ? formatDate(competition.payment_deadline)
+              : "wird noch bekannt gegeben",
+          )}
+          ${payment("Kontoinhaber", competition?.payment_account_holder)}
+          ${payment("IBAN", competition?.payment_iban)}
+          ${payment("BIC", competition?.payment_bic)}
+          ${payment("Verwendungszweck", reference)}
+          <tr>
+            <th>Betrag</th>
+            <td>${formatMoney(amount)}</td>
+          </tr>
+          <tr>
+            <th>Bezahlt</th>
+            <td>${formatMoney(paid)}</td>
+          </tr>
+          ${
+            open >= 0.01
+              ? html`<tr>
+                  <th>Offen</th>
+                  <td><strong>${formatMoney(open)}</strong></td>
+                </tr>`
+              : open <= -0.01
+                ? html`<tr>
+                    <th>Überzahlt</th>
+                    <td>
+                      ${formatMoney(-open)}${
+                        contact
+                          ? html` – Meldet euch bitte bei
+                              <a href="mailto:${contact}">${contact}</a>.`
+                          : nothing
+                      }
+                    </td>
+                  </tr>`
+                : amount > 0
+                  ? html`<tr>
+                      <th>Offen</th>
+                      <td>Alles bezahlt – danke!</td>
+                    </tr>`
+                  : nothing
+          }
+        </table>
+        ${
+          payload
+            ? html`<figure class="qr">
+                <cup-payment-qr .payload=${payload}></cup-payment-qr>
+                <figcaption>
+                  QR-Code für die Überweisung des offenen Betrags (mit der
+                  Banking-App scannen)
+                </figcaption>
+              </figure>`
+            : nothing
+        }
+      </div>
+      <p>
+        <i
+          ><strong>Hinweis:</strong> Zahlungen werden von uns manuell bestätigt,
+          daher kann die „Bezahlt“-Angabe teils mehrere Tage Verzug haben. Schon
+          überwiesen? Dann bitte nicht doppelt überweisen.</i
+        >
+      </p>`;
+  }
+
+  /** Deadlines and rules from the announcement, plus venue and contact. */
+  renderEventInfo(competition: Competition) {
+    return html`<ul class="event-info">
+      <li>
+        Anmeldungen und Änderungen sind bis zum Meldeschluss am
+        <strong>${formatDate(competition.registration_end)}</strong> möglich.
+        Nachmeldungen sind danach nicht möglich.
+      </li>
+      <li>
+        Abmeldungen nach dem Meldeschluss: Die Startgebühr wird nur bei
+        Krankheit mit ärztlichem Attest erstattet.
+      </li>
+      <li>
+        Musik als mp3 bis zum
+        <strong>${formatDate(competition.music_upload_end)}</strong> hochladen
+        und zusätzlich auf einem USB-Stick mitbringen.
+      </li>
+      ${
+        competition.venue
+          ? html`<li>Veranstaltungsort: ${competition.venue}</li>`
+          : nothing
+      }
+      ${
+        competition.contact_email
+          ? html`<li>
+              Fragen:
+              <a href="mailto:${competition.contact_email}"
+                >${competition.contact_email}</a
+              >
+            </li>`
+          : nothing
+      }
+    </ul>`;
+  }
+
+  override render() {
+    const competition = this.systemStatus?.competition;
     const amount = (this.starters.value || []).reduce(
       (acc, starter) => acc + getStarterPrice(starter, competition),
       0,
@@ -117,60 +277,24 @@ export default class CupClubManager extends LitElement {
           : html`
             <p>
               Der anmeldende Trainer ist dafür verantwortlich, dass alle Starter
-              den Bedingungen aus der Ausschreibung wie zum Beispiel der
-              Veröffentlichung von Namen und Bildern zustimmen.
-            </p>
-
-            ${
-              competition
-                ? html`<p>
-                  Änderungen können noch bis zum Anmeldeschluss am
-                  <strong>${formatDate(competition.registration_end)}</strong>
-                  vorgenommen werden.
-                </p>`
-                : nothing
-            }
-
-            <h4>Zahlungsinformationen</h4>
-            <table class="zahlungsinformationen">
-              ${payment(
-                "Zahlungsfrist",
-                competition?.payment_deadline &&
-                  formatDate(competition.payment_deadline),
-              )}
-              ${payment("Kontoinhaber", competition?.payment_account_holder)}
-              ${payment("IBAN", competition?.payment_iban)}
-              ${payment("BIC", competition?.payment_bic)}
-              ${payment(
-                "Verwendungszweck",
-                competition?.payment_reference
-                  ? `${competition.payment_reference}: ${this.club?.name}`
-                  : this.club?.name,
-              )}
-              <tr>
-                <th>Betrag</th>
-                <td>${formatMoney(amount)}</td>
-              </tr>
-              <tr>
-                <th>Bezahlt</th>
-                <td>${formatMoney(paid)}</td>
-              </tr>
+              den Bedingungen aus der
               ${
-                amount > paid
-                  ? html`<tr>
-                    <th>Offen</th>
-                    <td>${formatMoney(amount - paid)}</td>
-                  </tr>`
-                  : nothing
+                competition?.announcement_url
+                  ? html`<a
+                      href=${competition.announcement_url}
+                      target="_blank"
+                      rel="noopener"
+                      >Ausschreibung</a
+                    >`
+                  : "Ausschreibung"
               }
-            </table>
-            <p>
-              <i
-                ><strong>Hinweis:</strong> Zahlungen werden von uns manuell
-                bestätigt, daher kann die „Bezahlt“-Angabe teils mehrere Tage
-                Verzug haben.</i
-              >
+              wie zum Beispiel der Veröffentlichung von Namen und Bildern
+              zustimmen.
             </p>
+
+            ${competition ? this.renderEventInfo(competition) : nothing}
+
+            ${this.renderPayment(amount, paid)}
           `
       }
 

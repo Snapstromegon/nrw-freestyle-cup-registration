@@ -1,6 +1,6 @@
 use uuid::Uuid;
 
-use crate::act_type::ActType;
+use crate::{act_type::ActType, normalize::NormalizationStatus};
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct User {
@@ -36,6 +36,10 @@ pub struct Act {
     pub song_file: Option<String>,
     pub description: Option<String>,
     pub song_file_name: Option<String>,
+    /// The loudness-normalized copy of the song, once it is ready.
+    pub song_file_normalized: Option<String>,
+    /// `null` without a song.
+    pub normalization_status: Option<NormalizationStatus>,
     pub song_checked: bool,
     pub act_type: ActType,
     /// Age of the oldest rider (replacements included) on the determining
@@ -50,6 +54,11 @@ pub struct Act {
     /// may start in one small and one large group). Such groups get no
     /// category until that's sorted out.
     pub type_conflict: bool,
+    /// Withdrawn after the registration deadline: the act doesn't start and
+    /// has no category, but its riders still pay for it unless `fee_waived`.
+    pub withdrawn: bool,
+    /// An admin waived the fee of a withdrawn act (e.g. medical certificate).
+    pub fee_waived: bool,
     pub act_order: Option<i64>,
     pub category_order: Option<i64>,
 }
@@ -74,12 +83,16 @@ pub struct DBAct {
     pub song_file: Option<String>,
     pub description: Option<String>,
     pub song_file_name: Option<String>,
+    pub song_file_normalized: Option<String>,
+    pub normalization_status: Option<NormalizationStatus>,
     pub act_type: ActType,
     pub max_age: Option<f64>,
     pub participants: sqlx::types::Json<Vec<ActParticipant>>,
     pub category: Option<String>,
     pub type_conflict: bool,
     pub song_checked: bool,
+    pub withdrawn: bool,
+    pub fee_waived: bool,
     pub act_order: Option<i64>,
     pub category_order: Option<i64>,
 }
@@ -94,12 +107,19 @@ impl From<DBAct> for Act {
             song_file: db_act.song_file,
             description: db_act.description,
             song_file_name: db_act.song_file_name,
+            // Only a finished copy is worth playing.
+            song_file_normalized: db_act
+                .song_file_normalized
+                .filter(|_| db_act.normalization_status == Some(NormalizationStatus::Done)),
+            normalization_status: db_act.normalization_status,
             act_type: db_act.act_type,
             max_age: db_act.max_age,
             participants: db_act.participants.0,
             category: db_act.category,
             type_conflict: db_act.type_conflict,
             song_checked: db_act.song_checked,
+            withdrawn: db_act.withdrawn,
+            fee_waived: db_act.fee_waived,
             act_order: db_act.act_order,
             category_order: db_act.category_order,
         }

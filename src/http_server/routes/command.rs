@@ -29,6 +29,7 @@ mod resend_mail_validation;
 mod reset_password;
 mod save_act_song;
 mod set_act_order;
+mod set_act_withdrawn;
 mod set_checked_in;
 mod set_club_group_members;
 mod set_payment;
@@ -67,6 +68,7 @@ pub fn get_command_router() -> OpenApiRouter {
         .routes(routes!(save_act_song::save_act_song))
         .routes(routes!(set_payment::set_payment))
         .routes(routes!(set_song_checked::set_song_checked))
+        .routes(routes!(set_act_withdrawn::set_act_withdrawn))
         .routes(routes!(set_act_order::set_act_order))
         .routes(routes!(set_checked_in::set_checked_in))
         .routes(routes!(timeplan_forward::timeplan_forward))
@@ -74,5 +76,5 @@ pub fn get_command_router() -> OpenApiRouter {
         .routes(routes!(move_timeplan_up::move_timeplan_up))
         .routes(routes!(move_timeplan_down::move_timeplan_down))
         .routes(routes!(reload_db::reload_db))
-        .layer(DefaultBodyLimit::max(1024 * 1024 * 10))
+        .layer(DefaultBodyLimit::max(save_act_song::MAX_REQUEST_SIZE))
 }

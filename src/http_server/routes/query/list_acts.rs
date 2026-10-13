@@ -9,6 +9,7 @@ use crate::{
         extractor::auth::Auth,
         routes::http_types::{Act, ActParticipant, DBAct},
     },
+    normalize::NormalizationStatus,
     reloadable_sqlite::ReloadableSqlite,
 };
 
@@ -45,6 +46,8 @@ pub async fn list_acts(
             view_act.song_file,
             view_act.description,
             view_act.song_file_name,
+            view_act.song_file_normalized,
+            view_act.normalization_status as "normalization_status: NormalizationStatus",
             view_act.act_type as "act_type!: ActType",
             view_act.max_age,
             view_act.participants as "participants!: sqlx::types::Json<Vec<ActParticipant>>",
@@ -59,7 +62,9 @@ pub async fn list_acts(
                     WHERE own.act_id = view_act.id
                 )
             ) as "type_conflict!: bool",
-            view_act.song_checked
+            view_act.song_checked,
+            view_act.withdrawn_at IS NOT NULL as "withdrawn!: bool",
+            view_act.fee_waived as "fee_waived!: bool"
         FROM view_act LEFT JOIN categories ON view_act.category = categories.name
         ORDER BY categories."order" IS NULL, categories."order", view_act."order" ASC
         "#

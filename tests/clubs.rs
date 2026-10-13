@@ -209,6 +209,7 @@ async fn deleting_a_starter_removes_acts_and_unlinks_partner(db: SqlitePool) {
     assert_eq!(starters.len(), 1);
     assert_eq!(starters[0]["id"], berta.to_string());
     assert_eq!(starters[0]["partner_id"], Value::Null);
+    assert_eq!(starters[0]["partner_name"], Value::Null);
     assert!(list_acts(&app, &cookie, club_id).await.is_empty());
 }
 
@@ -611,4 +612,26 @@ async fn clubs_only_link_partners_of_their_own_club(db: SqlitePool) {
     assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
     let starters = list_starters(&app, &cookie, club_id).await;
     assert_eq!(starters[0]["partner_id"], zoe.to_string());
+}
+
+#[sqlx::test]
+async fn club_code_is_stable_across_renames(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let (cookie, club_id) = app.create_club_owner("Owner", "RSV").await;
+    let code = |body: &Value| body["code"].as_str().unwrap().to_string();
+
+    let before = app.get("/api/query/get_club", Some(&cookie)).await;
+    assert_eq!(before.status, StatusCode::OK, "{:?}", before.body);
+    let first = code(&before.body);
+    assert!(first.starts_with("EV-") && first.len() == 7, "{first}");
+
+    app.post(
+        "/api/command/rename_club",
+        json!({ "club_id": club_id, "name": "RSV Neu" }),
+        Some(&cookie),
+    )
+    .await;
+    let after = app.get("/api/query/get_club", Some(&cookie)).await;
+    assert_eq!(after.body["name"], "RSV Neu");
+    assert_eq!(code(&after.body), first);
 }

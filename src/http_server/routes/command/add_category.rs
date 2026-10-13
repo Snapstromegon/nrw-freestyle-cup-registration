@@ -62,9 +62,13 @@ pub async fn add_category(
             is_single_male, 
             einfahrzeit_seconds, 
             act_duration_seconds, 
-            judge_duration_seconds
+            judge_duration_seconds,
+            "order"
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9,
+            (SELECT COALESCE(MAX("order"), 0) + 1 FROM categories)
+        )
         "#,
         body.name,
         body.description,

@@ -24,8 +24,8 @@ export const timeplanStatus = (
       : TimeplanStatus.Break;
   }
   if ("Category" in entry.timeplan_entry) {
-    // A category without acts (e.g. a group category without complete
-    // groups) is ended by the next step forward; nothing happens until then.
+    // A category block that lost its acts while running (e.g. its only group
+    // became incomplete) is ended by the next step forward.
     if (entry.timeplan_entry.Category.acts.length === 0) {
       return TimeplanStatus.Break;
     }
@@ -35,7 +35,7 @@ export const timeplanStatus = (
     }
     if (
       entry.timeplan_entry.Category.acts[0].status === "Planned" &&
-      entry.timeplan_entry.Category.einfahrzeit_seconds > 0
+      entry.timeplan_entry.Category.warmup_seconds > 0
     ) {
       return TimeplanStatus.Warmup;
     }
@@ -50,15 +50,32 @@ export const currentTimeplanEntry = (
   return timeplan?.items.find((item) => item.status === "Started");
 };
 
+type TimeplanItem = components["schemas"]["TimeplanItem"];
+
+/**
+ * A category block without acts. "Weiter" skips it, so it takes no time and
+ * an ended empty block was skipped rather than run.
+ */
+export const isEmptyBlock = (item: TimeplanItem) =>
+  "Category" in item.timeplan_entry &&
+  item.timeplan_entry.Category.acts.length === 0;
+
+/** The next entry "Weiter" starts; empty blocks are skipped. */
 export const nextTimeplanEntry = (
   timeplan: components["schemas"]["Timeplan"],
 ) => {
-  return timeplan?.items.find((item) => item.status === "Planned");
+  return timeplan?.items.find(
+    (item) => item.status === "Planned" && !isEmptyBlock(item),
+  );
 };
+
+/** The last entry that really ran, not a skipped empty block. */
 export const lastTimeplanEntry = (
   timeplan: components["schemas"]["Timeplan"],
 ) => {
-  return timeplan?.items.findLast((item) => item.status === "Ended");
+  return timeplan?.items.findLast(
+    (item) => item.status === "Ended" && !isEmptyBlock(item),
+  );
 };
 
 export const currentTimeplanAct = (
@@ -151,6 +168,8 @@ interface Starts {
   pair: boolean;
   /** Group memberships, replacement riders included. Missing counts as 0. */
   group_count?: number | null;
+  /** Withdrawn starts whose fee an admin waived. Missing counts as 0. */
+  waived_count?: number | null;
 }
 
 /** Number of starts a starter is registered for, groups included. */
@@ -162,7 +181,8 @@ export const countStarts = (starter: Starts) =>
 
 /**
  * Registration fee of one starter: `fee_per_start` per start, capped at
- * `max_fee_per_starter`. Without a competition there is nothing to pay.
+ * `max_fee_per_starter`. Withdrawn starts still cost, unless their fee was
+ * waived. Without a competition there is nothing to pay.
  */
 export const getStarterPrice = (
   starter: Starts,
@@ -174,9 +194,48 @@ export const getStarterPrice = (
   if (!competition) {
     return 0;
   }
-  const price = countStarts(starter) * competition.fee_per_start;
+  const billable = Math.max(
+    0,
+    countStarts(starter) - (starter.waived_count ?? 0),
+  );
+  const price = billable * competition.fee_per_start;
   const max = competition.max_fee_per_starter;
   return max === null || max === undefined ? price : Math.min(price, max);
+};
+
+/** The local calendar day of a date-time, e.g. "2027-02-12", for grouping. */
+export const dayKey = (value: string | Date) => {
+  const date = new Date(value);
+  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+};
+
+/** A day heading like "Freitag, 12.02.". */
+export const formatDay = (value: string | Date) =>
+  new Date(value).toLocaleDateString("de-DE", {
+    weekday: "long",
+    day: "2-digit",
+    month: "2-digit",
+  });
+
+/**
+ * Splits `items` into days by `start`, for day headings. Returns one group per
+ * day, or a single group with an empty `day` if all items are on one day.
+ */
+export const groupByDay = <T>(items: T[], start: (item: T) => string) => {
+  const days: { day: string; label: string; items: T[] }[] = [];
+  for (const item of items) {
+    const day = dayKey(start(item));
+    const last = days.at(-1);
+    if (last?.day === day) {
+      last.items.push(item);
+    } else {
+      days.push({ day, label: formatDay(start(item)), items: [item] });
+    }
+  }
+  if (days.length === 1) {
+    days[0].day = "";
+  }
+  return days;
 };
 
 /**
@@ -240,7 +299,7 @@ export const groupTypeForSize = (regular: number): GroupActType | null => {
 };
 
 /**
- * One-line summary of a group, e.g. "KG U15 · 7 Fahrer + 1 Ersatz".
+ * One-line summary of a group, e.g. "KG Junior Expert · 7 Fahrer + 1 Ersatz".
  * `isU15` is `null` when the age group is unknown (it is then left out).
  */
 export const describeGroup = (
@@ -252,10 +311,29 @@ export const describeGroup = (
   if (!type) {
     return `unvollständig – mindestens ${MIN_GROUP_SIZE} Fahrer`;
   }
-  const age = isU15 === null ? "" : isU15 ? " U15" : " 15+";
+  const age = isU15 === null ? "" : isU15 ? " Junior Expert" : " Expert";
   const extra = replacements > 0 ? ` + ${replacements} Ersatz` : "";
   return `${actTypeShort[type]}${age} · ${regular} Fahrer${extra}`;
 };
+
+/**
+ * The song file to play: the loudness-normalized copy once it is ready,
+ * unless the original is wanted (e.g. because the copy sounds wrong).
+ */
+export const songFile = (
+  act: { song_file?: string | null; song_file_normalized?: string | null },
+  original = false,
+) => (original ? act.song_file : (act.song_file_normalized ?? act.song_file));
+
+/** A short German note on the normalized copy of a song, if there is one. */
+export const normalizationLabel = (status: string | null | undefined) =>
+  status === "pending"
+    ? "Lautstärke wird angeglichen…"
+    : status === "failed"
+      ? "Lautstärke konnte nicht angeglichen werden – es läuft das Original"
+      : status === "done"
+        ? "Lautstärke angeglichen"
+        : "";
 
 /** Name of the current competition, with a generic fallback. */
 export const competitionName = (competition: Competition | null | undefined) =>

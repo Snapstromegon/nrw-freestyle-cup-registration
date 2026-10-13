@@ -5,6 +5,7 @@ use uuid::Uuid;
 use crate::{
     http_server::{ClientError, HttpError, extractor::auth::Auth},
     reloadable_sqlite::ReloadableSqlite,
+    utils::club_code,
 };
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
@@ -17,6 +18,9 @@ pub struct ClubOverview {
     owner_name: String,
     owner_email: String,
     owner_email_verified: bool,
+    /// Short code for the transfer reference, e.g. "EV-K7Q3"; stays the
+    /// same when the club is renamed.
+    code: String,
 }
 
 /// List all clubs with their owners. Admin only.
@@ -39,7 +43,7 @@ pub async fn list_clubs(
         return Err(HttpError::InvalidCredentials);
     }
     let db = db.get().await.clone();
-    let clubs = sqlx::query_as!(
+    let mut clubs = sqlx::query_as!(
         ClubOverview,
         r#"
         SELECT
@@ -49,7 +53,8 @@ pub async fn list_clubs(
             clubs.owner_id as "owner_id!: Uuid",
             users.name as owner_name,
             users.email as owner_email,
-            users.email_verified as owner_email_verified
+            users.email_verified as owner_email_verified,
+            '' as "code!"
         FROM clubs
         JOIN users ON users.id = clubs.owner_id
         ORDER BY clubs.name
@@ -57,5 +62,8 @@ pub async fn list_clubs(
     )
     .fetch_all(&db)
     .await?;
+    for club in &mut clubs {
+        club.code = club_code(&club.id);
+    }
     Ok(Json(clubs))
 }

@@ -350,9 +350,12 @@ export default class CupViewAdminPayments extends LitElement {
       (row) =>
         (!this.onlyOpen || row.open > CENT || row.club.id === this.editing) &&
         (!needle ||
-          [row.club.name, row.club.owner_name, row.club.owner_email].some(
-            (text) => text.toLowerCase().includes(needle),
-          )),
+          [
+            row.club.name,
+            row.club.code,
+            row.club.owner_name,
+            row.club.owner_email,
+          ].some((text) => text.toLowerCase().includes(needle))),
     );
     const { key, desc } = this.sort;
     rows.sort((a, b) => {
@@ -572,7 +575,9 @@ export default class CupViewAdminPayments extends LitElement {
     const { club } = row;
     const editing = this.editing === club.id;
     return html`<tr class=${editing ? "editing" : ""}>
-      <td class="trunc" title=${club.name}>${club.name}</td>
+      <td class="trunc" title="${club.name} · Code im Verwendungszweck: ${club.code}">
+        ${club.name} <span class="muted small">${club.code}</span>
+      </td>
       <td class="contact">
         ${club.owner_name}
         <a

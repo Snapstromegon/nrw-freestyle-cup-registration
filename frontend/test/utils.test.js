@@ -28,6 +28,7 @@ import {
   isUnderAge,
   judgingAfterBlockEnd,
   lastTimeplanAct,
+  isEmptyBlock,
   lastTimeplanEntry,
   MAX_SMALL_GROUP_SIZE,
   MIN_GROUP_SIZE,
@@ -36,6 +37,7 @@ import {
   parseDuration,
   TimeplanStatus,
   timeplanStatus,
+  songFile,
 } from "../src/ts/utils.ts";
 
 // Pin the time zone, so date assertions don't depend on the machine. Nothing
@@ -44,10 +46,16 @@ process.env.TZ = "Europe/Berlin";
 
 const act = (id, status) => ({ id, name: id, status });
 
-const category = (name, status, acts, einfahrzeit_seconds = 600) => ({
+const category = (
+  name,
+  status,
+  acts,
+  einfahrzeit_seconds = 600,
+  warmup_seconds = acts.length ? einfahrzeit_seconds : 0,
+) => ({
   status,
   timeplan_entry: {
-    Category: { name, einfahrzeit_seconds, acts },
+    Category: { name, einfahrzeit_seconds, warmup_seconds, acts },
   },
 });
 
@@ -77,6 +85,24 @@ describe("timeplan entries", () => {
 
   test("lastTimeplanEntry returns the most recently ended entry", () => {
     assert.equal(lastTimeplanEntry(plan), plan.items[1]);
+  });
+
+  test("next and last entry skip empty blocks", () => {
+    const skipping = timeplan(
+      category("A", "Ended", [act("a1", "Ended")]),
+      category("Skipped", "Ended", []),
+      category("B", "Started", [act("b1", "Started")]),
+      category("Empty", "Planned", []),
+      category("C", "Planned", [act("c1", "Planned")]),
+    );
+    assert.equal(nextTimeplanEntry(skipping), skipping.items[4]);
+    assert.equal(lastTimeplanEntry(skipping), skipping.items[0]);
+    assert.equal(
+      nextTimeplanAct(timeplan(...skipping.items.slice(3))).id,
+      "c1",
+    );
+    assert.equal(isEmptyBlock(skipping.items[1]), true);
+    assert.equal(isEmptyBlock(skipping.items[0]), false);
   });
 
   test("all lookups tolerate a missing timeplan", () => {
@@ -149,6 +175,7 @@ describe("judging after the last act of a block", () => {
         name: "KGU15",
         description: "Kleingruppe U15",
         einfahrzeit_seconds: 600,
+        warmup_seconds: 600,
         judge_duration_seconds: 180,
         acts: [{ ...act("g1", "Ended"), ended_at: endedAt(secondsAgo) }],
       },
@@ -312,6 +339,20 @@ describe("getStarterPrice", () => {
     assert.equal(getStarterPrice(starter(true, false, true), null), 0);
   });
 
+  test("doesn't charge waived starts", () => {
+    const waived = { ...starter(true, false, true), group_count: 2 };
+    // 4 starts, capped at 45 €; one waived start leaves 3 billable ones.
+    assert.equal(
+      getStarterPrice({ ...waived, waived_count: 1 }, competition),
+      45,
+    );
+    assert.equal(
+      getStarterPrice({ ...waived, waived_count: 2 }, competition),
+      30,
+    );
+    assert.equal(countStarts({ ...waived, waived_count: 2 }), 4);
+  });
+
   test("countStarts counts every registered start", () => {
     assert.equal(countStarts(starter(true, false, true)), 2);
   });
@@ -386,13 +427,19 @@ describe("act types and groups", () => {
   });
 
   test("describeGroup summarizes type, age group and riders", () => {
-    assert.equal(describeGroup(7, 1, true), "KG U15 · 7 Fahrer + 1 Ersatz");
-    assert.equal(describeGroup(9, 0, false), "GG 15+ · 9 Fahrer");
+    assert.equal(
+      describeGroup(7, 1, true),
+      "KG Junior Expert · 7 Fahrer + 1 Ersatz",
+    );
+    assert.equal(describeGroup(9, 0, false), "GG Expert · 9 Fahrer");
     assert.equal(describeGroup(3, 0, null), "KG · 3 Fahrer");
   });
 
   test("describeGroup counts only regular riders for the size", () => {
-    assert.equal(describeGroup(8, 2, true), "KG U15 · 8 Fahrer + 2 Ersatz");
+    assert.equal(
+      describeGroup(8, 2, true),
+      "KG Junior Expert · 8 Fahrer + 2 Ersatz",
+    );
   });
 
   test("describeGroup flags incomplete groups", () => {
@@ -852,5 +899,18 @@ describe("unwrap", () => {
         }),
       { message: "Nicht gefunden" },
     );
+  });
+});
+
+describe("songFile", () => {
+  const act = { song_file: "a.mp3", song_file_normalized: "a.n.mp3" };
+
+  test("prefers the normalized copy", () => {
+    assert.equal(songFile(act), "a.n.mp3");
+  });
+
+  test("plays the original when asked or without a copy", () => {
+    assert.equal(songFile(act, true), "a.mp3");
+    assert.equal(songFile({ ...act, song_file_normalized: null }), "a.mp3");
   });
 });

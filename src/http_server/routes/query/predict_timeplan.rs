@@ -1,29 +1,32 @@
+use std::collections::HashMap;
+
 use axum::{Extension, Json};
-use tracing::{info, instrument};
+use tracing::instrument;
 use uuid::Uuid;
 
 use crate::{
     http_server::{ClientError, HttpError},
     reloadable_sqlite::ReloadableSqlite,
+    timeplan::{Block, effective_warmups},
 };
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct TimeplanAct {
-    status: TimeplanItemStatus,
-    id: Uuid,
-    name: String,
+    pub status: TimeplanItemStatus,
+    pub id: Uuid,
+    pub name: String,
     #[serde(with = "time::serde::iso8601::option")]
-    started_at: Option<time::OffsetDateTime>,
+    pub started_at: Option<time::OffsetDateTime>,
     #[serde(with = "time::serde::iso8601::option")]
-    ended_at: Option<time::OffsetDateTime>,
+    pub ended_at: Option<time::OffsetDateTime>,
     #[serde(with = "time::serde::iso8601")]
-    predicted_start: time::OffsetDateTime,
+    pub predicted_start: time::OffsetDateTime,
     #[serde(with = "time::serde::iso8601")]
-    predicted_end: time::OffsetDateTime,
+    pub predicted_end: time::OffsetDateTime,
     #[serde(with = "time::serde::iso8601")]
-    planned_start: time::OffsetDateTime,
+    pub planned_start: time::OffsetDateTime,
     #[serde(with = "time::serde::iso8601")]
-    planned_end: time::OffsetDateTime,
+    pub planned_end: time::OffsetDateTime,
 }
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
@@ -33,7 +36,12 @@ pub enum TimeplanEntry {
         description: String,
         duration_seconds: i64,
         order: i64,
+        /// The configured warm-up.
         einfahrzeit_seconds: i64,
+        /// The warm-up this block really gets: none for an empty block, and a
+        /// block sharing the warm-up of an empty category before it gets
+        /// that one (see `crate::timeplan::effective_warmups`).
+        warmup_seconds: i64,
         act_duration_seconds: i64,
         judge_duration_seconds: i64,
         acts: Vec<TimeplanAct>,
@@ -66,30 +74,30 @@ pub enum TimeplanItemStatus {
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct TimeplanItem {
-    status: TimeplanItemStatus,
+    pub status: TimeplanItemStatus,
     #[serde(with = "time::serde::iso8601")]
-    predicted_start: time::OffsetDateTime,
+    pub predicted_start: time::OffsetDateTime,
     #[serde(with = "time::serde::iso8601")]
-    predicted_end: time::OffsetDateTime,
+    pub predicted_end: time::OffsetDateTime,
     #[serde(with = "time::serde::iso8601")]
-    planned_start: time::OffsetDateTime,
+    pub planned_start: time::OffsetDateTime,
     #[serde(with = "time::serde::iso8601")]
-    planned_end: time::OffsetDateTime,
-    planned_duration: i64,
+    pub planned_end: time::OffsetDateTime,
+    pub planned_duration: i64,
     #[serde(with = "time::serde::iso8601::option")]
-    started_at: Option<time::OffsetDateTime>,
+    pub started_at: Option<time::OffsetDateTime>,
     #[serde(with = "time::serde::iso8601::option")]
-    ended_at: Option<time::OffsetDateTime>,
-    timeplan_entry: TimeplanEntry,
+    pub ended_at: Option<time::OffsetDateTime>,
+    pub timeplan_entry: TimeplanEntry,
 }
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct Timeplan {
-    offset: i64,
-    items: Vec<TimeplanItem>,
+    pub offset: i64,
+    pub items: Vec<TimeplanItem>,
 }
 
-/// List all users.
+/// Predicts when each timeplan entry and act starts and ends.
 #[utoipa::path(
     get,
     tags=["query", "timeplan"],
@@ -105,6 +113,11 @@ pub async fn predict_timeplan(
     Extension(db): Extension<ReloadableSqlite>,
 ) -> Result<Json<Timeplan>, HttpError> {
     let db = db.get().await.clone();
+    Ok(Json(predict(&db).await?))
+}
+
+/// The prediction behind `predict_timeplan`, also used by the startlist CSV.
+pub async fn predict(db: &sqlx::SqlitePool) -> Result<Timeplan, HttpError> {
     let top_level_timeplan = sqlx::query!(
         r#"
         SELECT
@@ -121,34 +134,92 @@ pub async fn predict_timeplan(
             id
         "#,
     )
-    .fetch_all(&db)
+    .fetch_all(db)
     .await?;
 
-    let first_entry = top_level_timeplan
-        .first()
-        .ok_or(HttpError::ErrorMessages("No first entry".to_string()))?;
+    let Some(first_entry) = top_level_timeplan.first() else {
+        return Ok(Timeplan {
+            offset: 0,
+            items: vec![],
+        });
+    };
     let mut next_planned_start_time =
         first_entry
             .earliest_start_time
             .ok_or(HttpError::ErrorMessages(
-                "Earliest start time is not set".to_string(),
+                "Der erste Zeitplaneintrag braucht eine früheste Startzeit.".to_string(),
             ))?;
 
     let mut next_predicted_start_time =
         time::OffsetDateTime::now_utc().max(next_planned_start_time);
 
-    info!("next_planned_start_time: {:?}", next_planned_start_time);
-    info!("next_predicted_start_time: {:?}", next_predicted_start_time);
+    let categories: HashMap<String, _> = sqlx::query!(
+        r#"
+        SELECT
+            name as "name!",
+            description as "description!",
+            "order" as "order!",
+            einfahrzeit_seconds,
+            act_duration_seconds,
+            judge_duration_seconds
+        FROM
+            categories
+        "#
+    )
+    .fetch_all(db)
+    .await?
+    .into_iter()
+    .map(|cat| (cat.name.clone(), cat))
+    .collect();
+    let mut acts_by_category: HashMap<String, Vec<_>> = HashMap::new();
+    for act in sqlx::query!(
+        r#"
+        SELECT
+            id as "id!: Uuid",
+            name,
+            started_at,
+            ended_at,
+            category as "category!"
+        FROM
+            view_act
+        WHERE
+            category IS NOT NULL
+        ORDER BY
+            "order"
+        "#
+    )
+    .fetch_all(db)
+    .await?
+    {
+        acts_by_category
+            .entry(act.category.clone())
+            .or_default()
+            .push(act);
+    }
+    let blocks: Vec<Block> = top_level_timeplan
+        .iter()
+        .map(|entry| match &entry.category {
+            Some(name) => Block::Category {
+                einfahrzeit_seconds: categories.get(name).map_or(0, |c| c.einfahrzeit_seconds),
+                empty: !acts_by_category.contains_key(name),
+            },
+            None => Block::Custom,
+        })
+        .collect();
+    let warmups = effective_warmups(&blocks);
 
     let mut timeplan = Timeplan {
-        offset: (next_predicted_start_time - next_planned_start_time).whole_seconds(),
+        offset: 0,
         items: vec![],
     };
 
-    let mut general_offset = None;
+    // The offset is the predicted delay of the next step that hasn't started
+    // (an act, or an entry's start). Once everything has started, it's the
+    // delay of the last start. It doesn't jump between acts or at the end.
+    let mut next_offset = None;
+    let mut last_offset = None;
 
-    for top_level_timeplan_entry in top_level_timeplan {
-        let mut entry_offset = None;
+    for (top_level_timeplan_entry, warmup_seconds) in top_level_timeplan.into_iter().zip(warmups) {
         if let Some(earliest_start_time) = top_level_timeplan_entry.earliest_start_time {
             next_planned_start_time = earliest_start_time.max(next_planned_start_time);
             next_predicted_start_time = top_level_timeplan_entry
@@ -158,6 +229,12 @@ pub async fn predict_timeplan(
 
         let item_planned_start_time = next_planned_start_time;
         let item_predicted_start_time = next_predicted_start_time;
+        if let Some(started_at) = top_level_timeplan_entry.started_at {
+            last_offset = Some((started_at - item_planned_start_time).whole_seconds());
+        } else if next_offset.is_none() {
+            next_offset =
+                Some((item_predicted_start_time - item_planned_start_time).whole_seconds());
+        }
 
         let entry = match (
             top_level_timeplan_entry.duration_seconds,
@@ -165,64 +242,26 @@ pub async fn predict_timeplan(
             top_level_timeplan_entry.category,
         ) {
             (_, _, Some(name)) => {
-                let cat = sqlx::query!(
-                    r#"
-                    SELECT
-                        name,
-                        description as "description!",
-                        "order" as "order!",
-                        einfahrzeit_seconds,
-                        act_duration_seconds,
-                        judge_duration_seconds
-                    FROM
-                        categories
-                    WHERE
-                        name = $1
-                    "#,
-                    name
-                )
-                .fetch_one(&db)
-                .await?;
-                let acts = sqlx::query!(
-                    r#"
-                    SELECT
-                        id as "id!: Uuid",
-                        name,
-                        started_at,
-                        ended_at
-                    FROM
-                        view_act
-                    WHERE
-                        category = $1
-                    ORDER BY
-                        "order"
-                    "#,
-                    name
-                )
-                .fetch_all(&db)
-                .await?;
+                let cat = categories.get(&name).ok_or_else(|| {
+                    HttpError::ErrorMessages(format!("Unbekannte Kategorie im Zeitplan: {name}"))
+                })?;
+                let acts = acts_by_category.remove(&name).unwrap_or_default();
 
-                // A category without acts is skipped, so nobody warms up for
-                // it (`einfahrzeit_seconds` still reports the configured time).
-                let warmup_seconds = if acts.is_empty() {
-                    0
-                } else {
-                    cat.einfahrzeit_seconds
-                };
                 next_predicted_start_time += time::Duration::seconds(warmup_seconds);
                 next_planned_start_time += time::Duration::seconds(warmup_seconds);
 
                 let mut timeplan_acts = vec![];
                 for act in acts {
-                    if let (Some(started_at), None) = (act.started_at, act.ended_at) {
-                        entry_offset = Some((started_at - next_planned_start_time).whole_seconds());
-                    }
-
                     next_predicted_start_time =
                         time::OffsetDateTime::now_utc().max(next_predicted_start_time);
 
                     if let Some(started_at) = act.started_at {
                         next_predicted_start_time = started_at;
+                        last_offset = Some((started_at - next_planned_start_time).whole_seconds());
+                    } else if next_offset.is_none() {
+                        next_offset = Some(
+                            (next_predicted_start_time - next_planned_start_time).whole_seconds(),
+                        );
                     }
 
                     let next_predicted_end_time = if let Some(ended_at) = act.ended_at {
@@ -248,7 +287,7 @@ pub async fn predict_timeplan(
                             (None, None) => TimeplanItemStatus::Planned,
                             _ => {
                                 return Err(HttpError::ErrorMessages(
-                                    "Invalid timeplan entry".to_string(),
+                                    "Ungültiger Zeitplaneintrag".to_string(),
                                 ));
                             }
                         },
@@ -260,12 +299,13 @@ pub async fn predict_timeplan(
                 }
                 TimeplanEntry::Category {
                     name,
-                    description: cat.description,
+                    description: cat.description.clone(),
                     duration_seconds: (warmup_seconds
                         + (cat.act_duration_seconds + cat.judge_duration_seconds)
                             * timeplan_acts.len() as i64),
                     order: cat.order,
                     einfahrzeit_seconds: (cat.einfahrzeit_seconds),
+                    warmup_seconds,
                     act_duration_seconds: (cat.act_duration_seconds),
                     judge_duration_seconds: (cat.judge_duration_seconds),
                     acts: timeplan_acts,
@@ -281,7 +321,7 @@ pub async fn predict_timeplan(
             }
             _ => {
                 return Err(HttpError::ErrorMessages(
-                    "Invalid timeplan entry".to_string(),
+                    "Ungültiger Zeitplaneintrag".to_string(),
                 ));
             }
         };
@@ -296,7 +336,7 @@ pub async fn predict_timeplan(
                 (None, None) => TimeplanItemStatus::Planned,
                 _ => {
                     return Err(HttpError::ErrorMessages(
-                        "Invalid timeplan entry".to_string(),
+                        "Ungültiger Zeitplaneintrag".to_string(),
                     ));
                 }
             },
@@ -314,22 +354,10 @@ pub async fn predict_timeplan(
             timeplan_entry: entry,
         };
 
-        if entry_offset.is_none()
-            && let (Some(started_at), None) = (item.started_at, item.ended_at)
-        {
-            entry_offset = Some((started_at - item.planned_start).whole_seconds());
-        }
-
-        if let Some(offset) = entry_offset {
-            general_offset = Some(offset);
-        } else if item.status == TimeplanItemStatus::Started {
-            general_offset = Some((item.started_at.unwrap() - item.planned_start).whole_seconds());
-        }
-
         timeplan.items.push(item);
     }
 
-    timeplan.offset = general_offset.unwrap_or(timeplan.offset);
+    timeplan.offset = next_offset.or(last_offset).unwrap_or(0);
 
-    Ok(Json(timeplan))
+    Ok(timeplan)
 }

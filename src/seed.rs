@@ -316,6 +316,12 @@ pub async fn seed(
     timeplan: &[TimeplanEntryConfig],
 ) -> Result<(), String> {
     let db_error = |e: sqlx::Error| format!("Database error while seeding: {e}");
+    if let Some(competition) = competition {
+        competition.validate()?;
+        for warning in competition.payment_warnings() {
+            warn!("{warning}");
+        }
+    }
     let mut tx = db.begin().await.map_err(db_error)?;
 
     if let Some(competition) = competition {
@@ -323,6 +329,19 @@ pub async fn seed(
             .await
             .map_err(db_error)?;
         info!("Applied competition {} from the config", competition.id);
+        // The app uses one competition. A row left over from an earlier id
+        // would win in `Competition::current` if it starts later.
+        let removed = sqlx::query!("DELETE FROM competition WHERE id != ?", competition.id)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?
+            .rows_affected();
+        if removed > 0 {
+            warn!(
+                "Removed {removed} competition(s) with an id other than {}",
+                competition.id
+            );
+        }
     }
 
     let category_count: i64 =
@@ -665,6 +684,28 @@ mod tests {
             vec![("U15".to_string(), 1), ("15+".to_string(), 2)]
         );
         assert_eq!(count(&db, "timeplan").await, 3);
+    }
+
+    #[sqlx::test]
+    async fn new_competition_id_replaces_the_old_row(db: sqlx::SqlitePool) {
+        seed_config(&db, CONFIG).await.unwrap();
+        let renamed = CONFIG.replace(r#"id = "cup""#, r#"id = "cup-2""#);
+        seed_config(&db, &renamed).await.unwrap();
+
+        assert_eq!(count(&db, "competition").await, 1);
+        let competition = Competition::current(&db).await.unwrap().unwrap();
+        assert_eq!(competition.id, "cup-2");
+    }
+
+    #[sqlx::test]
+    async fn invalid_competition_dates_write_nothing(db: sqlx::SqlitePool) {
+        let broken = CONFIG.replace(
+            "registration_end = 2027-04-30T23:59:59+02:00",
+            "registration_end = 2027-12-20T23:59:59+01:00",
+        );
+        let err = seed_config(&db, &broken).await.unwrap_err();
+        assert!(err.contains("registration_end"), "{err}");
+        assert_eq!(count(&db, "competition").await, 0);
     }
 
     #[sqlx::test]

@@ -45,6 +45,7 @@ const emptyStarter = (): MaybeNewStarter => ({
   pair: false,
   partner_name: "",
   group_count: 0,
+  waived_count: 0,
 });
 
 /** The value of a date input; "" for an invalid date (a cleared input). */
