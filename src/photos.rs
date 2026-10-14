@@ -36,7 +36,7 @@ use url::Url;
 use utoipa::ToSchema;
 
 /// How often the source is listed.
-pub const POLL_EVERY: Duration = Duration::from_secs(15);
+pub const POLL_EVERY: Duration = Duration::from_secs(5);
 /// How many of the newest photos breaks choose from.
 const RECENT: usize = 30;
 /// How many images are kept in memory.
