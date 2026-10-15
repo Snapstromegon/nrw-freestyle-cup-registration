@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { liveState, phaseTimer, scheduleOffset } from "../src/ts/live.ts";
+import {
+  endedActIds,
+  liveState,
+  phaseTimer,
+  scheduleOffset,
+} from "../src/ts/live.ts";
 
 const START = "2027-02-12T09:00:00Z";
 const MINUTE = 60_000;
@@ -103,5 +108,24 @@ describe("phaseTimer", () => {
 
   test("is undefined without a start", () => {
     assert.equal(phaseTimer({ phase: "before" }, Date.now(), false), undefined);
+  });
+});
+
+describe("endedActIds", () => {
+  const ended = { status: "Ended", ended_at: START };
+
+  test("finds the act that was running and has ended", () => {
+    assert.deepEqual(endedActIds(timeplan(), timeplan(ended)), ["a"]);
+  });
+
+  test("ignores acts that were not running", () => {
+    // E.g. the first load, or judging already when the view opened.
+    assert.deepEqual(endedActIds(timeplan(ended), timeplan(ended)), []);
+    assert.deepEqual(
+      endedActIds(timeplan({ status: "Planned" }), timeplan(ended)),
+      [],
+    );
+    // "Zurück": it runs again.
+    assert.deepEqual(endedActIds(timeplan(ended), timeplan()), []);
   });
 });

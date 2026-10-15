@@ -19,7 +19,8 @@ pub struct SetTimeplanForwardResponse {}
 /// Moves the live timeplan one step forward.
 ///
 /// Ends the running act, starts the next act, or ends the running entry and
-/// starts the next one. Empty category blocks are skipped on the way.
+/// starts the next one. Empty category blocks are skipped on the way. Ending
+/// an act stops the music on the active player.
 #[utoipa::path(
     post,
     tags=["command", "timeplan"],
@@ -46,6 +47,7 @@ pub async fn timeplan_forward(
     // One write transaction, so two operators pressing at the same moment
     // can't both act on the same state and skip a step.
     let mut tx = begin_write(&db).await?;
+    let mut ended_act = false;
 
     let running_timeplan_entry = sqlx::query!(
         "SELECT id, category FROM timeplan WHERE started_at IS NOT NULL AND ended_at IS NULL ORDER BY id LIMIT 1"
@@ -64,6 +66,7 @@ pub async fn timeplan_forward(
                 )
                 .execute(&mut *tx)
                 .await?;
+                ended_act = true;
 
                 // Ende category if all acts are done
                 let open_cat_acts = sqlx::query!(
@@ -122,7 +125,13 @@ pub async fn timeplan_forward(
 
     tx.commit().await?;
     // A remote player gets the song of the act now due; it doesn't start.
-    if let Err(e) = player_hub.cue_from_timeplan().await {
+    // Judging starts in silence.
+    let cued = if ended_act {
+        player_hub.stop_and_cue_from_timeplan().await
+    } else {
+        player_hub.cue_from_timeplan().await
+    };
+    if let Err(e) = cued {
         warn!("Couldn't cue the next song: {e}");
     }
 

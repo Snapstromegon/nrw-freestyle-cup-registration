@@ -37,6 +37,7 @@ import {
   songFile,
 } from "../../utils";
 import {
+  endedActIds,
   entryTitle,
   type Live,
   liveState,
@@ -743,6 +744,9 @@ export default class CupViewAdminMusicControl extends LitElement {
     const errors: string[] = [];
     if (timeplan.status === "fulfilled") {
       if (this.changed("timeplan", timeplan.value)) {
+        if (this.timeplan) {
+          this.stopEndedActs(this.timeplan, timeplan.value);
+        }
         this.timeplan = timeplan.value;
       }
       this.timeplanSeq = seq;
@@ -771,6 +775,20 @@ export default class CupViewAdminMusicControl extends LitElement {
       this.loadErrors = errors;
     }
     this.loaded = true;
+  }
+
+  /**
+   * Judging starts in silence: pauses this browser's song of an act that
+   * just ended, whichever music control pressed "Weiter". The server stops
+   * a remote player.
+   */
+  private stopEndedActs(before: Timeplan, after: Timeplan) {
+    const ended = new Set(endedActIds(before, after));
+    for (const audio of this.audios) {
+      if (ended.has(audio.dataset.act ?? "")) {
+        audio.pause();
+      }
+    }
   }
 
   private changed(key: string, value: unknown) {

@@ -383,9 +383,9 @@ async fn forward(app: &TestApp, admin: &str) {
     assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
 }
 
-/// Anna and Berta with songs; Tonpult is the active player and plays Anna's
-/// song (or paused it mid-song, as `state` says) while Anna's act ends, so
-/// Berta's song waits.
+/// Anna and Berta with songs; Tonpult is the active player. Anna's song
+/// plays again while she is judged (or is paused mid-song, as `state` says)
+/// when Berta's act starts, so Berta's song waits.
 struct BertaWaiting {
     address: SocketAddr,
     controller: Ws,
@@ -404,16 +404,27 @@ async fn berta_waiting(app: &TestApp, admin: &str, state: &str) -> BertaWaiting 
     select(&mut controller, &id).await;
     let message = tonpult.wait_for("Anna's cue", |m| m["type"] == "cue").await;
     assert_eq!(message, cue(original_song(anna, "Anna")));
-    // Warm-up, then Anna starts and her music plays.
-    forward(app, admin).await;
-    forward(app, admin).await;
+    // Warm-up, Anna's act, then she is judged and Berta's song is cued.
+    for _ in 0..3 {
+        forward(app, admin).await;
+    }
+    tonpult
+        .wait_for("Berta's cue", |m| m == &cue(original_song(berta, "Berta")))
+        .await;
+    // Her song again, meanwhile.
+    controller
+        .send(json!({ "type": "cue", "act_id": anna, "original": false }))
+        .await;
+    tonpult
+        .wait_for("Anna's cue", |m| m == &cue(original_song(anna, "Anna")))
+        .await;
     tonpult.send(status(state, 1.0)).await;
     controller
         .wait_state(&format!("state with Tonpult {state}"), |s| {
             find_player(s, "Tonpult").unwrap()["status"]["state"] == state
         })
         .await;
-    // Anna ends while her song still plays.
+    // Berta starts while it still plays.
     forward(app, admin).await;
     let state = controller
         .wait_state("state with Berta pending", |s| !s["pending_cue"].is_null())
@@ -609,22 +620,25 @@ async fn timeplan_steps_cue_the_songs_without_starting_them(db: SqlitePool) {
         .await;
 
     // Each step sends the songs coming up first; the song only changes when
-    // the next act is due. A step without a new song is followed directly by
-    // the next step's prefetch.
+    // the next act is due. Ending an act stops the music before that. A step
+    // without a new song is followed directly by the next step's prefetch.
     let steps = [
         // The category starts with its warm-up.
-        (vec![anna, berta], None),
+        (false, vec![anna, berta], None),
         // Anna starts.
-        (vec![anna, berta], None),
+        (false, vec![anna, berta], None),
         // Anna ends: Berta is due.
-        (vec![berta], Some(cue(original_song(berta, "Berta")))),
+        (true, vec![berta], Some(cue(original_song(berta, "Berta")))),
         // Berta starts.
-        (vec![berta], None),
+        (false, vec![berta], None),
         // Berta ends, and with her the category: nothing left to play.
-        (vec![], Some(json!({ "type": "clear" }))),
+        (true, vec![], Some(json!({ "type": "clear" }))),
     ];
-    for (songs, message) in steps {
+    for (stops, songs, message) in steps {
         forward(&app, &admin).await;
+        if stops {
+            assert_eq!(tonpult.next().await, json!({ "type": "stop" }));
+        }
         let prefetch = tonpult.next().await;
         assert_eq!(prefetch["type"], "prefetch", "{prefetch}");
         assert_eq!(act_ids(&prefetch["songs"]), ids(&songs));
@@ -637,6 +651,47 @@ async fn timeplan_steps_cue_the_songs_without_starting_them(db: SqlitePool) {
         .await;
     assert_eq!(state["pending_cue"], Value::Null);
     assert_eq!(state["active_player"], id);
+}
+
+#[sqlx::test]
+async fn ending_an_act_stops_its_music(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let admin = app.create_admin().await;
+    let acts = acts_with_songs(&app, &admin, &["Anna", "Berta"]).await;
+    let (anna, berta) = (acts[0], acts[1]);
+    let address = app.serve().await;
+    let (mut controller, _) = controller(address, &admin).await;
+    let (mut tonpult, id) = player(address, &admin, &mut controller, "Tonpult").await;
+    select(&mut controller, &id).await;
+    tonpult
+        .wait_for("Anna's cue", |m| m == &cue(original_song(anna, "Anna")))
+        .await;
+    // Warm-up, then Anna starts and her music plays.
+    forward(&app, &admin).await;
+    forward(&app, &admin).await;
+    tonpult.send(status("playing", 1.0)).await;
+    controller
+        .wait_state("state with Tonpult playing", |s| {
+            find_player(s, "Tonpult").unwrap()["status"]["state"] == "playing"
+        })
+        .await;
+
+    // Judging starts in silence, and Berta's song comes right away.
+    forward(&app, &admin).await;
+    let message = tonpult
+        .wait_for("the stop", |m| m["type"] != "prefetch")
+        .await;
+    assert_eq!(message, json!({ "type": "stop" }));
+    let message = tonpult
+        .wait_for("Berta's cue", |m| m["type"] != "prefetch")
+        .await;
+    assert_eq!(message, cue(original_song(berta, "Berta")));
+    let state = controller
+        .wait_state("state with Berta cued", |s| {
+            s["cue"] == original_song(berta, "Berta")
+        })
+        .await;
+    assert_eq!(state["pending_cue"], Value::Null);
 }
 
 #[sqlx::test]
@@ -1207,8 +1262,13 @@ async fn the_active_player_reconnects_with_its_id(db: SqlitePool) {
     assert_eq!(state["players"].as_array().unwrap().len(), 1);
     assert_eq!(find_player(&state, "Tonpult").unwrap()["id"], tonpult_id);
 
-    // Selected again, it plays Anna's song; then the connection is lost
-    // once more and it comes back as the active player.
+    // Back to Anna's judging. Selected again, it plays her song while Berta
+    // starts again; then the connection is lost once more and it comes back
+    // as the active player.
+    let response = app
+        .post("/api/command/timeplan_backward", json!(null), Some(&admin))
+        .await;
+    assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
     controller
         .send(json!({ "type": "cue", "act_id": anna, "original": false }))
         .await;

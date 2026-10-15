@@ -106,6 +106,24 @@ export const findNextAct = (timeplan: Timeplan): NextAct | undefined => {
   return undefined;
 };
 
+/** The ids of the acts running in `before` that have ended in `after`. */
+export const endedActIds = (before: Timeplan, after: Timeplan) => {
+  const acts = (timeplan: Timeplan) =>
+    timeplan.items.flatMap((item) =>
+      "Category" in item.timeplan_entry
+        ? item.timeplan_entry.Category.acts
+        : [],
+    );
+  const running = new Set(
+    acts(before)
+      .filter((a) => a.status === "Started")
+      .map((a) => a.id),
+  );
+  return acts(after)
+    .filter((a) => a.status === "Ended" && running.has(a.id))
+    .map((a) => a.id);
+};
+
 /**
  * Derives the live state the same way `timeplan_forward` sees it. `now` (ms)
  * decides whether the last act of an ended block is still being judged.

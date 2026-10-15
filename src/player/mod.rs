@@ -948,6 +948,19 @@ impl PlayerHub {
     /// mid-song, the new song waits until it is stopped or over. Also sends
     /// the songs coming up.
     pub async fn cue_from_timeplan(&self) -> Result<(), sqlx::Error> {
+        self.cue_next(false).await
+    }
+
+    /// Like [`Self::cue_from_timeplan`] after an act ended: the active player
+    /// stops its music first, so the next song needn't wait.
+    pub async fn stop_and_cue_from_timeplan(&self) -> Result<(), sqlx::Error> {
+        self.cue_next(true).await
+    }
+
+    async fn cue_next(&self, stop: bool) -> Result<(), sqlx::Error> {
+        if stop {
+            self.forward(ToPlayer::Stop);
+        }
         let songs = self.upcoming_songs().await?;
         let next = songs.first().cloned();
         let mut inner = self.lock();
@@ -957,7 +970,7 @@ impl PlayerHub {
         };
         if same_act(&inner.cue) {
             inner.pending_cue = None;
-        } else if Self::active_holds_song(&inner) {
+        } else if !stop && Self::active_holds_song(&inner) {
             inner.pending_cue = next;
         } else {
             inner.pending_cue = None;
@@ -1572,6 +1585,36 @@ mod tests {
         drain(&mut c_rx);
         select(&hub, c).await;
         assert!(drain(&mut c_rx).contains(&ToPlayer::Cue { song: song(2) }));
+    }
+
+    #[sqlx::test]
+    async fn ending_an_act_stops_the_music(db: sqlx::SqlitePool) {
+        let hub = hub(db);
+        let (a, mut a_rx) = connect(&hub, "A").await;
+        select(&hub, a).await;
+        hub.lock().cue = Some(song(1));
+        hub.status(a, playing());
+        drain(&mut a_rx);
+
+        // Any other step: the song plays on.
+        hub.cue_from_timeplan().await.unwrap();
+        assert!(!drain(&mut a_rx).contains(&ToPlayer::Stop));
+        assert_eq!(hub.subscribe().0.cue, Some(song(1)));
+
+        // The next song (none here) comes at once, not once the player says
+        // it stopped.
+        hub.stop_and_cue_from_timeplan().await.unwrap();
+        assert_eq!(
+            drain(&mut a_rx),
+            [
+                ToPlayer::Stop,
+                ToPlayer::Prefetch { songs: vec![] },
+                ToPlayer::Clear
+            ]
+        );
+        let state = hub.subscribe().0;
+        assert_eq!(state.cue, None);
+        assert_eq!(state.pending_cue, None);
     }
 
     #[sqlx::test]
