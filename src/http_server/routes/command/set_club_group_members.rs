@@ -7,8 +7,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    act_type::ActType,
-    groups::{ensure_club_access, get_group, refresh_group_act_type, type_conflict_message},
+    groups::{ensure_club_access, get_group, type_conflict_message},
     http_server::{ClientError, HttpError, extractor::auth::Auth},
     reloadable_sqlite::{ReloadableSqlite, begin_write},
     system_status::Capabilities,
@@ -16,8 +15,6 @@ use crate::{
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct SetClubGroupMembersResponse {
-    /// The group's type after the change, from its number of regular riders.
-    act_type: ActType,
     /// Set if a rider of the group is now also in another group of the same
     /// type. The change is saved anyway, but the group has no category until
     /// the clubs sort it out. A German message for the user.
@@ -42,12 +39,12 @@ pub struct SetClubGroupMembersBody {
 
 /// Set a club's riders in a group.
 ///
-/// Every club can join every group, but only with its own riders. The group
-/// becomes a small or large group depending on its regular riders. If a rider
+/// Every club can join every group, but only with its own riders. The group's
+/// type stays as its owner chose it, whatever the number of riders. If a rider
 /// of the group (from any club) is then in two groups of the same type, the
 /// change is saved with a warning and both groups lose their category until
-/// that's sorted out: clubs add their riders to a shared group one after
-/// another, and a growing large group counts as a small group meanwhile.
+/// that's sorted out, since clubs add their riders to a shared group one after
+/// another.
 #[utoipa::path(
     post,
     tags=["command", "club", "group"],
@@ -129,10 +126,9 @@ pub async fn set_club_group_members(
         .await?;
     }
 
-    let act_type = refresh_group_act_type(&mut transaction, group.id).await?;
-    let warning = type_conflict_message(&mut transaction, group.id, None).await?;
+    let warning = type_conflict_message(&mut transaction, group.id).await?;
 
     transaction.commit().await?;
 
-    Ok(Json(SetClubGroupMembersResponse { act_type, warning }))
+    Ok(Json(SetClubGroupMembersResponse { warning }))
 }

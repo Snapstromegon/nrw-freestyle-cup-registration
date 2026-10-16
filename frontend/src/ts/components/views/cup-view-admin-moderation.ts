@@ -4,6 +4,7 @@ import { classMap } from "lit/directives/class-map.js";
 import { PollController, unwrap } from "../../api";
 import { client, type components } from "../../apiClient";
 import {
+  actPosition,
   entryTitle,
   type Live,
   liveState,
@@ -13,8 +14,10 @@ import {
   type Timeplan,
 } from "../../live";
 import {
+  breakEnd,
   formatDuration,
   formatTime,
+  isFinalist,
   isGroupActType,
   songFile,
 } from "../../utils";
@@ -339,10 +342,8 @@ export default class CupViewAdminModeration extends LitElement {
         : live.phase === "done"
           ? "Zeitplan beendet"
           : "Pause";
-    const position =
-      live.category && live.act
-        ? `Kür ${live.category.acts.indexOf(live.act) + 1} von ${live.category.acts.length}`
-        : "";
+    const start = live.finalist ?? live.act;
+    const position = live.acts && start ? actPosition(live.acts, start) : "";
     const act = live.act ? this.actsById.get(live.act.id) : undefined;
     return html`<section class="current">
       <div class="phase">
@@ -354,6 +355,13 @@ export default class CupViewAdminModeration extends LitElement {
         live.act
           ? html`${live.phase === "judging" ? html`<h2 class="muted">Das war:</h2>` : nothing}
             <h1>${live.act.name || act?.group_name || "Kür"}</h1>
+            ${
+              live.finalist
+                ? html`<p class="description">
+                    ${live.finalist.label} · ${live.finalist.final_description}
+                  </p>`
+                : nothing
+            }
             ${
               act
                 ? html`<cup-act-participants
@@ -369,6 +377,22 @@ export default class CupViewAdminModeration extends LitElement {
             }`
           : nothing
       }
+      ${
+        // A final's slot without a published act.
+        live.finalist && !live.act
+          ? html`${live.phase === "judging" ? html`<h2 class="muted">Das war:</h2>` : nothing}
+            <h1>${live.finalist.label}</h1>
+            <p class="description">${live.finalist.final_description}</p>`
+          : nothing
+      }
+      ${
+        live.pause
+          ? html`<h1>${live.pause.label}</h1>
+            <p class="description">
+              Geplant bis ${formatTime(breakEnd(live.pause))}
+            </p>`
+          : nothing
+      }
       ${this.renderProgress(live, act)}
       ${live.phase === "act" && act ? this.renderSong(live, act) : nothing}
     </section>`;
@@ -380,7 +404,7 @@ export default class CupViewAdminModeration extends LitElement {
     if (!timer) {
       return nothing;
     }
-    const { elapsed, planned } = timer;
+    const { elapsed, planned, remaining } = timer;
     if (timer.waiting) {
       return html`<div class="progress">
         <span class="time"
@@ -388,6 +412,23 @@ export default class CupViewAdminModeration extends LitElement {
           <small>wartet auf Musik</small></span
         >
         <div class="bar"><div style="width: 0"></div></div>
+      </div>`;
+    }
+    // A break counts down; from its end on, it shows how far it ran over.
+    if (remaining !== undefined && planned) {
+      const over = remaining <= 0;
+      return html`<div class="progress">
+        <span class="time ${over ? "bad" : ""}"
+          >${
+            over
+              ? html`+${formatDuration(-remaining)} <small>länger als geplant</small>`
+              : html`<small>noch</small> ${formatDuration(remaining)}`
+          }
+          <small>/ ${formatDuration(planned)}</small></span
+        >
+        <div class=${classMap({ bar: true, over })}>
+          <div style="width: ${Math.min(100, (elapsed / planned) * 100)}%"></div>
+        </div>
       </div>`;
     }
     if (!planned) {
@@ -422,11 +463,21 @@ export default class CupViewAdminModeration extends LitElement {
       .position=${playback.position}
       .playing=${playback.state === "playing"}
       .duration=${playback.duration ?? 0}
-      .limit=${live.category?.act_duration_seconds ?? 0}
+      .limit=${live.act?.act_duration_seconds ?? 0}
     ></cup-waveform>`;
   }
 
   private renderNext(live: Live) {
+    const nextStart = live.nextStart?.start;
+    if (nextStart && isFinalist(nextStart) && !nextStart.act) {
+      return html`<section class="next">
+        <span class="label"
+          >Als Nächstes · ${nextStart.final_description} · ca.
+          ${formatTime(nextStart.predicted_start)}</span
+        >
+        <h2>${nextStart.label}</h2>
+      </section>`;
+    }
     const next = live.next;
     if (!next) {
       return live.nextEntry
@@ -439,9 +490,13 @@ export default class CupViewAdminModeration extends LitElement {
         : nothing;
     }
     const act = this.actsById.get(next.act.id);
+    // The next act may run in a final's slot.
+    const finalist = nextStart && isFinalist(nextStart) ? nextStart : undefined;
     return html`<section class="next">
       <span class="label"
-        >Als Nächstes · ${next.category.description} · ca.
+        >Als Nächstes ·
+        ${finalist ? `${finalist.final_description} · ${finalist.label}` : next.act.category_description}
+        · ca.
         ${formatTime(next.act.predicted_start)}</span
       >
       <h2>${next.act.name || act?.group_name || "Kür"}</h2>

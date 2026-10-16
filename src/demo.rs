@@ -20,7 +20,8 @@ use uuid::Uuid;
 use crate::{
     act_type::ActType,
     config::{
-        CategoryConfig, CompetitionConfig, TimeplanEntryConfig, toml_date, toml_datetime_option,
+        CategoryConfig, CompetitionConfig, FinalConfig, TimeplanEntryConfig, toml_date,
+        toml_datetime_option,
     },
     groups, seed, utils,
 };
@@ -31,6 +32,8 @@ pub struct DemoData {
     pub competition: CompetitionConfig,
     #[serde(default)]
     pub categories: Vec<CategoryConfig>,
+    #[serde(default)]
+    pub finals: Vec<FinalConfig>,
     #[serde(default)]
     pub timeplan: Vec<DemoTimeplanEntry>,
     #[serde(default)]
@@ -51,6 +54,8 @@ pub struct DemoData {
 #[serde(deny_unknown_fields)]
 pub struct DemoTimeplanEntry {
     pub category: Option<String>,
+    #[serde(rename = "final")]
+    pub final_name: Option<String>,
     pub label: Option<String>,
     pub duration_minutes: Option<f64>,
     #[serde(default, deserialize_with = "toml_datetime_option")]
@@ -136,6 +141,9 @@ pub struct DemoGroup {
     pub name: String,
     /// Name of the club that created the group.
     pub owner: String,
+    /// `group_small` (Kleingruppe) or `group_large` (Großgruppe), as the
+    /// owner club chose it.
+    pub act_type: ActType,
     /// Full names of the regular riders.
     #[serde(default)]
     pub members: Vec<String>,
@@ -232,15 +240,23 @@ impl DemoData {
             .iter()
             .map(|entry| TimeplanEntryConfig {
                 category: entry.category.clone(),
+                final_name: entry.final_name.clone(),
                 label: entry.label.clone(),
                 duration_minutes: entry.duration_minutes,
                 earliest_start: entry.earliest_start,
             })
             .collect();
-        seed::seed(db, Some(&self.competition), &self.categories, &timeplan).await?;
+        seed::seed(
+            db,
+            Some(&self.competition),
+            &self.categories,
+            &self.finals,
+            &timeplan,
+        )
+        .await?;
 
         let timeplan_ids: Vec<i64> =
-            sqlx::query_scalar!(r#"SELECT id as "id!" FROM timeplan ORDER BY id"#)
+            sqlx::query_scalar!(r#"SELECT id as "id!" FROM timeplan ORDER BY position, id"#)
                 .fetch_all(db)
                 .await
                 .map_err(db_error)?;
@@ -487,6 +503,11 @@ impl DemoData {
             .await
             .map_err(db_error)?
             .ok_or_else(|| format!("{referenced_by}: owner {} is not a demo club.", group.owner))?;
+            if !group.act_type.is_group() {
+                return Err(format!(
+                    "{referenced_by}: act_type must be group_small or group_large."
+                ));
+            }
 
             let act_id = Uuid::now_v7();
             sqlx::query!(
@@ -495,7 +516,7 @@ impl DemoData {
                 VALUES (?, '', ?, ?, ?)
                 "#,
                 act_id,
-                ActType::GroupSmall,
+                group.act_type,
                 group_name,
                 owner_club_id,
             )
@@ -527,12 +548,9 @@ impl DemoData {
                 .await
                 .map_err(db_error)?;
             }
-            groups::refresh_group_act_type(&mut connection, act_id)
-                .await
-                .map_err(db_error)?;
             // The API only warns about such conflicts; demo groups must not
             // have any.
-            if let Some(conflict) = groups::type_conflict_message(&mut connection, act_id, None)
+            if let Some(conflict) = groups::type_conflict_message(&mut connection, act_id)
                 .await
                 .map_err(db_error)?
             {
@@ -773,6 +791,12 @@ mod tests {
             ("act_participants", "SELECT COUNT(*) FROM act_participants"),
             ("categories", "SELECT COUNT(*) FROM categories"),
             ("timeplan", "SELECT COUNT(*) FROM timeplan"),
+            ("finals", "SELECT COUNT(*) FROM finals"),
+            ("final_slots", "SELECT COUNT(*) FROM final_slots"),
+            (
+                "planned finals",
+                "SELECT COUNT(*) FROM timeplan WHERE final_name IS NOT NULL",
+            ),
         ] {
             assert!(count(&db, sql).await > 0, "{table} is empty");
         }

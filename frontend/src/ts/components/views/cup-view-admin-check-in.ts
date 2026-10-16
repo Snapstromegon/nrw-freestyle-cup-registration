@@ -16,6 +16,7 @@ import {
   actClubNames,
   actTypeLabels,
   actTypeShort,
+  blockActs,
   type CheckInMap,
   checkInStats,
   formatAge,
@@ -1176,10 +1177,7 @@ export default class CupViewAdminCheckIn extends LitElement {
       { time: number | null; status: TimeplanItemStatus }
     >();
     for (const item of this.timeplan?.items ?? []) {
-      if (!("Category" in item.timeplan_entry)) {
-        continue;
-      }
-      for (const act of item.timeplan_entry.Category.acts) {
+      for (const act of blockActs(item)) {
         const time = new Date(act.predicted_start).getTime();
         times.set(act.id, {
           time: Number.isNaN(time) ? null : time,

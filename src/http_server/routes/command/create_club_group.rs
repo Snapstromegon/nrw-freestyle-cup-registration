@@ -6,7 +6,9 @@ use uuid::Uuid;
 
 use crate::{
     act_type::ActType,
-    groups::{ensure_club_access, ensure_group_name_is_free, normalize_group_name},
+    groups::{
+        ensure_club_access, ensure_group_name_is_free, ensure_group_type, normalize_group_name,
+    },
     http_server::{ClientError, HttpError, extractor::auth::Auth},
     reloadable_sqlite::{ReloadableSqlite, begin_write},
     system_status::Capabilities,
@@ -21,13 +23,16 @@ pub struct CreateClubGroupResponse {
 pub struct CreateClubGroupBody {
     club_id: Uuid,
     group_name: String,
+    /// `group_small` (Kleingruppe) or `group_large` (Großgruppe). The type
+    /// stays as chosen; the number of riders doesn't change it.
+    act_type: ActType,
 }
 
 /// Create a group act.
 ///
-/// The club becomes the group's owner. The group starts without riders; add
-/// them with `set_club_group_members`. Group names are unique across the
-/// competition (case-insensitive).
+/// The club becomes the group's owner and chooses its type. The group starts
+/// without riders; add them with `set_club_group_members`. Group names are
+/// unique across the competition (case-insensitive).
 #[utoipa::path(
     post,
     tags=["command", "club", "group"],
@@ -55,12 +60,14 @@ pub async fn create_club_group(
     let mut transaction = begin_write(&db).await?;
 
     ensure_club_access(&mut transaction, &auth, body.club_id).await?;
+    ensure_group_type(body.act_type)?;
     let group_name = normalize_group_name(&body.group_name).map_err(HttpError::ErrorMessages)?;
     ensure_group_name_is_free(&mut transaction, &group_name, None).await?;
 
     let act_id = Uuid::now_v7();
     info!(
-        "Creating group {group_name:?} ({act_id}) for club {}",
+        "Creating {} {group_name:?} ({act_id}) for club {}",
+        body.act_type.as_str(),
         body.club_id
     );
     sqlx::query!(
@@ -69,7 +76,7 @@ pub async fn create_club_group(
         VALUES (?, '', ?, ?, ?)
         "#,
         act_id,
-        ActType::GroupSmall,
+        body.act_type,
         group_name,
         body.club_id,
     )

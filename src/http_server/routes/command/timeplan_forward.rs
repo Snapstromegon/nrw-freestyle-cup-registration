@@ -4,13 +4,12 @@ use axum::{Extension, Json, http::StatusCode};
 use serde::Serialize;
 use tracing::{info, instrument, warn};
 use utoipa::ToSchema;
-use uuid::Uuid;
 
 use crate::{
     http_server::{ClientError, HttpError, extractor::auth::Auth},
     player::PlayerHub,
     reloadable_sqlite::{ReloadableSqlite, begin_write},
-    timeplan::{LiveEntry, live_entries},
+    timeplan::{Entry, EntryKind, Slot, end_slot, load, now, start_slot},
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -18,9 +17,11 @@ pub struct SetTimeplanForwardResponse {}
 
 /// Moves the live timeplan one step forward.
 ///
-/// Ends the running act, starts the next act, or ends the running entry and
-/// starts the next one. Empty category blocks are skipped on the way. Ending
-/// an act stops the music on the active player.
+/// Ends the running act or break, starts the next slot of the running block,
+/// or ends the running entry and starts the next one. Ending a break starts
+/// the next slot in the same step; ending the last slot ends the block. Empty
+/// start blocks are skipped on the way. Ending an act stops the music on the
+/// active player.
 #[utoipa::path(
     post,
     tags=["command", "timeplan"],
@@ -49,77 +50,40 @@ pub async fn timeplan_forward(
     let mut tx = begin_write(&db).await?;
     let mut ended_act = false;
 
-    let running_timeplan_entry = sqlx::query!(
-        "SELECT id, category FROM timeplan WHERE started_at IS NOT NULL AND ended_at IS NULL ORDER BY id LIMIT 1"
-    ).fetch_optional(&mut *tx).await?.map(|row| (row.id, row.category));
-
-    match running_timeplan_entry {
-        Some((id, Some(category))) => {
-            let running_act = sqlx::query!(
-                "SELECT id as 'id!: Uuid' FROM view_act WHERE category = ? AND started_at IS NOT NULL AND ended_at IS NULL ORDER BY `order` LIMIT 1",
-                category
-            ).fetch_optional(&mut *tx).await?.map(|row| row.id);
-            if let Some(running_act_id) = running_act {
-                sqlx::query!(
-                    "UPDATE acts SET ended_at = datetime('now') WHERE id = ?",
-                    running_act_id
-                )
-                .execute(&mut *tx)
-                .await?;
-                ended_act = true;
-
-                // Ende category if all acts are done
-                let open_cat_acts = sqlx::query!(
-                    "SELECT id FROM view_act WHERE category = ? AND started_at IS NULL",
-                    category
-                )
-                .fetch_all(&mut *tx)
-                .await?;
-                if open_cat_acts.is_empty() {
-                    sqlx::query!(
-                        "UPDATE timeplan SET ended_at = datetime('now') WHERE id = ?",
-                        id
-                    )
-                    .execute(&mut *tx)
-                    .await?;
-                }
-            } else {
-                info!("Starting next act");
-                let upcoming_starts = sqlx::query!(
-                    "SELECT id as 'id!: Uuid' FROM view_act WHERE category = ? AND started_at IS NULL ORDER BY `order`",
-                    category
-                ).fetch_all(&mut *tx).await?;
-                info!("Upcoming starts: {upcoming_starts:?}");
-                if let Some(next_act) = upcoming_starts.first() {
-                    sqlx::query!(
-                        "UPDATE acts SET started_at = datetime('now') WHERE id = ?",
-                        next_act.id
-                    )
-                    .execute(&mut *tx)
-                    .await?;
-                } else {
-                    // Nothing (left) to start, e.g. a category without acts:
-                    // end it so the timeplan can move on.
-                    sqlx::query!(
-                        "UPDATE timeplan SET ended_at = datetime('now') WHERE id = ?",
-                        id
-                    )
-                    .execute(&mut *tx)
-                    .await?;
+    let timeplan = load(&mut tx).await?;
+    let now = now(&mut tx).await?;
+    match timeplan.entries.iter().find(|e| e.is_running()) {
+        Some(entry) if entry.kind == EntryKind::Acts => {
+            let slots = &entry.slots;
+            let upcoming = |from: usize| slots[from..].iter().find(|s| !s.is_started());
+            let running = slots.iter().position(Slot::is_running);
+            if let Some(index) = running {
+                end_slot(&mut tx, &slots[index], &now).await?;
+                // A finalist is judged like an act.
+                ended_act = slots[index].is_start();
+            }
+            let next = running.map_or_else(|| upcoming(0), |index| upcoming(index + 1));
+            match next {
+                // That was the last slot, or the block lost its acts (e.g.
+                // they were moved away): the block is over. A block without
+                // acts doesn't run its breaks either.
+                _ if entry.is_empty() => end_entry(&mut tx, entry.id, &now).await?,
+                None => end_entry(&mut tx, entry.id, &now).await?,
+                // The act is judged now; the next slot starts with the next
+                // step.
+                Some(_) if ended_act => {}
+                // Nothing to judge after a break, or nothing was running:
+                // the next slot starts.
+                Some(slot) => {
+                    info!("Starting next slot");
+                    start_slot(&mut tx, slot, &now).await?;
                 }
             }
         }
-        Some((id, None)) => {
-            sqlx::query!(
-                "UPDATE timeplan SET ended_at = datetime('now') WHERE id = ?",
-                id
-            )
-            .execute(&mut *tx)
-            .await?;
-        }
+        Some(entry) => end_entry(&mut tx, entry.id, &now).await?,
         None => {
             info!("Starting Next timeplan entry");
-            start_next_timeplan_entry(&mut tx).await?;
+            start_next_timeplan_entry(&mut tx, &timeplan.entries, &now).await?;
         }
     }
 
@@ -138,19 +102,24 @@ pub async fn timeplan_forward(
     Ok(Json(SetTimeplanForwardResponse {}))
 }
 
-/// Starts the next entry that isn't empty, and skips the empty category
-/// blocks before it. Its first act starts right away if it has no warm-up.
-/// If only empty blocks are left, nothing changes.
-async fn start_next_timeplan_entry(db: &mut sqlx::SqliteConnection) -> Result<(), sqlx::Error> {
-    let entries = live_entries(&mut *db).await?;
-    let upcoming: Vec<&LiveEntry> = entries.iter().filter(|e| e.started_at.is_none()).collect();
-    let Some(next) = upcoming.iter().position(|e| !e.empty) else {
+/// Starts the next entry that isn't empty, and skips the empty start blocks
+/// before it. Its first slot starts right away if it has no warm-up. If only
+/// empty blocks are left, nothing changes.
+async fn start_next_timeplan_entry(
+    db: &mut sqlx::SqliteConnection,
+    entries: &[Entry],
+    now: &str,
+) -> Result<(), sqlx::Error> {
+    let upcoming: Vec<&Entry> = entries.iter().filter(|e| e.started_at.is_none()).collect();
+    let Some(next) = upcoming.iter().position(|e| !e.is_empty()) else {
         return Ok(());
     };
 
     for skipped in &upcoming[..next] {
         sqlx::query!(
-            "UPDATE timeplan SET started_at = datetime('now'), ended_at = datetime('now') WHERE id = ?",
+            "UPDATE timeplan SET started_at = ?, ended_at = ? WHERE id = ?",
+            now,
+            now,
             skipped.id
         )
         .execute(&mut *db)
@@ -159,20 +128,26 @@ async fn start_next_timeplan_entry(db: &mut sqlx::SqliteConnection) -> Result<()
 
     let next = upcoming[next];
     sqlx::query!(
-        "UPDATE timeplan SET started_at = datetime('now') WHERE id = ?",
+        "UPDATE timeplan SET started_at = ? WHERE id = ?",
+        now,
         next.id
     )
     .execute(&mut *db)
     .await?;
 
-    if let Some(category) = &next.category
+    if next.kind == EntryKind::Acts
         && next.warmup_seconds == 0
+        && let Some(slot) = next.slots.iter().find(|s| !s.is_started())
     {
-        sqlx::query!(
-            "UPDATE acts SET started_at = datetime('now') WHERE id = (SELECT id FROM view_act WHERE category = ? AND started_at IS NULL ORDER BY `order` LIMIT 1)",
-            category
-        ).execute(&mut *db).await?;
+        start_slot(db, slot, now).await?;
     }
 
+    Ok(())
+}
+
+async fn end_entry(db: &mut sqlx::SqliteConnection, id: i64, now: &str) -> Result<(), sqlx::Error> {
+    sqlx::query!("UPDATE timeplan SET ended_at = ? WHERE id = ?", now, id)
+        .execute(db)
+        .await?;
     Ok(())
 }

@@ -755,23 +755,17 @@ export default class CupClubStarterManager extends LitElement {
     if (!confirm(`Sicher, dass du ${name} löschen willst?${groups}`)) {
       return;
     }
-    let warnings: string[];
     try {
-      ({ warnings } = unwrap(
+      unwrap(
         await client.POST("/api/command/delete_club_starter", {
           body: { starter_id: starter.id },
         }),
-      ));
+      );
     } catch (error) {
       return this.showError(`Fehler beim Löschen: ${errorMessage(error)}`);
     }
     this.starterEdits.delete(starter.id);
-    // Deleted, but a group the starter left may now clash with another one.
-    if (warnings.length) {
-      this.showError(warnings.join("\n"));
-    } else {
-      this.clearError();
-    }
+    this.clearError();
     this.dataChanged();
   }
 

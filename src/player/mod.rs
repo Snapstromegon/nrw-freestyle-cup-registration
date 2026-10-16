@@ -32,7 +32,7 @@ use uuid::Uuid;
 use crate::{
     http_server::routes::{
         http_types::ActParticipant,
-        query::predict_timeplan::{TimeplanEntry, TimeplanItemStatus, predict},
+        query::predict_timeplan::{TimeplanItemStatus, predict},
     },
     normalize::NormalizationStatus,
     reloadable_sqlite::ReloadableSqlite,
@@ -1019,6 +1019,7 @@ impl PlayerHub {
     }
 
     /// The running act (if any) and the acts after it, in timeplan order.
+    /// Acts placed in a published final play there again.
     async fn upcoming_acts(&self) -> Result<Vec<Uuid>, sqlx::Error> {
         let db = self.db.get().await.clone();
         let Ok(timeplan) = predict(&db).await else {
@@ -1029,14 +1030,9 @@ impl PlayerHub {
             .items
             .iter()
             .filter(|item| item.status != TimeplanItemStatus::Ended)
-            .flat_map(|item| match &item.timeplan_entry {
-                TimeplanEntry::Category { acts, .. } => acts
-                    .iter()
-                    .filter(|act| act.status != TimeplanItemStatus::Ended)
-                    .map(|act| act.id)
-                    .collect(),
-                TimeplanEntry::Custom { .. } => vec![],
-            })
+            .flat_map(|item| item.timeplan_entry.songs())
+            .filter(|(_, status)| **status != TimeplanItemStatus::Ended)
+            .map(|(act_id, _)| act_id)
             .collect())
     }
 

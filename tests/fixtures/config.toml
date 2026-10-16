@@ -423,6 +423,17 @@ einfahrzeit_minutes = 10
 act_duration_minutes = 5
 judge_duration_minutes = 3
 
+# A final, not planned: tests add its timeplan entry.
+[[finals]]
+name = "Finale EW"
+description = "Finale Einzel Weiblich"
+act_type = "single"
+einfahrzeit_minutes = 5
+act_duration_minutes = 3
+judge_duration_minutes = 2
+slots = [{ label = "U11–U15", count = 2 }, { label = "U17+", count = 1 }]
+categories = ["EWU11", "EWU13", "EWU15", "EWU17"]
+
 [[timeplan]]
 category = "EMU11"
 earliest_start = 2027-06-05T10:00:00+02:00

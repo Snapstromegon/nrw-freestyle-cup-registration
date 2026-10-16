@@ -25,7 +25,9 @@ import {
   actTypeShort,
   describeGroup,
   formatMoney,
-  groupTypeForSize,
+  type GroupActType,
+  groupSizeWarning,
+  isGroupActType,
   isUnderAge,
   MAX_SMALL_GROUP_SIZE,
   MIN_GROUP_SIZE,
@@ -49,11 +51,33 @@ const normalizeGroupName = (name: string) => name.trim().replace(/\s+/g, " ");
 const ridersText = (regular: number, replacements: number) =>
   `${regular} Fahrer${replacements ? ` + ${replacements} Ersatz` : ""}`;
 
-/** A group of `list_groups`: "GG · 10 Fahrer" or "2 Fahrer, unvollständig". */
+/** A group of `list_groups`: "GG · 10 Fahrer" or "KG · 2 Fahrer, unvollständig". */
 const groupSummaryText = (group: GroupSummary) =>
-  groupTypeForSize(group.regular_count)
-    ? describeGroup(group.regular_count, group.replacement_count, null)
-    : `${ridersText(group.regular_count, group.replacement_count)}, unvollständig`;
+  group.regular_count >= MIN_GROUP_SIZE
+    ? describeGroup(
+        group.act_type,
+        group.regular_count,
+        group.replacement_count,
+        null,
+      )
+    : `${actTypeShort[group.act_type]} · ${ridersText(group.regular_count, group.replacement_count)}, unvollständig`;
+
+/** The group types a club chooses from, with their size range. */
+const groupTypeChoices: [GroupActType, string][] = [
+  [
+    "group_small",
+    `Kleingruppe (${MIN_GROUP_SIZE}–${MAX_SMALL_GROUP_SIZE} FahrerInnen)`,
+  ],
+  ["group_large", `Großgruppe (ab ${MAX_SMALL_GROUP_SIZE + 1} FahrerInnen)`],
+];
+
+/** The group type chosen in a `<select>` of `groupTypeChoices`. */
+const selectedGroupType = (e: Event): GroupActType => {
+  const value = (e.target as HTMLSelectElement).value;
+  return isGroupActType(value as ActType)
+    ? (value as GroupActType)
+    : "group_small";
+};
 
 const sameGroupName = (a: string, b: string) =>
   a.toLocaleLowerCase("de") === b.toLocaleLowerCase("de");
@@ -65,13 +89,16 @@ interface GroupEdit {
   /** The saved name; `name` is the edited one. */
   originalName: string;
   name: string;
-  /** The owner club and admins may rename the group. */
+  /** The owner club and admins may rename the group and change its type. */
   canRename: boolean;
   isOwner: boolean;
   /** Own riders when editing started: starter id → replacement rider. */
   original: ReadonlyMap<string, boolean>;
   /** Own riders selected now: starter id → replacement rider. */
   members: Map<string, boolean>;
+  /** The saved type; `type` is the edited one. */
+  originalType: GroupActType;
+  type: GroupActType;
   /** Riders of other clubs; they stay as they are. */
   otherRegular: number;
   otherReplacements: number;
@@ -366,6 +393,8 @@ export default class CupClubGroupManager extends LitElement {
   @state() joinEdit: GroupEdit | null = null;
   @state() addMode = false;
   @state() addName = "";
+  /** The type of a group created from the add row. */
+  @state() addType: GroupActType = "group_small";
   @state() adding = false;
   @state() error: string | null = null;
 
@@ -515,9 +544,11 @@ export default class CupClubGroupManager extends LitElement {
       <li>
         <strong>Kleingruppe (KG)</strong>: ${MIN_GROUP_SIZE}–${MAX_SMALL_GROUP_SIZE}
         FahrerInnen, <strong>Großgruppe (GG)</strong>: ab
-        ${MAX_SMALL_GROUP_SIZE + 1} FahrerInnen. Die Art ergibt sich
-        automatisch aus der Zahl der FahrerInnen. Gruppen mit weniger als
-        ${MIN_GROUP_SIZE} FahrerInnen sind unvollständig und starten nicht.
+        ${MAX_SMALL_GROUP_SIZE + 1} FahrerInnen. Die Art wählt der Verein, der
+        die Gruppe erstellt; sie ändert sich nicht mit der Zahl der FahrerInnen.
+        Passt die Größe nicht zur Art, wird die Gruppe trotzdem eingeplant, aber
+        mit einem Hinweis. Gruppen mit weniger als ${MIN_GROUP_SIZE}
+        FahrerInnen sind unvollständig und starten nicht.
       </li>
       <li>
         <strong>ErsatzfahrerInnen</strong> zählen nicht zur Gruppengröße, zahlen
@@ -633,7 +664,8 @@ export default class CupClubGroupManager extends LitElement {
           Vereins, um ihr beizutreten.</span
         >`;
       case "create":
-        return html`Neue Gruppe <strong>„${action.name}“</strong>. Danach
+        return html`Neue Gruppe <strong>„${action.name}“</strong> als
+          ${this.renderTypeSelect(this.addType, this.updateAddType)}. Danach
           werden die FahrerInnen ausgewählt.`;
       case "edit":
         return html`<strong>„${action.group.group_name}“</strong>: Der Verein
@@ -700,6 +732,7 @@ export default class CupClubGroupManager extends LitElement {
       <td>
         <label><span>Kategorie</span></label>
         ${this.renderCategory(
+          group.act_type,
           regular,
           replacements,
           isU15,
@@ -722,7 +755,7 @@ export default class CupClubGroupManager extends LitElement {
                 class="blue material-icon"
                 title=${
                   this.canManage(group)
-                    ? "FahrerInnen auswählen oder umbenennen"
+                    ? "FahrerInnen auswählen, umbenennen oder Art ändern"
                     : "FahrerInnen auswählen"
                 }
                 aria-label="Bearbeiten"
@@ -822,13 +855,21 @@ export default class CupClubGroupManager extends LitElement {
         </td>
         <td>
           <label><span>Kategorie (Vorschau)</span></label>
+          ${
+            edit.canRename
+              ? html`${this.renderTypeSelect(edit.type, (e: Event) =>
+                  this.updateEditType(edit, e),
+                )}<br />`
+              : nothing
+          }
           ${this.renderCategory(
+            edit.type,
             preview.regular,
             preview.replacements,
             preview.isU15,
           )}
           ${
-            preview.isU15 === null && groupTypeForSize(preview.regular)
+            preview.isU15 === null && preview.regular >= MIN_GROUP_SIZE
               ? html`<br /><small class="muted"
                   >Die Altersklasse hängt vom Alter der FahrerInnen anderer
                   Vereine ab und steht nach dem Speichern fest.</small
@@ -884,15 +925,14 @@ export default class CupClubGroupManager extends LitElement {
         </td>
       </tr>
       <tr class="editing pickerRow fullRow" data-group=${edit.id}>
-        <td colspan=${this.columnCount}>${this.renderPicker(edit, preview.regular)}</td>
+        <td colspan=${this.columnCount}>${this.renderPicker(edit)}</td>
       </tr>`;
   }
 
   /** Checkboxes for the club's own riders, each with an "Ersatz" toggle. */
-  renderPicker(edit: GroupEdit, regular: number) {
+  renderPicker(edit: GroupEdit) {
     const starters = this.starters.value ?? [];
-    // The type the group will have; incomplete groups are stored as KG.
-    const type = groupTypeForSize(regular) ?? "group_small";
+    const type = edit.type;
     const elsewhere = this.membershipsElsewhere(edit.id);
     return html`${
       this.adminMode
@@ -1009,23 +1049,44 @@ export default class CupClubGroupManager extends LitElement {
         >`;
   }
 
+  /** A `<select>` of the group types. */
+  renderTypeSelect(type: GroupActType, onChange: (e: Event) => void) {
+    const options = groupTypeChoices.map(
+      ([value, label]) =>
+        html`<option value=${value} ?selected=${value === type}>${label}</option>`,
+    );
+    return html`<select aria-label="Art der Gruppe" @change=${onChange}>
+      ${options}
+    </select>`;
+  }
+
   /**
    * "KG Junior Expert · 7 Fahrer + 1 Ersatz", or a warning for incomplete groups and
-   * groups without category. `category` is `undefined` for previews.
+   * groups without category. `category` is `undefined` for previews. Groups
+   * whose size doesn't fit their type get a hint below.
    */
   renderCategory(
+    type: ActType,
     regular: number,
     replacements: number,
     isU15: boolean | null,
     category?: string | null,
     conflict?: string | null,
   ) {
-    const text = describeGroup(regular, replacements, isU15);
-    if (!groupTypeForSize(regular)) {
+    const text = describeGroup(type, regular, replacements, isU15);
+    if (regular < MIN_GROUP_SIZE) {
       return html`<span class="warn">⌛ ${text}</span>`;
     }
+    const sizeWarning = groupSizeWarning(type, regular);
+    const hint = sizeWarning
+      ? html`<br /><small
+            class="warn"
+            title="Die Gruppe ist trotzdem eingeplant. Fehlen noch FahrerInnen, oder passt die andere Art?"
+            >⚠️ ${sizeWarning}</small
+          >`
+      : nothing;
     if (category === undefined) {
-      return text;
+      return html`${text}${hint}`;
     }
     if (conflict) {
       return html`<span class="warn" title=${conflict}
@@ -1039,7 +1100,7 @@ export default class CupClubGroupManager extends LitElement {
         >⌛ ${text} – keine Kategorie</span
       >`;
     }
-    return html`<span title="Kategorie ${category}">✔️ ${text}</span>`;
+    return html`<span title="Kategorie ${category}">✔️ ${text}</span>${hint}`;
   }
 
   renderOwnMembers(members: ClubGroupMember[]) {
@@ -1178,10 +1239,15 @@ export default class CupClubGroupManager extends LitElement {
   resetAdd() {
     this.addMode = false;
     this.addName = "";
+    this.addType = "group_small";
   }
 
   updateAddName(e: InputEvent) {
     this.addName = (e.target as HTMLInputElement).value;
+  }
+
+  updateAddType(e: Event) {
+    this.addType = selectedGroupType(e);
   }
 
   addNameKeydown(e: KeyboardEvent) {
@@ -1206,7 +1272,13 @@ export default class CupClubGroupManager extends LitElement {
         return;
       case "join":
         this.joinEdit = {
-          ...this.newEdit(action.group.id, action.group.group_name),
+          ...this.newEdit(
+            action.group.id,
+            action.group.group_name,
+            isGroupActType(action.group.act_type)
+              ? action.group.act_type
+              : "group_small",
+          ),
           canRename: false,
           isOwner: false,
           otherRegular: action.group.regular_count,
@@ -1224,12 +1296,16 @@ export default class CupClubGroupManager extends LitElement {
         try {
           const { act_id } = unwrap(
             await client.POST("/api/command/create_club_group", {
-              body: { club_id: this.club.id, group_name: action.name },
+              body: {
+                club_id: this.club.id,
+                group_name: action.name,
+                act_type: this.addType,
+              },
             }),
           );
           // Pick the riders right away; the row appears after the reload.
           this.edits.set(act_id, {
-            ...this.newEdit(act_id, action.name),
+            ...this.newEdit(act_id, action.name, this.addType),
             created: true,
           });
           this.resetAdd();
@@ -1252,11 +1328,13 @@ export default class CupClubGroupManager extends LitElement {
   }
 
   /** Edit state of a group without riders, owned by this club. */
-  newEdit(id: string, name: string): GroupEdit {
+  newEdit(id: string, name: string, type: GroupActType): GroupEdit {
     return {
       id,
       originalName: name,
       name,
+      originalType: type,
+      type,
       canRename: true,
       isOwner: true,
       original: new Map(),
@@ -1274,10 +1352,15 @@ export default class CupClubGroupManager extends LitElement {
     const own = this.ownMembers(group);
     const others = this.otherMembers(group);
     const members = new Map(own.map((m) => [m.starter_id, m.is_replacement]));
+    const type = isGroupActType(group.act_type)
+      ? group.act_type
+      : "group_small";
     this.edits.set(group.id, {
       id: group.id,
       originalName: group.group_name,
       name: group.group_name,
+      originalType: type,
+      type,
       canRename: this.canManage(group),
       isOwner: group.is_owner,
       original: new Map(members),
@@ -1333,6 +1416,11 @@ export default class CupClubGroupManager extends LitElement {
     this.requestUpdate();
   }
 
+  updateEditType(edit: GroupEdit, e: Event) {
+    edit.type = selectedGroupType(e);
+    this.requestUpdate();
+  }
+
   toggleMember(edit: GroupEdit, starterId: string, e: Event) {
     if ((e.target as HTMLInputElement).checked) {
       edit.members.set(starterId, false);
@@ -1355,7 +1443,9 @@ export default class CupClubGroupManager extends LitElement {
     }
     const name = normalizeGroupName(edit.name);
     const rename = edit.canRename && name !== edit.originalName;
+    const typeChanged = edit.canRename && edit.type !== edit.originalType;
     const membersChanged = !sameMembers(edit.original, edit.members);
+    const changed = rename || typeChanged || membersChanged;
     if (rename && !name) {
       return this.showEditError(edit, "Bitte gib einen Gruppennamen an.");
     }
@@ -1379,7 +1469,7 @@ export default class CupClubGroupManager extends LitElement {
     edit.saving = true;
     edit.error = null;
     this.requestUpdate();
-    let renamed = false;
+    let saved = false;
     try {
       if (rename) {
         unwrap(
@@ -1389,9 +1479,19 @@ export default class CupClubGroupManager extends LitElement {
         );
         // A retry after failing to save the riders doesn't rename again.
         edit.originalName = name;
-        renamed = true;
+        saved = true;
       }
       let warning: string | null | undefined;
+      if (typeChanged) {
+        ({ warning } = unwrap(
+          await client.POST("/api/command/set_club_group_type", {
+            body: { act_id: edit.id, act_type: edit.type },
+          }),
+        ));
+        edit.originalType = edit.type;
+        saved = true;
+      }
+      // Saving the riders checks the final state again.
       if (membersChanged) {
         ({ warning } = unwrap(
           await client.POST("/api/command/set_club_group_members", {
@@ -1414,15 +1514,15 @@ export default class CupClubGroupManager extends LitElement {
       // Saved, but a rider is now also in another group of the same type.
       if (warning) {
         this.showError(warning);
-      } else if (rename || membersChanged) {
+      } else if (changed) {
         this.clearError();
       }
-      if (rename || membersChanged) {
+      if (changed) {
         this.dataChanged();
       }
     } catch (error) {
       this.showEditError(edit, errorMessage(error));
-      if (renamed) {
+      if (saved) {
         this.dataChanged();
       }
     } finally {

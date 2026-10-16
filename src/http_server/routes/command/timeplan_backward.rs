@@ -4,13 +4,12 @@ use axum::{Extension, Json, http::StatusCode};
 use serde::Serialize;
 use tracing::{instrument, warn};
 use utoipa::ToSchema;
-use uuid::Uuid;
 
 use crate::{
     http_server::{ClientError, HttpError, extractor::auth::Auth},
     player::PlayerHub,
     reloadable_sqlite::{ReloadableSqlite, begin_write},
-    timeplan::live_entries,
+    timeplan::{Entry, Slot, load, reopen_slot, unstart_slot},
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -18,8 +17,10 @@ pub struct SetTimeplanBackwardResponse {}
 
 /// Moves the live timeplan one step back, undoing the last forward step.
 ///
-/// Undoing the start of an entry also undoes the skips of the empty category
-/// blocks right before it, since they were skipped in the same step.
+/// Undoing the start of an entry also undoes the skips of the empty start
+/// blocks right before it, since they were skipped in the same step. Undoing
+/// the start of a slot that followed a break reopens the break, since ending
+/// it started the slot.
 #[utoipa::path(
     post,
     tags=["command", "timeplan"],
@@ -45,39 +46,21 @@ pub async fn timeplan_backward(
     // can't both act on the same state and skip a step.
     let mut tx = begin_write(&db).await?;
 
-    let entries = live_entries(&mut tx).await?;
-    let running = entries
-        .iter()
-        .position(|e| e.started_at.is_some() && e.ended_at.is_none());
-
-    match running {
+    let entries = load(&mut tx).await?.entries;
+    match entries.iter().position(Entry::is_running) {
         Some(index) => {
             let entry = &entries[index];
-            let running_act = match &entry.category {
-                Some(category) => sqlx::query!(
-                    "SELECT id as 'id!: Uuid' FROM view_act WHERE category = ? AND started_at IS NOT NULL AND ended_at IS NULL ORDER BY `order` LIMIT 1",
-                    category
-                ).fetch_optional(&mut *tx).await?.map(|row| row.id),
-                None => None,
-            };
-            let last_finished_act = match &entry.category {
-                Some(category) => sqlx::query!(
-                    "SELECT id as 'id!: Uuid' FROM view_act WHERE category = ? AND ended_at IS NOT NULL ORDER BY `order` DESC LIMIT 1",
-                    category
-                ).fetch_optional(&mut *tx).await?.map(|row| row.id),
-                None => None,
-            };
-            if let Some(running_act_id) = running_act {
-                sqlx::query!(
-                    "UPDATE acts SET started_at = NULL, music_started_at = NULL WHERE id = ?",
-                    running_act_id
-                )
-                .execute(&mut *tx)
-                .await?;
-            } else if let Some(last_act_id) = last_finished_act {
-                sqlx::query!("UPDATE acts SET ended_at = NULL WHERE id = ?", last_act_id)
-                    .execute(&mut *tx)
-                    .await?;
+            let slots = &entry.slots;
+            if let Some(running) = slots.iter().position(Slot::is_running) {
+                unstart_slot(&mut tx, &slots[running]).await?;
+                // Ending a break started this slot in the same step.
+                if let Some(pause @ Slot::Break(_)) = running.checked_sub(1).map(|i| &slots[i])
+                    && pause.ended_at() == slots[running].started_at()
+                {
+                    reopen_slot(&mut tx, pause).await?;
+                }
+            } else if let Some(last) = slots.iter().rfind(|s| s.is_ended()) {
+                reopen_slot(&mut tx, last).await?;
             } else {
                 // Nothing done in this entry yet: undo its start, together
                 // with the empty blocks skipped to get here.
@@ -94,7 +77,8 @@ pub async fn timeplan_backward(
             }
         }
         None => {
-            // Reopen the last entry that really ran, and undo the skips after it.
+            // Reopen the last entry that really ran (and its last slot), and
+            // undo the skips after it.
             let Some(index) = entries
                 .iter()
                 .rposition(|e| e.ended_at.is_some() && !e.is_skipped())
@@ -106,13 +90,15 @@ pub async fn timeplan_backward(
             sqlx::query!("UPDATE timeplan SET ended_at = NULL WHERE id = ?", entry.id)
                 .execute(&mut *tx)
                 .await?;
-            if let Some(category) = &entry.category {
-                sqlx::query!(
-                    "UPDATE acts SET ended_at = NULL WHERE id = (SELECT id FROM view_act WHERE category = ? ORDER BY `order` DESC LIMIT 1)",
-                    category
-                )
-                .execute(&mut *tx)
-                .await?;
+            // Its last slot runs again if ending it ended the block; a block
+            // that ended because its last acts were moved away just reopens.
+            if let Some(last) = entry
+                .slots
+                .iter()
+                .rfind(|s| s.is_ended())
+                .filter(|last| last.ended_at() == entry.ended_at)
+            {
+                reopen_slot(&mut tx, last).await?;
             }
             for skipped in entries[index + 1..].iter().filter(|e| e.is_skipped()) {
                 reset_entry(&mut tx, skipped.id).await?;
@@ -129,13 +115,20 @@ pub async fn timeplan_backward(
     Ok(Json(SetTimeplanBackwardResponse {}))
 }
 
-/// Puts an entry back to planned.
+/// Puts a skipped entry back to planned, with its breaks (a block can lose
+/// its acts while one of its breaks runs).
 async fn reset_entry(db: &mut sqlx::SqliteConnection, id: i64) -> Result<(), sqlx::Error> {
     sqlx::query!(
         "UPDATE timeplan SET started_at = NULL, ended_at = NULL WHERE id = ?",
         id
     )
-    .execute(db)
+    .execute(&mut *db)
+    .await?;
+    sqlx::query!(
+        "UPDATE timeplan_slots SET started_at = NULL, ended_at = NULL WHERE timeplan_id = ? AND act_id IS NULL",
+        id
+    )
+    .execute(&mut *db)
     .await?;
     Ok(())
 }

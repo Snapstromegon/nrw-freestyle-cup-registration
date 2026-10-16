@@ -14,6 +14,7 @@ import { iconStyles, resetStyles } from "../../styles/base";
 import {
   actClubNames,
   actParticipantsLabel,
+  actSizeWarning,
   actTypeShort,
   type CheckInMap,
   checkInMap,
@@ -259,10 +260,27 @@ const buildIssues = (
         const reason = act.type_conflict
           ? conflictReason(act, data.acts)
           : isGroupActType(act.act_type) && regular < MIN_GROUP_SIZE
-            ? describeGroup(regular, act.participants.length - regular, null)
+            ? describeGroup(
+                act.act_type,
+                regular,
+                act.participants.length - regular,
+                null,
+              )
             : "keine passende Kategorie";
         return `${actLabel(act)}: ${reason}`;
       }),
+  });
+
+  issues.push({
+    key: "group-size",
+    tone: "warn",
+    label: "Gruppen mit unpassender Größe",
+    href: "/admin-acts-overview",
+    view: "Küren",
+    items: data.acts.flatMap((act) => {
+      const warning = act.category ? actSizeWarning(act) : null;
+      return warning ? [`${actLabel(act)}: ${warning}`] : [];
+    }),
   });
 
   const musicEnd = competition ? new Date(competition.music_upload_end) : null;

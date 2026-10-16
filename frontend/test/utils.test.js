@@ -8,10 +8,14 @@ import {
   actParticipantsLabel,
   actTypeLabels,
   actTypeShort,
+  breakEnd,
   checkInMap,
   checkInStats,
   countStarts,
   currentTimeplanAct,
+  blockActs,
+  blockStarts,
+  currentTimeplanBreak,
   currentTimeplanEntry,
   describeGroup,
   formatAge,
@@ -20,9 +24,12 @@ import {
   formatDateTime,
   formatDuration,
   formatMoney,
+  formatSlotGroups,
+  parseSlotGroups,
   formatTime,
   getStarterPrice,
-  groupTypeForSize,
+  groupSizeWarning,
+  actSizeWarning,
   isGroupActType,
   isMusicUploadOpen,
   isRegistrationOpen,
@@ -47,16 +54,34 @@ process.env.TZ = "Europe/Berlin";
 
 const act = (id, status) => ({ id, name: id, status });
 
+/** A break inside a start block, as a slot. */
+const pause = (id, status) => ({
+  Break: { id, label: `Pause ${id}`, duration_seconds: 300, status },
+});
+
+const hasActs = (slots) => slots.some((slot) => !("Break" in slot));
+
+/**
+ * A start block of category `name`. Its `slots` are acts (`act`) or breaks
+ * (`pause`); it only gets its warm-up if it has acts.
+ */
 const category = (
   name,
   status,
-  acts,
+  slots,
   einfahrzeit_seconds = 600,
-  warmup_seconds = acts.length ? einfahrzeit_seconds : 0,
+  warmup_seconds = hasActs(slots) ? einfahrzeit_seconds : 0,
 ) => ({
   status,
   timeplan_entry: {
-    Category: { name, einfahrzeit_seconds, warmup_seconds, acts },
+    Acts: {
+      description: name,
+      home_category: name,
+      categories: hasActs(slots) ? [name] : [],
+      einfahrzeit_seconds,
+      warmup_seconds,
+      slots: slots.map((slot) => ("Break" in slot ? slot : { Act: slot })),
+    },
   },
 });
 
@@ -66,6 +91,34 @@ const custom = (label, status) => ({
 });
 
 const timeplan = (...items) => ({ offset: 0, items });
+
+/** A reserved slot of a final. */
+const finalist = (id, status) => ({
+  Finalist: {
+    id,
+    label: `${id}. Finalist (U11–U15)`,
+    final_description: "Finale 1",
+    status,
+    ended_at: status === "Ended" ? new Date().toISOString() : null,
+    judge_duration_seconds: 120,
+  },
+});
+
+/** A final's start block with its reserved `slots`. */
+const final = (status, slots) => ({
+  status,
+  timeplan_entry: {
+    Acts: {
+      description: "Finale 1",
+      home_category: null,
+      final_name: "Finale 1",
+      categories: [],
+      einfahrzeit_seconds: 600,
+      warmup_seconds: 600,
+      slots,
+    },
+  },
+});
 
 describe("timeplan entries", () => {
   const plan = timeplan(
@@ -104,6 +157,11 @@ describe("timeplan entries", () => {
     );
     assert.equal(isEmptyBlock(skipping.items[1]), true);
     assert.equal(isEmptyBlock(skipping.items[0]), false);
+    // Breaks alone don't make a block run.
+    assert.equal(
+      isEmptyBlock(category("Pausen", "Planned", [pause(1, "Planned")])),
+      true,
+    );
   });
 
   test("all lookups tolerate a missing timeplan", () => {
@@ -161,6 +219,24 @@ describe("timeplanStatus", () => {
     const plan = timeplan(category("A", "Started", []));
     assert.equal(timeplanStatus(plan), TimeplanStatus.Break);
   });
+
+  test("is BlockBreak while a break inside the block runs", () => {
+    const plan = timeplan(
+      category("A", "Started", [
+        act("a1", "Ended"),
+        pause(1, "Started"),
+        act("a2", "Planned"),
+      ]),
+    );
+    assert.equal(timeplanStatus(plan), TimeplanStatus.BlockBreak);
+  });
+
+  test("is Warmup before a break that opens the block", () => {
+    const plan = timeplan(
+      category("A", "Started", [pause(1, "Planned"), act("a1", "Planned")]),
+    );
+    assert.equal(timeplanStatus(plan), TimeplanStatus.Warmup);
+  });
 });
 
 describe("judging after the last act of a block", () => {
@@ -168,17 +244,33 @@ describe("judging after the last act of a block", () => {
   // The backend writes extended years and nanoseconds.
   const endedAt = (secondsAgo) =>
     `+00${new Date(now - secondsAgo * 1000).toISOString().replace("Z", "000000Z")}`;
-  /** Ending its only act ended the block `secondsAgo` seconds before `now`. */
-  const endedBlock = (secondsAgo) => ({
+  /**
+   * Ending its last act, judged for `judge_duration_seconds`, ended the block
+   * `secondsAgo` seconds before `now`. `before` and `after` are other slots.
+   */
+  const endedBlock = (
+    secondsAgo,
+    { judge_duration_seconds = 180, before = [], after = [] } = {},
+  ) => ({
     status: "Ended",
     timeplan_entry: {
-      Category: {
-        name: "KGU15",
+      Acts: {
         description: "Kleingruppe U15",
+        home_category: "KGU15",
+        categories: ["KGU15"],
         einfahrzeit_seconds: 600,
         warmup_seconds: 600,
-        judge_duration_seconds: 180,
-        acts: [{ ...act("g1", "Ended"), ended_at: endedAt(secondsAgo) }],
+        slots: [
+          ...before,
+          {
+            Act: {
+              ...act("g1", "Ended"),
+              ended_at: endedAt(secondsAgo),
+              judge_duration_seconds,
+            },
+          },
+          ...after,
+        ],
       },
     },
   });
@@ -189,15 +281,33 @@ describe("judging after the last act of a block", () => {
       category("B", "Planned", [act("b1", "Planned")]),
     );
     assert.equal(timeplanStatus(plan, now), TimeplanStatus.Judging);
+    const block = plan.items[0].timeplan_entry.Acts;
     assert.deepEqual(judgingAfterBlockEnd(plan, now), {
       entry: plan.items[0],
-      category: plan.items[0].timeplan_entry.Category,
-      act: plan.items[0].timeplan_entry.Category.acts[0],
+      block,
+      act: block.slots[0].Act,
     });
-    assert.equal(
-      lastTimeplanAct(plan),
-      plan.items[0].timeplan_entry.Category.acts[0],
-    );
+    assert.equal(lastTimeplanAct(plan), block.slots[0].Act);
+  });
+
+  test("uses the judging time of the last act's own category", () => {
+    // A mixed block: a pair (1 minute judging) after a group (3 minutes).
+    const group = {
+      Act: { ...act("g0", "Ended"), judge_duration_seconds: 180 },
+    };
+    const pairEnded = (secondsAgo) =>
+      timeplan(
+        endedBlock(secondsAgo, { judge_duration_seconds: 60, before: [group] }),
+      );
+    assert.equal(timeplanStatus(pairEnded(30), now), TimeplanStatus.Judging);
+    assert.equal(judgingAfterBlockEnd(pairEnded(90), now), undefined);
+    assert.equal(timeplanStatus(pairEnded(90), now), TimeplanStatus.Break);
+  });
+
+  test("is over when the block ended with a break", () => {
+    const plan = timeplan(endedBlock(4, { after: [pause(1, "Ended")] }));
+    assert.equal(judgingAfterBlockEnd(plan, now), undefined);
+    assert.equal(timeplanStatus(plan, now), TimeplanStatus.Break);
   });
 
   test("is Break once the judging time is over", () => {
@@ -308,6 +418,56 @@ describe("timeplan acts", () => {
     );
     assert.equal(lastTimeplanAct(plan), undefined);
   });
+
+  test("acts of other categories in a block count like its own", () => {
+    const moved = { ...act("b1", "Planned"), category: "B" };
+    const plan = timeplan(
+      category("A", "Started", [act("a1", "Started"), moved]),
+      category("B", "Planned", [act("b2", "Planned")]),
+    );
+    assert.equal(nextTimeplanAct(plan), moved);
+  });
+});
+
+describe("breaks inside a block", () => {
+  const running = pause(1, "Started");
+  const plan = timeplan(
+    category("A", "Started", [
+      act("a1", "Ended"),
+      running,
+      act("a2", "Planned"),
+    ]),
+  );
+
+  test("currentTimeplanBreak returns the running break", () => {
+    assert.equal(currentTimeplanBreak(plan), running.Break);
+    assert.equal(currentTimeplanAct(plan), undefined);
+    assert.equal(
+      currentTimeplanBreak(
+        timeplan(category("A", "Started", [act("a1", "Started")])),
+      ),
+      undefined,
+    );
+  });
+
+  test("next and last act skip the break", () => {
+    assert.equal(nextTimeplanAct(plan).id, "a2");
+    assert.equal(lastTimeplanAct(plan).id, "a1");
+  });
+
+  test("breakEnd is the break's start plus its duration", () => {
+    assert.equal(
+      breakEnd({
+        started_at: "2027-06-05T10:00:00Z",
+        duration_seconds: 300,
+      }).toISOString(),
+      "2027-06-05T10:05:00.000Z",
+    );
+    assert.equal(
+      breakEnd({ started_at: null, duration_seconds: 300 }),
+      undefined,
+    );
+  });
 });
 
 describe("getStarterPrice", () => {
@@ -416,40 +576,98 @@ describe("act types and groups", () => {
     assert.equal(isGroupActType(undefined), false);
   });
 
-  test("groupTypeForSize follows the size limits", () => {
+  test("slot groups are formatted and parsed as admins type them", () => {
+    const groups = [
+      { count: 4, label: "U17–U21" },
+      { count: 4, label: "U23+" },
+    ];
+    assert.equal(formatSlotGroups(groups), "4 × U17–U21, 4 × U23+");
+    assert.deepEqual(parseSlotGroups("4 × U17–U21, 4 × U23+"), groups);
+    assert.deepEqual(parseSlotGroups(" 4x U17–U21 ,4 * U23+ ,"), groups);
+    assert.deepEqual(parseSlotGroups("3 Xtreme"), [
+      { count: 3, label: "Xtreme" },
+    ]);
+    assert.deepEqual(parseSlotGroups("5"), [{ count: 5, label: "" }]);
+    assert.equal(formatSlotGroups([{ count: 5, label: "" }]), "5");
+    for (const text of ["", " , ", "U23+", "0 × U23+", "4 × U17, Rest"]) {
+      assert.equal(parseSlotGroups(text), null, text);
+    }
+  });
+
+  test("groupSizeWarning flags groups outside their type's size range", () => {
     assert.equal(MIN_GROUP_SIZE, 3);
     assert.equal(MAX_SMALL_GROUP_SIZE, 8);
-    assert.equal(groupTypeForSize(0), null);
-    assert.equal(groupTypeForSize(2), null);
-    assert.equal(groupTypeForSize(3), "group_small");
-    assert.equal(groupTypeForSize(8), "group_small");
-    assert.equal(groupTypeForSize(9), "group_large");
-    assert.equal(groupTypeForSize(20), "group_large");
+    for (const regular of [3, 8]) {
+      assert.equal(groupSizeWarning("group_small", regular), null, regular);
+    }
+    for (const regular of [9, 20]) {
+      assert.equal(groupSizeWarning("group_large", regular), null, regular);
+    }
+    assert.equal(
+      groupSizeWarning("group_small", 9),
+      "zu groß für eine Kleingruppe – höchstens 8 Fahrer",
+    );
+    for (const regular of [3, 8]) {
+      assert.equal(
+        groupSizeWarning("group_large", regular),
+        "zu klein für eine Großgruppe – mindestens 9 Fahrer",
+        regular,
+      );
+    }
+    // Incomplete groups have no category; they aren't warned about here.
+    for (const type of ["group_small", "group_large"]) {
+      assert.equal(groupSizeWarning(type, 2), null, type);
+    }
+  });
+
+  test("actSizeWarning counts regular riders of group acts only", () => {
+    const riders = (regular, replacements) => [
+      ...Array.from({ length: regular }, () => ({ is_replacement: false })),
+      ...Array.from({ length: replacements }, () => ({ is_replacement: true })),
+    ];
+    assert.equal(
+      actSizeWarning({ act_type: "group_large", participants: riders(5, 4) }),
+      "zu klein für eine Großgruppe – mindestens 9 Fahrer",
+    );
+    assert.equal(
+      actSizeWarning({ act_type: "group_small", participants: riders(8, 2) }),
+      null,
+    );
+    assert.equal(
+      actSizeWarning({ act_type: "single", participants: riders(1, 0) }),
+      null,
+    );
   });
 
   test("describeGroup summarizes type, age group and riders", () => {
     assert.equal(
-      describeGroup(7, 1, true),
+      describeGroup("group_small", 7, 1, true),
       "KG Junior Expert · 7 Fahrer + 1 Ersatz",
     );
-    assert.equal(describeGroup(9, 0, false), "GG Expert · 9 Fahrer");
-    assert.equal(describeGroup(3, 0, null), "KG · 3 Fahrer");
+    assert.equal(
+      describeGroup("group_large", 9, 0, false),
+      "GG Expert · 9 Fahrer",
+    );
+    assert.equal(describeGroup("group_small", 3, 0, null), "KG · 3 Fahrer");
+    // The chosen type, whatever the size.
+    assert.equal(describeGroup("group_large", 5, 0, null), "GG · 5 Fahrer");
+    assert.equal(describeGroup("group_small", 9, 0, null), "KG · 9 Fahrer");
   });
 
   test("describeGroup counts only regular riders for the size", () => {
     assert.equal(
-      describeGroup(8, 2, true),
+      describeGroup("group_small", 8, 2, true),
       "KG Junior Expert · 8 Fahrer + 2 Ersatz",
     );
   });
 
   test("describeGroup flags incomplete groups", () => {
     assert.equal(
-      describeGroup(2, 3, true),
+      describeGroup("group_small", 2, 3, true),
       "unvollständig – mindestens 3 Fahrer",
     );
     assert.equal(
-      describeGroup(0, 0, null),
+      describeGroup("group_large", 0, 0, null),
       "unvollständig – mindestens 3 Fahrer",
     );
   });
@@ -939,5 +1157,36 @@ describe("actMatchesSearch", () => {
       assert.ok(actMatchesSearch(act, search), search);
     }
     assert.ok(!actMatchesSearch(act, "Berta"));
+  });
+});
+
+describe("final blocks", () => {
+  test("run their reserved slots like acts", () => {
+    const planned = final("Planned", [finalist("1", "Planned")]);
+    assert.equal(isEmptyBlock(planned), false);
+    assert.deepEqual(blockActs(planned), []);
+    assert.deepEqual(
+      blockStarts(planned).map((start) => start.id),
+      ["1"],
+    );
+    assert.equal(nextTimeplanAct(timeplan(planned))?.id, "1");
+
+    const running = final("Started", [
+      finalist("1", "Started"),
+      finalist("2", "Planned"),
+    ]);
+    assert.equal(timeplanStatus(timeplan(running)), TimeplanStatus.Act);
+    assert.equal(currentTimeplanAct(timeplan(running))?.id, "1");
+
+    const judging = final("Started", [
+      finalist("1", "Ended"),
+      finalist("2", "Planned"),
+    ]);
+    assert.equal(timeplanStatus(timeplan(judging)), TimeplanStatus.Judging);
+    assert.equal(lastTimeplanAct(timeplan(judging))?.id, "1");
+
+    // The last finalist is judged after the block ended.
+    const over = { ...final("Ended", [finalist("1", "Ended")]) };
+    assert.equal(timeplanStatus(timeplan(over)), TimeplanStatus.Judging);
   });
 });

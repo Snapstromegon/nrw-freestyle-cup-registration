@@ -11,7 +11,7 @@ use crate::{
         ClientError, HttpError,
         routes::{
             http_types::ActParticipant,
-            query::predict_timeplan::{TimeplanEntry, predict},
+            query::predict_timeplan::{TimeplanEntry, TimeplanSlot, predict},
         },
     },
     reloadable_sqlite::ReloadableSqlite,
@@ -33,7 +33,8 @@ fn csv_field(value: &str) -> String {
     }
 }
 
-/// The startlist as CSV, one section per timeplan entry.
+/// The startlist as CSV, one section per timeplan entry. Breaks inside a
+/// start block and the reserved slots of a final get their own `#` line.
 #[utoipa::path(
     get,
     tags=["query", "timeplan"],
@@ -71,26 +72,51 @@ pub async fn get_startlist_csv(
 
     csv.push_str("Wettbewerb;Anzahl Fahrer;Startnummer/PK;Land;Kürtitel;Name;Verein;Startzeit\n");
 
+    let time = |t: time::OffsetDateTime| {
+        t.to_offset(time::UtcOffset::from_hms(1, 0, 0).expect("Invalid Offset"))
+            .format(&TIME_FORMAT)
+            .unwrap()
+    };
     let mut counter = 1;
     for entry in timeplan.items {
         match entry.timeplan_entry {
-            TimeplanEntry::Category {
-                description, acts, ..
+            TimeplanEntry::Acts {
+                description, slots, ..
             } => {
                 // Empty blocks are skipped, so they get no header either.
-                if acts.is_empty() {
+                if !slots
+                    .iter()
+                    .any(|slot| matches!(slot, TimeplanSlot::Act(_) | TimeplanSlot::Finalist(_)))
+                {
                     continue;
                 }
                 csv.push_str(&format!(
                     "# {} {}\n",
-                    entry
-                        .predicted_start
-                        .to_offset(time::UtcOffset::from_hms(1, 0, 0).expect("Invalid Offset"))
-                        .format(&TIME_FORMAT)
-                        .unwrap(),
+                    time(entry.predicted_start),
                     csv_field(&description)
                 ));
-                for timeplan_act in acts {
+                for slot in slots {
+                    let timeplan_act = match slot {
+                        TimeplanSlot::Act(act) => act,
+                        TimeplanSlot::Break(pause) => {
+                            csv.push_str(&format!(
+                                "# {} {}\n",
+                                time(pause.predicted_start),
+                                csv_field(&pause.label)
+                            ));
+                            continue;
+                        }
+                        // The finalists aren't known yet: a comment, like a
+                        // break, and no start number.
+                        TimeplanSlot::Finalist(finalist) => {
+                            csv.push_str(&format!(
+                                "# {} {}\n",
+                                time(finalist.predicted_start),
+                                csv_field(&finalist.label)
+                            ));
+                            continue;
+                        }
+                    };
                     let Some(act) = details.get(&timeplan_act.id) else {
                         continue;
                     };
@@ -116,20 +142,17 @@ pub async fn get_startlist_csv(
                         .iter()
                         .filter(|p| !p.is_replacement)
                         .count();
+                    // Each act with its own category: a block can mix them.
                     csv.push_str(&format!(
                         "{};{};{};{};{};{};{};{}\n",
-                        csv_field(&description),
+                        csv_field(&timeplan_act.category_description),
                         rider_count,
                         counter,
                         "Deutschland",
                         csv_field(&timeplan_act.name),
                         csv_field(&names),
                         csv_field(&clubs.join(" & ")),
-                        timeplan_act
-                            .predicted_start
-                            .to_offset(time::UtcOffset::from_hms(1, 0, 0).expect("Invalid Offset"))
-                            .format(&TIME_FORMAT)
-                            .unwrap()
+                        time(timeplan_act.predicted_start)
                     ));
                     counter += 1;
                 }
@@ -137,11 +160,7 @@ pub async fn get_startlist_csv(
             TimeplanEntry::Custom { label, .. } => {
                 csv.push_str(&format!(
                     "# {} {}\n",
-                    entry
-                        .predicted_start
-                        .to_offset(time::UtcOffset::from_hms(1, 0, 0).expect("Invalid Offset"))
-                        .format(&TIME_FORMAT)
-                        .unwrap(),
+                    time(entry.predicted_start),
                     csv_field(&label)
                 ));
             }

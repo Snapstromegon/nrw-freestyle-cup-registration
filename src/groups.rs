@@ -286,55 +286,31 @@ pub async fn ensure_group_name_is_free(
     Ok(())
 }
 
-/// Sets the group's act type from its number of regular riders: up to
-/// `MAX_SMALL_GROUP_SIZE` it's a small group, above a large one.
-///
-/// Call it whenever the riders of a group change. Acts that aren't groups are
-/// left alone.
-pub async fn refresh_group_act_type(
-    conn: &mut SqliteConnection,
-    act_id: Uuid,
-) -> Result<ActType, sqlx::Error> {
-    let regular_count = sqlx::query_scalar!(
-        r#"
-        SELECT COUNT(*) as "count!: i64" FROM act_participants
-        WHERE act_id = ? AND NOT is_replacement
-        "#,
-        act_id
-    )
-    .fetch_one(&mut *conn)
-    .await?;
-    let act_type = ActType::for_group_size(regular_count);
-    sqlx::query!(
-        r#"
-        UPDATE acts SET act_type = ?
-        WHERE id = ? AND act_type IN ('group_small', 'group_large')
-        "#,
-        act_type,
-        act_id
-    )
-    .execute(&mut *conn)
-    .await?;
-    Ok(act_type)
+/// Checks that `act_type` is a group type, for commands that set a group's
+/// type. Fails with a German message otherwise.
+pub fn ensure_group_type(act_type: ActType) -> Result<(), HttpError> {
+    if act_type.is_group() {
+        Ok(())
+    } else {
+        Err(HttpError::ErrorMessages(
+            "Eine Gruppe ist eine Kleingruppe oder eine Großgruppe.".to_string(),
+        ))
+    }
 }
 
 /// A rider can be in at most one small and one large group, replacements
 /// included.
 ///
 /// The rule isn't enforced when riders change: clubs add their riders to a
-/// shared group one after another, and a group on its way to a large group
-/// counts as a small one until it has enough riders. Instead, groups breaking
-/// the rule get no category (see `view_act`) and the clubs get this warning.
+/// shared group one after another. Instead, groups breaking the rule get no
+/// category (see `view_act`) and the clubs get this warning.
 ///
 /// Checks every participant of the act (from any club) against all other acts
 /// of the same type. Returns `None` without conflicts, otherwise a user-facing
-/// (German) message saying what the group counts as, and naming the riders,
-/// their clubs and the other groups. `cause` starts the message, e.g.
-/// „Ohne „Anna Muster““ when a starter was deleted.
+/// (German) message naming the riders, their clubs and the other groups.
 pub async fn type_conflict_message(
     conn: &mut SqliteConnection,
     act_id: Uuid,
-    cause: Option<&str>,
 ) -> Result<Option<String>, sqlx::Error> {
     let conflicts = sqlx::query!(
         r#"
@@ -365,13 +341,7 @@ pub async fn type_conflict_message(
 
     let group = sqlx::query!(
         r#"
-        SELECT
-            group_name as "group_name!",
-            act_type as "act_type!: ActType",
-            (
-                SELECT COUNT(*) FROM act_participants
-                WHERE act_id = acts.id AND NOT is_replacement
-            ) as "regular_count!: i64"
+        SELECT group_name as "group_name!", act_type as "act_type!: ActType"
         FROM acts
         WHERE id = ?
         "#,
@@ -379,20 +349,7 @@ pub async fn type_conflict_message(
     )
     .fetch_one(&mut *conn)
     .await?;
-    let riders = if group.regular_count == 1 {
-        "FahrerIn"
-    } else {
-        "FahrerInnen"
-    };
-    let size = format!(
-        "mit {} {riders} als {}",
-        group.regular_count,
-        group.act_type.german_name()
-    );
-    let mut message = match cause {
-        Some(cause) => format!("{cause} zählt „{}“ {size}:", group.group_name),
-        None => format!("„{}“ zählt {size}:", group.group_name),
-    };
+    let mut message = format!("{} „{}“:", group.act_type.german_name(), group.group_name);
     for conflict in &conflicts {
         message.push_str(&format!(
             " „{} {}“ ({}) ist bereits in der {} „{}“ angemeldet.",

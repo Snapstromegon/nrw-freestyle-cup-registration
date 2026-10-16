@@ -13,6 +13,8 @@ import { resetStyles } from "../../styles/base";
 import {
   actClubNames,
   actParticipantsLabel,
+  blockActs,
+  blockOf,
   competitionName,
   formatDateRange,
   formatTime,
@@ -25,7 +27,7 @@ type Category = components["schemas"]["Category"];
 type StartlistAct = components["schemas"]["StartlistAct"];
 type Timeplan = components["schemas"]["Timeplan"];
 
-/** A warm-up (Einfahrzeit) that one or more consecutive categories share. */
+/** A warm-up (Einfahrzeit) that one or more consecutive blocks share. */
 interface Warmup {
   /** Predicted start of the warm-up. */
   start: string;
@@ -35,7 +37,10 @@ interface Warmup {
 
 interface StartlistSection {
   category: Category;
-  /** The acts with their predicted start, if the timeplan has them. */
+  /**
+   * The acts with their predicted start, if the timeplan has them; in
+   * timeplan order, as acts can be moved to other blocks.
+   */
   acts: { act: StartlistAct; start?: string }[];
   warmup?: Warmup;
 }
@@ -62,8 +67,9 @@ const performers = (act: StartlistAct) =>
 
 /**
  * Groups the acts by category and takes the predicted times from the
- * timeplan. A category with warm-up time starts a warm-up; the categories
- * right after it without warm-up time share that one.
+ * timeplan, wherever the acts run. A block with warm-up time starts a
+ * warm-up; the blocks right after it without warm-up time share that one.
+ * A category warms up with the first block it has acts in.
  */
 const buildStartlist = (
   categories: Category[],
@@ -82,45 +88,59 @@ const buildStartlist = (
   }
 
   const actStarts = new Map<string, string>();
+  // Where each act runs in the timeplan, to sort by: times can disagree
+  // with the order (e.g. a block running late).
+  const actPositions = new Map<string, number>();
   const warmups: Warmup[] = [];
   const warmupByCategory = new Map<string, Warmup>();
+  // The categories of the blocks so far: a category warms up with its first
+  // block, not with a later one like "Nachstarter".
+  const seen = new Set<string>();
   let warmup: Warmup | undefined;
   for (const item of timeplan?.items ?? []) {
-    if (!("Category" in item.timeplan_entry)) {
+    const block = blockOf(item);
+    if (!block) {
       // Nobody warms up across a break or the award ceremony.
       warmup = undefined;
       continue;
     }
-    const entry = item.timeplan_entry.Category;
-    for (const act of entry.acts) {
+    for (const act of blockActs(block)) {
       actStarts.set(act.id, act.predicted_start);
+      actPositions.set(act.id, actPositions.size);
     }
     // The effective warm-up: empty blocks have none, and their warm-up moves
-    // to the next category sharing it.
-    if (entry.warmup_seconds > 0) {
+    // to the next block sharing it.
+    if (block.warmup_seconds > 0) {
       warmup = { start: item.predicted_start, categories: [] };
       warmups.push(warmup);
     }
-    const category = categoriesByName.get(entry.name);
-    if (warmup && category && actsByCategory.has(entry.name)) {
-      warmup.categories.push(category);
-      warmupByCategory.set(entry.name, warmup);
+    for (const name of block.categories) {
+      const category = categoriesByName.get(name);
+      if (warmup && category && actsByCategory.has(name) && !seen.has(name)) {
+        warmup.categories.push(category);
+        warmupByCategory.set(name, warmup);
+      }
+      seen.add(name);
     }
   }
 
+  const position = (act: StartlistAct) =>
+    actPositions.get(act.id) ?? Number.MAX_SAFE_INTEGER;
   return {
     sections: categories.flatMap((category) => {
       const categoryActs = actsByCategory.get(category.name);
       if (!categoryActs) {
         return [];
       }
+      const withStarts = categoryActs.map((act) => ({
+        act,
+        start: actStarts.get(act.id),
+      }));
       return [
         {
           category,
-          acts: categoryActs.map((act) => ({
-            act,
-            start: actStarts.get(act.id),
-          })),
+          // In timeplan order; acts not in it keep their order, at the end.
+          acts: withStarts.sort((a, b) => position(a.act) - position(b.act)),
           warmup: warmupByCategory.get(category.name),
         },
       ];

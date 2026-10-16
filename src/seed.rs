@@ -1,9 +1,10 @@
-//! Seeds the competition, categories and timeplan from the config file.
+//! Seeds the competition, categories, finals and timeplan from the config
+//! file.
 //!
 //! The competition is inserted or updated on every start, so the config file
-//! stays the source of truth for event settings. Categories and the timeplan
-//! are only seeded into empty tables, so changes admins make in the UI are
-//! never overwritten.
+//! stays the source of truth for event settings. Categories, finals and the
+//! timeplan are only seeded into empty tables, so changes admins make in the
+//! UI are never overwritten.
 
 use std::collections::{BTreeMap, HashSet};
 
@@ -13,7 +14,9 @@ use tracing::{info, warn};
 use crate::{
     act_type::ActType,
     competition::{Competition, upsert_competition},
-    config::{CategoryConfig, CompetitionConfig, TimeplanEntryConfig},
+    config::{CategoryConfig, CompetitionConfig, FinalConfig, TimeplanEntryConfig},
+    finals::{self, SlotGroup},
+    timeplan::EntryKind,
 };
 
 /// Lower birthday bound for categories without a maximum age.
@@ -149,6 +152,66 @@ pub fn resolve_categories(
     Ok(resolved)
 }
 
+/// A final from the config with its durations in seconds.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ResolvedFinal {
+    pub name: String,
+    pub description: Option<String>,
+    pub act_type: ActType,
+    pub single_male: bool,
+    pub einfahrzeit_seconds: i64,
+    pub act_duration_seconds: i64,
+    pub judge_duration_seconds: i64,
+    pub slots: Vec<SlotGroup>,
+    pub categories: Vec<String>,
+}
+
+/// Checks the finals of the config and converts their durations.
+pub fn resolve_finals(finals: &[FinalConfig]) -> Result<Vec<ResolvedFinal>, String> {
+    let mut names = HashSet::new();
+    finals
+        .iter()
+        .map(|config| {
+            let name = config.name.trim();
+            if name.is_empty() {
+                return Err("A final has an empty name.".to_string());
+            }
+            if !names.insert(name.to_string()) {
+                return Err(format!("Final {name} is defined more than once."));
+            }
+            let slots = finals::normalize_slot_groups(&config.slots).map_err(|_| {
+                format!(
+                    "Final {name}: slots need at least one slot, each group a count of at least 1, at most {} in all.",
+                    finals::MAX_SLOTS
+                )
+            })?;
+            Ok(ResolvedFinal {
+                name: name.to_string(),
+                description: config.description.clone(),
+                act_type: config.act_type,
+                single_male: config.single_male,
+                einfahrzeit_seconds: minutes_to_seconds(
+                    config.einfahrzeit_minutes,
+                    "einfahrzeit_minutes",
+                    name,
+                )?,
+                act_duration_seconds: minutes_to_seconds(
+                    config.act_duration_minutes,
+                    "act_duration_minutes",
+                    name,
+                )?,
+                judge_duration_seconds: minutes_to_seconds(
+                    config.judge_duration_minutes,
+                    "judge_duration_minutes",
+                    name,
+                )?,
+                slots,
+                categories: finals::normalize_categories(&config.categories),
+            })
+        })
+        .collect()
+}
+
 /// Finds overlapping or missing birthday ranges among categories that compete
 /// for the same riders (same act type and gender filter).
 pub fn coverage_warnings(categories: &[ResolvedCategory]) -> Vec<String> {
@@ -249,14 +312,56 @@ pub fn unscheduled_category_warnings(
         .collect()
 }
 
+/// Finds finals without a timeplan entry: their slots are never planned.
+pub fn unscheduled_final_warnings(
+    timeplan: &[TimeplanEntryConfig],
+    final_names: &[String],
+) -> Vec<String> {
+    final_names
+        .iter()
+        .filter(|name| {
+            !timeplan
+                .iter()
+                .any(|entry| entry.final_name.as_ref() == Some(*name))
+        })
+        .map(|name| format!("Final {name} has no [[timeplan]] entry; it is never planned."))
+        .collect()
+}
+
 /// Checks that every timeplan entry is either a category entry for a known
-/// category or a custom entry with a label and a duration.
+/// category, a final entry for a known final (each final once) or a custom
+/// entry with a label and a duration.
 pub fn validate_timeplan(
     timeplan: &[TimeplanEntryConfig],
     category_names: &[String],
+    final_names: &[String],
 ) -> Result<(), String> {
+    let mut planned_finals = HashSet::new();
     for (index, entry) in timeplan.iter().enumerate() {
         let position = index + 1;
+        if let Some(final_name) = &entry.final_name {
+            if entry.category.is_some() || entry.label.is_some() {
+                return Err(format!(
+                    "Timeplan entry {position}: set either category, final or label, not several."
+                ));
+            }
+            if !final_names.contains(final_name) {
+                return Err(format!(
+                    "Timeplan entry {position}: final {final_name} doesn't exist."
+                ));
+            }
+            if !planned_finals.insert(final_name) {
+                return Err(format!(
+                    "Timeplan entry {position}: final {final_name} is planned more than once."
+                ));
+            }
+            if entry.duration_minutes.is_some() {
+                return Err(format!(
+                    "Timeplan entry {position}: final entries get their duration from the final, remove duration_minutes."
+                ));
+            }
+            continue;
+        }
         match (&entry.category, &entry.label) {
             (Some(category), None) => {
                 if !category_names.contains(category) {
@@ -295,7 +400,7 @@ pub fn validate_timeplan(
             }
             (None, None) => {
                 return Err(format!(
-                    "Timeplan entry {position}: set either category or label."
+                    "Timeplan entry {position}: set either category, final or label."
                 ));
             }
         }
@@ -313,6 +418,7 @@ pub async fn seed(
     db: &sqlx::SqlitePool,
     competition: Option<&CompetitionConfig>,
     categories: &[CategoryConfig],
+    finals: &[FinalConfig],
     timeplan: &[TimeplanEntryConfig],
 ) -> Result<(), String> {
     let db_error = |e: sqlx::Error| format!("Database error while seeding: {e}");
@@ -393,6 +499,53 @@ pub async fn seed(
         info!("Categories already present, [[categories]] in the config is ignored");
     }
 
+    let final_count: i64 = sqlx::query_scalar!(r#"SELECT COUNT(*) as "count!: i64" FROM finals"#)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(db_error)?;
+    if final_count == 0 && !finals.is_empty() {
+        let resolved = resolve_finals(finals)?;
+        for (order, item) in (1_i64..).zip(&resolved) {
+            sqlx::query!(
+                r#"
+                INSERT INTO finals (
+                    name, description, act_type, is_single_male, "order",
+                    einfahrzeit_seconds, act_duration_seconds, judge_duration_seconds
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                "#,
+                item.name,
+                item.description,
+                item.act_type,
+                item.single_male,
+                order,
+                item.einfahrzeit_seconds,
+                item.act_duration_seconds,
+                item.judge_duration_seconds,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
+            finals::replace_slots(&mut tx, &item.name, &item.slots)
+                .await
+                .map_err(db_error)?;
+            if finals::check_categories(&mut tx, &item.categories)
+                .await
+                .is_err()
+            {
+                return Err(format!(
+                    "Final {}: categories must name categories of the config.",
+                    item.name
+                ));
+            }
+            finals::set_categories(&mut tx, &item.name, &item.categories)
+                .await
+                .map_err(db_error)?;
+        }
+        info!("Seeded {} finals from the config", resolved.len());
+    } else if !finals.is_empty() {
+        info!("Finals already present, [[finals]] in the config is ignored");
+    }
+
     let timeplan_count: i64 =
         sqlx::query_scalar!(r#"SELECT COUNT(*) as "count!: i64" FROM timeplan"#)
             .fetch_one(&mut *tx)
@@ -404,21 +557,37 @@ pub async fn seed(
                 .fetch_all(&mut *tx)
                 .await
                 .map_err(db_error)?;
-        validate_timeplan(timeplan, &category_names)?;
-        for warning in unscheduled_category_warnings(timeplan, &category_names) {
+        let final_names: Vec<String> = sqlx::query_scalar!(r#"SELECT name as "name!" FROM finals"#)
+            .fetch_all(&mut *tx)
+            .await
+            .map_err(db_error)?;
+        validate_timeplan(timeplan, &category_names, &final_names)?;
+        for warning in unscheduled_category_warnings(timeplan, &category_names)
+            .into_iter()
+            .chain(unscheduled_final_warnings(timeplan, &final_names))
+        {
             warn!("{warning}");
         }
-        for entry in timeplan {
+        for (position, entry) in (1_i64..).zip(timeplan) {
             let duration_seconds = entry.duration_minutes.map(|m| (m * 60.0).round() as i64);
+            let kind = EntryKind::derive(
+                None,
+                entry.category.as_deref().or(entry.final_name.as_deref()),
+            );
             sqlx::query!(
                 r#"
-                INSERT INTO timeplan (earliest_start_time, duration_seconds, label, category)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO timeplan (
+                    earliest_start_time, duration_seconds, label, category, final_name, kind, position
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 "#,
                 entry.earliest_start,
                 duration_seconds,
                 entry.label,
                 entry.category,
+                entry.final_name,
+                kind,
+                position,
             )
             .execute(&mut *tx)
             .await
@@ -580,23 +749,25 @@ mod tests {
         let names = vec!["NEM".to_string()];
         let parse = |toml: &str| ConfigFile::parse(toml).unwrap().timeplan;
 
-        assert!(validate_timeplan(&parse("[[timeplan]]\ncategory = \"NEM\""), &names).is_ok());
-        assert!(
-            validate_timeplan(
-                &parse("[[timeplan]]\nlabel = \"Pause\"\nduration_minutes = 30"),
-                &names
-            )
-            .is_ok()
-        );
-        let unknown = validate_timeplan(&parse("[[timeplan]]\ncategory = \"XYZ\""), &names);
+        let finals = vec!["Finale 1".to_string()];
+        let validate = |toml: &str| validate_timeplan(&parse(toml), &names, &finals);
+
+        assert!(validate("[[timeplan]]\ncategory = \"NEM\"").is_ok());
+        assert!(validate("[[timeplan]]\nlabel = \"Pause\"\nduration_minutes = 30").is_ok());
+        assert!(validate("[[timeplan]]\nfinal = \"Finale 1\"").is_ok());
+        let unknown = validate("[[timeplan]]\ncategory = \"XYZ\"");
         assert!(unknown.unwrap_err().contains("doesn't exist"));
-        let no_duration = validate_timeplan(&parse("[[timeplan]]\nlabel = \"Pause\""), &names);
+        let unknown = validate("[[timeplan]]\nfinal = \"Finale 2\"");
+        assert!(unknown.unwrap_err().contains("doesn't exist"));
+        let no_duration = validate("[[timeplan]]\nlabel = \"Pause\"");
         assert!(no_duration.unwrap_err().contains("duration_minutes"));
-        let both = validate_timeplan(
-            &parse("[[timeplan]]\ncategory = \"NEM\"\nlabel = \"Pause\""),
-            &names,
-        );
+        let both = validate("[[timeplan]]\ncategory = \"NEM\"\nlabel = \"Pause\"");
         assert!(both.unwrap_err().contains("not both"));
+        let both = validate("[[timeplan]]\nfinal = \"Finale 1\"\ncategory = \"NEM\"");
+        assert!(both.unwrap_err().contains("not several"));
+        let twice =
+            validate("[[timeplan]]\nfinal = \"Finale 1\"\n[[timeplan]]\nfinal = \"Finale 1\"");
+        assert!(twice.unwrap_err().contains("more than once"));
     }
 
     const CONFIG: &str = r#"
@@ -640,6 +811,7 @@ mod tests {
             db,
             file.competition.as_ref(),
             &file.categories,
+            &file.finals,
             &file.timeplan,
         )
         .await

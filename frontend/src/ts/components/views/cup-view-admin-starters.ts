@@ -6,6 +6,7 @@ import { client, type components } from "../../apiClient";
 import { adminStyles } from "../../styles/admin";
 import { iconStyles, resetStyles } from "../../styles/base";
 import {
+  actSizeWarning,
   type ActType,
   actTypeLabels,
   actTypeShort,
@@ -261,7 +262,12 @@ export default class CupViewAdminStarters extends LitElement {
     }
     const regular = act.participants.filter((p) => !p.is_replacement).length;
     if (isGroupActType(act.act_type) && regular < MIN_GROUP_SIZE) {
-      return describeGroup(regular, act.participants.length - regular, null);
+      return describeGroup(
+        act.act_type,
+        regular,
+        act.participants.length - regular,
+        null,
+      );
     }
     const label = actTypeLabels[act.act_type];
     if (!this.categories.some((c) => c.act_type === act.act_type)) {
@@ -823,6 +829,7 @@ export default class CupViewAdminStarters extends LitElement {
   private renderGroupRow(act: Act) {
     const regular = act.participants.filter((p) => !p.is_replacement).length;
     const replacements = act.participants.length - regular;
+    const sizeWarning = actSizeWarning(act);
     const clubs = [...new Set(act.participants.map((p) => p.club_name))]
       .sort(compareText)
       .join(", ");
@@ -854,7 +861,13 @@ export default class CupViewAdminStarters extends LitElement {
       <td>
         ${
           act.category
-            ? act.category
+            ? html`${act.category}${
+                sizeWarning
+                  ? html` <span class="chip warn" title=${sizeWarning}
+                      >Größe</span
+                    >`
+                  : nothing
+              }`
             : act.type_conflict
               ? html`<span
                   class="chip warn"
@@ -863,7 +876,7 @@ export default class CupViewAdminStarters extends LitElement {
                 >`
               : html`<span
                   class="chip warn"
-                  title=${describeGroup(regular, replacements, null)}
+                  title=${describeGroup(act.act_type, regular, replacements, null)}
                   >unvollständig</span
                 >`
         }

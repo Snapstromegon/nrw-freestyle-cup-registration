@@ -15,6 +15,7 @@ import {
   formatDuration,
   parseDuration,
 } from "../../utils";
+import "../elements/cup-admin-finals.js";
 
 type Category = components["schemas"]["Category"];
 
@@ -231,6 +232,11 @@ export default class CupViewAdminCategories extends LitElement {
         max-width: 12em;
         white-space: pre-line;
       }
+
+      cup-admin-finals {
+        display: block;
+        margin-top: 2rem;
+      }
     `,
   ];
 
@@ -317,6 +323,7 @@ export default class CupViewAdminCategories extends LitElement {
                 </div>`,
             })
       }
+      <cup-admin-finals></cup-admin-finals>
     </div>`;
   }
 
@@ -1003,16 +1010,19 @@ export default class CupViewAdminCategories extends LitElement {
         return null;
       }
       return {
-        label: next.category ?? next.label ?? "",
+        label: next.category ?? next.final_name ?? next.label ?? "",
         start,
         // edit_timeplan_entry overwrites every field: send the others back
         // as the server returned them.
         body: {
           id: next.id,
           earliest_start_time: start,
+          kind: next.kind,
           category: next.category ?? null,
+          final_name: next.final_name ?? null,
           label: next.label ?? null,
           duration_seconds: next.duration_seconds ?? null,
+          einfahrzeit_seconds: next.einfahrzeit_seconds ?? null,
         },
       };
     } catch {

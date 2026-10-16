@@ -127,31 +127,40 @@ fn keys(value: &Value) -> BTreeSet<&str> {
 }
 
 #[sqlx::test]
-async fn group_size_decides_small_or_large_group(db: SqlitePool) {
+async fn the_chosen_type_stays_and_the_size_only_decides_if_it_starts(db: SqlitePool) {
     let app = TestApp::new(db).await;
     let (cookie, club_id) = app.create_club_owner("Owner", "RSV").await;
     // Born 2015, so every group of them is U15.
     let riders = app.add_riders(&cookie, club_id, "R", 11).await;
-    let group = app.create_group(&cookie, club_id, "Wirbelwind").await;
+    let small = app.create_group(&cookie, club_id, "Wirbelwind").await;
+    let large = app.create_large_group(&cookie, club_id, "Sturm").await;
 
-    let act = get_act(&app, group).await;
+    let act = get_act(&app, small).await;
     assert_eq!(act["act_type"], "group_small");
     assert_eq!(act["group_name"], "Wirbelwind");
     assert_eq!(act["owner_club_id"], club_id.to_string());
     assert_eq!(act["category"], Value::Null);
     assert_eq!(act["participants"], json!([]));
+    assert_eq!(get_act(&app, large).await["act_type"], "group_large");
 
-    // Replacement riders (Ersatzfahrer) don't count towards the size.
-    for (regular, replacements, act_type, category) in [
-        (2, 0, "group_small", Value::Null),
-        (2, 2, "group_small", Value::Null),
-        (3, 0, "group_small", json!("KGU15")),
-        (8, 0, "group_small", json!("KGU15")),
-        (9, 0, "group_large", json!("GGU15")),
-        (8, 2, "group_small", json!("KGU15")),
-        (2, 0, "group_small", Value::Null),
+    // Replacement riders (Ersatzfahrer) don't count towards the size. Below 3
+    // regular riders a group has no category; from 3 on it gets one of its
+    // chosen type, even outside the type's size range (the frontend warns).
+    for (group, act_type, regular, replacements, category) in [
+        (small, "group_small", 2, 0, Value::Null),
+        (small, "group_small", 2, 2, Value::Null),
+        (small, "group_small", 3, 0, json!("KGU15")),
+        (small, "group_small", 8, 0, json!("KGU15")),
+        (small, "group_small", 9, 0, json!("KGU15")),
+        (small, "group_small", 8, 2, json!("KGU15")),
+        (small, "group_small", 2, 0, Value::Null),
+        (large, "group_large", 2, 0, Value::Null),
+        (large, "group_large", 3, 0, json!("GGU15")),
+        (large, "group_large", 5, 1, json!("GGU15")),
+        (large, "group_large", 11, 0, json!("GGU15")),
     ] {
-        let case = format!("{regular} riders + {replacements} replacements");
+        // The same riders may be in one small and one large group.
+        let case = format!("{act_type}: {regular} riders + {replacements} replacements");
         let response = app
             .set_group_members(
                 &cookie,
@@ -162,7 +171,7 @@ async fn group_size_decides_small_or_large_group(db: SqlitePool) {
             )
             .await;
         assert_ok(&response);
-        assert_eq!(response.body["act_type"], act_type, "{case}");
+        assert_eq!(response.body, json!({ "warning": null }), "{case}");
 
         let act = get_act(&app, group).await;
         assert_eq!(act["act_type"], act_type, "{case}");
@@ -175,6 +184,113 @@ async fn group_size_decides_small_or_large_group(db: SqlitePool) {
             .count();
         assert_eq!(replacement_flags, replacements, "{case}");
     }
+}
+
+#[sqlx::test]
+async fn a_group_is_a_small_or_a_large_group(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let (cookie, club_id) = app.create_club_owner("Owner", "RSV").await;
+    let group = app.create_group(&cookie, club_id, "Wirbelwind").await;
+
+    for act_type in ["single", "pair"] {
+        let response = app
+            .post(
+                "/api/command/create_club_group",
+                json!({ "club_id": club_id, "group_name": "Falsch", "act_type": act_type }),
+                Some(&cookie),
+            )
+            .await;
+        assert_error(&response, "Kleingruppe oder eine Großgruppe");
+        let response = app
+            .post(
+                "/api/command/set_club_group_type",
+                json!({ "act_id": group, "act_type": act_type }),
+                Some(&cookie),
+            )
+            .await;
+        assert_error(&response, "Kleingruppe oder eine Großgruppe");
+    }
+    // The type has to be chosen.
+    let response = app
+        .post(
+            "/api/command/create_club_group",
+            json!({ "club_id": club_id, "group_name": "Ohne Art" }),
+            Some(&cookie),
+        )
+        .await;
+    assert_status(&response, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(list_groups(&app, &cookie).await.len(), 1);
+    assert_eq!(get_act(&app, group).await["act_type"], "group_small");
+}
+
+#[sqlx::test]
+async fn only_the_owner_club_or_an_admin_changes_the_group_type(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let (owner, club_id) = app.create_club_owner("Owner", "RSV").await;
+    let (guest, guest_club_id) = app.create_club_owner("Guest", "SSV").await;
+    let admin = app.create_admin().await;
+    let a = app.add_riders(&owner, club_id, "A", 2).await;
+    let b = app.add_riders(&guest, guest_club_id, "B", 3).await;
+    let group = app.create_group(&owner, club_id, "Gemeinsam").await;
+    assert_ok(&app.set_group_members(&owner, club_id, group, &a, &[]).await);
+    assert_ok(
+        &app.set_group_members(&guest, guest_club_id, group, &b, &[])
+            .await,
+    );
+    let set_type = |act_type: &'static str| json!({ "act_id": group, "act_type": act_type });
+
+    let response = app
+        .post(
+            "/api/command/set_club_group_type",
+            set_type("group_large"),
+            None,
+        )
+        .await;
+    assert_status(&response, StatusCode::UNAUTHORIZED);
+    // A club with riders in the group, but not its owner.
+    let response = app
+        .post(
+            "/api/command/set_club_group_type",
+            set_type("group_large"),
+            Some(&guest),
+        )
+        .await;
+    assert_status(&response, StatusCode::FORBIDDEN);
+    assert_eq!(get_act(&app, group).await["category"], "KGU15");
+
+    let response = app
+        .post(
+            "/api/command/set_club_group_type",
+            set_type("group_large"),
+            Some(&owner),
+        )
+        .await;
+    assert_ok(&response);
+    assert_eq!(response.body, json!({ "warning": null }));
+    let act = get_act(&app, group).await;
+    assert_eq!(act["act_type"], "group_large");
+    assert_eq!(act["category"], "GGU15");
+    // Setting the same type again changes nothing.
+    assert_ok(
+        &app.post(
+            "/api/command/set_club_group_type",
+            set_type("group_large"),
+            Some(&owner),
+        )
+        .await,
+    );
+
+    let response = app
+        .post(
+            "/api/command/set_club_group_type",
+            set_type("group_small"),
+            Some(&admin),
+        )
+        .await;
+    assert_ok(&response);
+    let act = get_act(&app, group).await;
+    assert_eq!(act["act_type"], "group_small");
+    assert_eq!(act["category"], "KGU15");
 }
 
 #[sqlx::test]
@@ -241,7 +357,7 @@ async fn group_names_are_unique_ignoring_case(db: SqlitePool) {
         let response = app
             .post(
                 "/api/command/create_club_group",
-                json!({ "club_id": club, "group_name": name }),
+                json!({ "act_type": "group_small", "club_id": club, "group_name": name }),
                 Some(cookie),
             )
             .await;
@@ -250,7 +366,7 @@ async fn group_names_are_unique_ignoring_case(db: SqlitePool) {
     let response = app
         .post(
             "/api/command/create_club_group",
-            json!({ "club_id": club_id, "group_name": "   " }),
+            json!({ "act_type": "group_small", "club_id": club_id, "group_name": "   " }),
             Some(&owner),
         )
         .await;
@@ -290,7 +406,7 @@ async fn group_names_are_unique_ignoring_case(db: SqlitePool) {
         let response = app
             .post(
                 "/api/command/create_club_group",
-                json!({ "club_id": other_club_id, "group_name": name }),
+                json!({ "act_type": "group_small", "club_id": other_club_id, "group_name": name }),
                 Some(&other),
             )
             .await;
@@ -308,7 +424,7 @@ async fn group_names_are_unique_ignoring_case(db: SqlitePool) {
     let response = app
         .post(
             "/api/command/create_club_group",
-            json!({ "club_id": club_id, "group_name": "=HYPERLINK(\"http://x\";\"Klick\")" }),
+            json!({ "act_type": "group_small", "club_id": club_id, "group_name": "=HYPERLINK(\"http://x\";\"Klick\")" }),
             Some(&owner),
         )
         .await;
@@ -344,7 +460,7 @@ async fn clubs_only_change_their_own_riders_in_a_shared_group(db: SqlitePool) {
         .set_group_members(&guest, guest_club_id, group, &b, &[])
         .await;
     assert_ok(&response);
-    assert_eq!(response.body["act_type"], "group_small");
+    assert_eq!(response.body, json!({ "warning": null }));
     let all: Vec<Uuid> = a.iter().chain(&b).copied().collect();
     assert_eq!(participant_ids(&get_act(&app, group).await), id_set(&all));
 
@@ -397,7 +513,7 @@ async fn clubs_only_change_their_own_riders_in_a_shared_group(db: SqlitePool) {
     let response = app
         .post(
             "/api/command/create_club_group",
-            json!({ "club_id": club_id, "group_name": "Ohne Login" }),
+            json!({ "act_type": "group_small", "club_id": club_id, "group_name": "Ohne Login" }),
             None,
         )
         .await;
@@ -406,7 +522,7 @@ async fn clubs_only_change_their_own_riders_in_a_shared_group(db: SqlitePool) {
     let response = app
         .post(
             "/api/command/create_club_group",
-            json!({ "club_id": guest_club_id, "group_name": "Fremd" }),
+            json!({ "act_type": "group_small", "club_id": guest_club_id, "group_name": "Fremd" }),
             Some(&owner),
         )
         .await;
@@ -596,10 +712,7 @@ async fn a_rider_starts_in_only_one_small_group_even_as_replacement(db: SqlitePo
             .await;
         assert_ok(&response);
         let warning = response.body["warning"].as_str().unwrap();
-        assert!(
-            warning.starts_with("„Zweite“ zählt mit 3 FahrerInnen als Kleingruppe:"),
-            "{warning}"
-        );
+        assert!(warning.starts_with("Kleingruppe „Zweite“:"), "{warning}");
         assert!(
             warning
                 .contains("„R1 Muster“ (RSV) ist bereits in der Kleingruppe „Erste“ angemeldet."),
@@ -648,18 +761,19 @@ async fn a_rider_starts_in_one_small_and_one_large_group(db: SqlitePool) {
         &app.set_group_members(&cookie, club_id, small, &r[..3], &[])
             .await,
     );
-    let large = app.create_group(&cookie, club_id, "Groß").await;
+    let large = app.create_large_group(&cookie, club_id, "Groß").await;
     let response = app
         .set_group_members(&cookie, club_id, large, &r, &[])
         .await;
     assert_ok(&response);
-    assert_eq!(response.body["act_type"], "group_large");
     assert_eq!(response.body["warning"], Value::Null);
     assert_eq!(get_act(&app, small).await["category"], "KGU15");
     assert_eq!(get_act(&app, large).await["category"], "GGU15");
 
     // But not in a second large group.
-    let larger = app.create_group(&cookie, club_id, "Noch größer").await;
+    let larger = app
+        .create_large_group(&cookie, club_id, "Noch größer")
+        .await;
     assert_ok(
         &app.set_group_members(&cookie, club_id, larger, &s, &[])
             .await,
@@ -670,10 +784,9 @@ async fn a_rider_starts_in_one_small_and_one_large_group(db: SqlitePool) {
         .set_group_members(&cookie, club_id, larger, &regular, &[])
         .await;
     assert_ok(&response);
-    assert_eq!(response.body["act_type"], "group_large");
     let warning = response.body["warning"].as_str().unwrap();
     assert!(
-        warning.starts_with("„Noch größer“ zählt mit 9 FahrerInnen als Großgruppe:"),
+        warning.starts_with("Großgruppe „Noch größer“:"),
         "{warning}"
     );
     assert!(
@@ -692,41 +805,43 @@ async fn a_rider_starts_in_one_small_and_one_large_group(db: SqlitePool) {
 }
 
 #[sqlx::test]
-async fn growing_into_a_large_group_warns_if_a_rider_is_in_another_one(db: SqlitePool) {
+async fn changing_the_type_warns_if_a_rider_is_in_another_group_of_it(db: SqlitePool) {
     let app = TestApp::new(db).await;
     let (owner, club_id) = app.create_club_owner("Owner", "RSV").await;
     let (guest, guest_club_id) = app.create_club_owner("Guest", "SSV").await;
 
     let b = app.add_riders(&guest, guest_club_id, "B", 9).await;
-    let alpha = app.create_group(&guest, guest_club_id, "Alpha").await;
-    let response = app
-        .set_group_members(&guest, guest_club_id, alpha, &b, &[])
-        .await;
-    assert_eq!(response.body["act_type"], "group_large");
-
-    // B1 of the large group Alpha also joins the small group Beta.
-    let a = app.add_riders(&owner, club_id, "A", 8).await;
-    let beta = app.create_group(&owner, club_id, "Beta").await;
+    let alpha = app.create_large_group(&guest, guest_club_id, "Alpha").await;
     assert_ok(
-        &app.set_group_members(&owner, club_id, beta, &a[..7], &[])
+        &app.set_group_members(&guest, guest_club_id, alpha, &b, &[])
             .await,
     );
+
+    // B1 of the large group Alpha also joins the small group Beta. Growing to
+    // 9 regular riders doesn't make Beta a large group.
+    let a = app.add_riders(&owner, club_id, "A", 8).await;
+    let beta = app.create_group(&owner, club_id, "Beta").await;
+    assert_ok(&app.set_group_members(&owner, club_id, beta, &a, &[]).await);
     let response = app
         .set_group_members(&guest, guest_club_id, beta, &b[..1], &[])
         .await;
     assert_ok(&response);
-    assert_eq!(response.body["act_type"], "group_small");
     assert_eq!(response.body["warning"], Value::Null);
+    let act = get_act(&app, beta).await;
+    assert_eq!(act["act_type"], "group_small");
+    assert_eq!(act["category"], "KGU15");
 
-    // A ninth regular rider makes Beta a second large group for B1.
-    let response = app.set_group_members(&owner, club_id, beta, &a, &[]).await;
+    // Its owner makes it a large group: a second one for B1.
+    let response = app
+        .post(
+            "/api/command/set_club_group_type",
+            json!({ "act_id": beta, "act_type": "group_large" }),
+            Some(&owner),
+        )
+        .await;
     assert_ok(&response);
-    assert_eq!(response.body["act_type"], "group_large");
     let warning = response.body["warning"].as_str().unwrap();
-    assert!(
-        warning.starts_with("„Beta“ zählt mit 9 FahrerInnen als Großgruppe:"),
-        "{warning}"
-    );
+    assert!(warning.starts_with("Großgruppe „Beta“:"), "{warning}");
     assert!(
         warning.contains("„B1 Muster“ (SSV) ist bereits in der Großgruppe „Alpha“ angemeldet."),
         "{warning}"
@@ -744,12 +859,15 @@ async fn growing_into_a_large_group_warns_if_a_rider_is_in_another_one(db: Sqlit
         assert!(conflict.contains("„B1 Muster“ (SSV)"), "{conflict}");
     }
 
-    // As a replacement, the rider doesn't change the group's size.
+    // Back to a small group, both start again.
     let response = app
-        .set_group_members(&owner, club_id, beta, &a[..7], &a[7..])
+        .post(
+            "/api/command/set_club_group_type",
+            json!({ "act_id": beta, "act_type": "group_small" }),
+            Some(&owner),
+        )
         .await;
     assert_ok(&response);
-    assert_eq!(response.body["act_type"], "group_small");
     assert_eq!(response.body["warning"], Value::Null);
     assert_eq!(get_act(&app, beta).await["category"], "KGU15");
     assert_eq!(get_act(&app, alpha).await["category"], "GGU15");
@@ -776,45 +894,37 @@ async fn a_shared_large_group_can_be_built_one_club_at_a_time(db: SqlitePool) {
     );
 
     // … and the clubs build a large group together, one after another. With
-    // the first club's riders only, it counts as a second small group.
-    let together = app.create_group(&ssv, ssv_id, "NRW Auswahl").await;
+    // the first club's riders only, it is still a large group: it doesn't
+    // block their small group, and it's planned already.
+    let together = app.create_large_group(&ssv, ssv_id, "NRW Auswahl").await;
     let response = app.set_group_members(&ssv, ssv_id, together, &b, &[]).await;
     assert_ok(&response);
-    assert_eq!(response.body["act_type"], "group_small");
-    let warning = response.body["warning"].as_str().unwrap();
-    assert!(
-        warning.starts_with("„NRW Auswahl“ zählt mit 5 FahrerInnen als Kleingruppe:"),
-        "{warning}"
-    );
-    assert!(
-        warning
-            .contains("„B1 Muster“ (SSV) ist bereits in der Kleingruppe „SSV klein“ angemeldet."),
-        "{warning}"
-    );
-    assert_eq!(get_act(&app, ssv_small).await["category"], Value::Null);
-    assert_eq!(get_act(&app, together).await["category"], Value::Null);
-    assert_eq!(get_act(&app, rsv_small).await["category"], "KGU15");
-
-    let response = app.set_group_members(&rsv, rsv_id, together, &a, &[]).await;
-    assert_ok(&response);
-    assert_eq!(response.body["act_type"], "group_large");
     assert_eq!(response.body["warning"], Value::Null);
     for (group, category) in [
         (rsv_small, "KGU15"),
         (ssv_small, "KGU15"),
         (together, "GGU15"),
     ] {
-        let act = get_act(&app, group).await;
-        assert_eq!(act["category"], category, "{act}");
-        assert_eq!(act["type_conflict"], false, "{act}");
+        assert_eq!(get_act(&app, group).await["category"], category);
+    }
+    let response = app.get("/api/query/startlist", None).await;
+    assert_eq!(response.body.as_array().unwrap().len(), 3);
+
+    let response = app.set_group_members(&rsv, rsv_id, together, &a, &[]).await;
+    assert_ok(&response);
+    assert_eq!(response.body["warning"], Value::Null);
+    let act = get_act(&app, together).await;
+    assert_eq!(act["act_type"], "group_large");
+    assert_eq!(act["category"], "GGU15");
+    assert_eq!(act["participants"].as_array().unwrap().len(), 10);
+    for group in [rsv_small, ssv_small, together] {
+        assert_eq!(get_act(&app, group).await["type_conflict"], false);
     }
     for (cookie, club_id) in [(&rsv, rsv_id), (&ssv, ssv_id)] {
         let groups = list_club_groups(&app, cookie, club_id).await;
         assert_eq!(groups.len(), 2);
         assert!(groups.iter().all(|g| g["conflict"].is_null()), "{groups:?}");
     }
-    let response = app.get("/api/query/startlist", None).await;
-    assert_eq!(response.body.as_array().unwrap().len(), 3);
 }
 
 #[sqlx::test]
@@ -826,11 +936,11 @@ async fn deleting_a_starter_only_removes_them_from_the_group(db: SqlitePool) {
         .add_starter(&cookie, starter_body(club_id, "Solo", true, false))
         .await;
     riders.push(solo);
-    let group = app.create_group(&cookie, club_id, "Neun").await;
-    let response = app
-        .set_group_members(&cookie, club_id, group, &riders, &[])
-        .await;
-    assert_eq!(response.body["act_type"], "group_large");
+    let group = app.create_large_group(&cookie, club_id, "Neun").await;
+    assert_ok(
+        &app.set_group_members(&cookie, club_id, group, &riders, &[])
+            .await,
+    );
     assert_eq!(list_acts(&app).await.len(), 2);
 
     let response = app
@@ -841,64 +951,18 @@ async fn deleting_a_starter_only_removes_them_from_the_group(db: SqlitePool) {
         )
         .await;
     assert_ok(&response);
+    assert_eq!(response.body, json!({}));
 
-    // The group keeps its other riders and shrinks into a small group.
+    // The group keeps its other riders and stays a large group.
     let act = get_act(&app, group).await;
-    assert_eq!(act["act_type"], "group_small");
-    assert_eq!(act["category"], "KGU15");
+    assert_eq!(act["act_type"], "group_large");
+    assert_eq!(act["category"], "GGU15");
     assert_eq!(participant_ids(&act), id_set(&riders[..8]));
     assert_eq!(list_club_starters(&app, &cookie, club_id).await.len(), 8);
     // The starter's single act is gone with them.
     let acts = list_acts(&app).await;
     assert_eq!(acts.len(), 1);
     assert_eq!(acts[0]["id"], group.to_string());
-}
-
-#[sqlx::test]
-async fn deleting_a_starter_warns_if_the_smaller_group_conflicts(db: SqlitePool) {
-    let app = TestApp::new(db).await;
-    let (cookie, club_id) = app.create_club_owner("Owner", "RSV").await;
-    let r = app.add_riders(&cookie, club_id, "R", 11).await;
-    let small = app.create_group(&cookie, club_id, "Klein").await;
-    assert_ok(
-        &app.set_group_members(&cookie, club_id, small, &[r[0], r[9], r[10]], &[])
-            .await,
-    );
-    let large = app.create_group(&cookie, club_id, "Groß").await;
-    assert_ok(
-        &app.set_group_members(&cookie, club_id, large, &r[..9], &[])
-            .await,
-    );
-
-    // Without R9, Groß becomes a second small group of R1. The starter is
-    // deleted anyway; the warning says why both groups lost their category.
-    let response = app
-        .post(
-            "/api/command/delete_club_starter",
-            json!({ "starter_id": r[8] }),
-            Some(&cookie),
-        )
-        .await;
-    assert_ok(&response);
-    let warnings = response.body["warnings"].as_array().unwrap();
-    assert_eq!(warnings.len(), 1, "{warnings:?}");
-    let warning = warnings[0].as_str().unwrap();
-    assert!(
-        warning.starts_with("Ohne „R9 Muster“ zählt „Groß“ mit 8 FahrerInnen als Kleingruppe:"),
-        "{warning}"
-    );
-    assert!(
-        warning.contains("„R1 Muster“ (RSV) ist bereits in der Kleingruppe „Klein“ angemeldet."),
-        "{warning}"
-    );
-
-    let act = get_act(&app, large).await;
-    assert_eq!(act["act_type"], "group_small");
-    assert_eq!(act["category"], Value::Null);
-    assert_eq!(act["type_conflict"], true);
-    assert_eq!(participant_ids(&act), id_set(&r[..8]));
-    assert_eq!(get_act(&app, small).await["category"], Value::Null);
-    assert_eq!(list_club_starters(&app, &cookie, club_id).await.len(), 10);
 }
 
 #[sqlx::test]
@@ -911,7 +975,7 @@ async fn deleting_a_starter_leaves_their_small_and_large_group(db: SqlitePool) {
         &app.set_group_members(&cookie, club_id, small, &[r[0], r[8], r[9]], &[])
             .await,
     );
-    let large = app.create_group(&cookie, club_id, "Groß").await;
+    let large = app.create_large_group(&cookie, club_id, "Groß").await;
     assert_ok(
         &app.set_group_members(&cookie, club_id, large, &r[..9], &[])
             .await,
@@ -926,36 +990,20 @@ async fn deleting_a_starter_leaves_their_small_and_large_group(db: SqlitePool) {
         .await;
     assert_ok(&response);
 
-    // R9 left both groups and is gone.
-    assert_eq!(
-        participant_ids(&get_act(&app, small).await),
-        id_set(&[r[0], r[9]])
-    );
+    // R9 left both groups and is gone. Both keep their type, so no rider is
+    // in two groups of the same type: Groß still starts with 8 riders, Klein
+    // is incomplete with 2.
+    let act = get_act(&app, small).await;
+    assert_eq!(participant_ids(&act), id_set(&[r[0], r[9]]));
+    assert_eq!(act["category"], Value::Null);
     let act = get_act(&app, large).await;
-    assert_eq!(act["act_type"], "group_small");
+    assert_eq!(act["act_type"], "group_large");
+    assert_eq!(act["category"], "GGU15");
+    assert_eq!(act["type_conflict"], false);
     assert_eq!(participant_ids(&act), id_set(&r[..8]));
     let starters = list_club_starters(&app, &cookie, club_id).await;
     assert_eq!(starters.len(), 9);
     assert!(starters.iter().all(|s| s["id"] != r[8].to_string()));
-
-    // Both groups are checked once both have changed: R1 is now in two small
-    // groups.
-    let warnings: Vec<_> = response.body["warnings"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|w| w.as_str().unwrap())
-        .collect();
-    assert_eq!(warnings.len(), 2, "{warnings:?}");
-    assert!(
-        warnings[0]
-            .starts_with("Ohne „R9 Muster“ zählt „Klein“ mit 2 FahrerInnen als Kleingruppe:"),
-        "{warnings:?}"
-    );
-    assert!(
-        warnings[1].starts_with("Ohne „R9 Muster“ zählt „Groß“ mit 8 FahrerInnen als Kleingruppe:"),
-        "{warnings:?}"
-    );
 }
 
 #[sqlx::test]
@@ -1321,7 +1369,7 @@ async fn group_count_counts_group_starts_including_replacements(db: SqlitePool) 
         &app.set_group_members(&cookie, club_id, small, &r[..3], &r[3..4])
             .await,
     );
-    let large = app.create_group(&cookie, club_id, "Groß").await;
+    let large = app.create_large_group(&cookie, club_id, "Groß").await;
     assert_ok(
         &app.set_group_members(&cookie, club_id, large, &r, &[])
             .await,
@@ -1441,7 +1489,7 @@ async fn group_commands_need_open_registration_unless_admin(db: SqlitePool) {
     let commands = [
         (
             "/api/command/create_club_group",
-            json!({ "club_id": club_id, "group_name": "Nachzügler" }),
+            json!({ "act_type": "group_small", "club_id": club_id, "group_name": "Nachzügler" }),
         ),
         (
             "/api/command/set_club_group_members",
@@ -1455,6 +1503,10 @@ async fn group_commands_need_open_registration_unless_admin(db: SqlitePool) {
             "/api/command/rename_club_group",
             json!({ "act_id": group, "group_name": "Umbenannt" }),
         ),
+        (
+            "/api/command/set_club_group_type",
+            json!({ "act_id": group, "act_type": "group_large" }),
+        ),
         ("/api/command/delete_club_group", json!({ "act_id": group })),
     ];
     for (uri, body) in &commands {
@@ -1463,6 +1515,7 @@ async fn group_commands_need_open_registration_unless_admin(db: SqlitePool) {
     }
     let act = get_act(&app, group).await;
     assert_eq!(act["group_name"], "Wirbelwind");
+    assert_eq!(act["act_type"], "group_small");
     assert_eq!(participant_ids(&act), id_set(&r[..3]));
     assert_eq!(list_groups(&app, &owner).await.len(), 1);
 

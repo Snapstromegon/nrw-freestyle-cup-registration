@@ -967,7 +967,10 @@ async fn the_playback_is_public(db: SqlitePool) {
     controller.close().await;
     let deadline = Instant::now() + TIMEOUT;
     while app.get("/api/query/get_playback", None).await.body["state"] != "idle" {
-        assert!(Instant::now() < deadline, "the playback stayed after closing");
+        assert!(
+            Instant::now() < deadline,
+            "the playback stayed after closing"
+        );
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
 }
@@ -1488,4 +1491,93 @@ async fn the_original_choice_is_remembered_per_act(db: SqlitePool) {
         })
         .await;
     assert_eq!(state["cue"], berta_normalized);
+}
+
+#[sqlx::test]
+async fn a_published_final_plays_the_songs_of_its_placed_acts(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let admin = app.create_admin().await;
+    let acts = acts_with_songs(&app, &admin, &["Anna", "Berta"]).await;
+    let (anna, berta) = (acts[0], acts[1]);
+    // The final after the heat, Berta in its first slot, Anna in its second.
+    let entry = json!({
+        "earliest_start_time": null,
+        "duration_seconds": null,
+        "label": null,
+        "category": null,
+        "final_name": "Finale EW",
+    });
+    let response = app
+        .post("/api/command/add_timeplan_entry", entry, Some(&admin))
+        .await;
+    assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+    let finals = app.get("/api/query/list_finals", Some(&admin)).await.body;
+    let slots = &finals[0]["slots"];
+    let response = app
+        .post(
+            "/api/command/set_final_placement",
+            json!({
+                "name": "Finale EW",
+                "slots": [
+                    { "slot_id": slots[0]["id"], "act_id": berta },
+                    { "slot_id": slots[1]["id"], "act_id": anna },
+                ],
+            }),
+            Some(&admin),
+        )
+        .await;
+    assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+    let address = app.serve().await;
+    let (mut controller, _) = controller(address, &admin).await;
+    let (mut tonpult, id) = player(address, &admin, &mut controller, "Tonpult").await;
+    select(&mut controller, &id).await;
+
+    let message = tonpult.wait_for("Anna's cue", |m| m["type"] == "cue").await;
+    assert_eq!(message, cue(original_song(anna, "Anna")));
+
+    // Once published, the final's songs come up after the heat's.
+    let response = app
+        .post(
+            "/api/command/set_final_published",
+            json!({ "name": "Finale EW", "published": true }),
+            Some(&admin),
+        )
+        .await;
+    assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+    let prefetch = tonpult
+        .wait_for("the songs coming up", |m| m["type"] == "prefetch")
+        .await;
+    assert_eq!(
+        act_ids(&prefetch["songs"]),
+        ids(&[anna, berta, berta, anna])
+    );
+
+    // The heat: warm-up, Anna, Berta. Berta's song comes again for the final.
+    for _ in 0..5 {
+        forward(&app, &admin).await;
+    }
+    let message = tonpult
+        .wait_for("the final's first cue", |m| {
+            m["type"] == "cue" && m["song"]["act_id"] == json!(berta)
+        })
+        .await;
+    assert_eq!(message, cue(original_song(berta, "Berta")));
+    let prefetch = tonpult
+        .wait_for("the final's songs coming up", |m| m["type"] == "prefetch")
+        .await;
+    // The heat might still be on its way out; the last list counts.
+    let mut songs = act_ids(&prefetch["songs"]);
+    while songs != ids(&[berta, anna]) {
+        let prefetch = tonpult
+            .wait_for("the final's songs coming up", |m| m["type"] == "prefetch")
+            .await;
+        songs = act_ids(&prefetch["songs"]);
+    }
+
+    // The final's warm-up, Berta, then Anna is due.
+    forward(&app, &admin).await;
+    forward(&app, &admin).await;
+    forward(&app, &admin).await;
+    let message = tonpult.wait_for("Anna's cue", |m| m["type"] == "cue").await;
+    assert_eq!(message, cue(original_song(anna, "Anna")));
 }

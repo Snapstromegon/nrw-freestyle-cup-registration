@@ -26,17 +26,27 @@ import { adminStyles } from "../../styles/admin";
 import { iconStyles, resetStyles } from "../../styles/base";
 import {
   actParticipantsLabel,
+  blockOf,
+  blockPlayedActs,
+  blockStarts,
+  breakEnd,
   type CheckInMap,
   checkInMap,
   checkInStats,
   formatDuration,
   formatTime,
+  isEmptyBlock,
+  isFinalist,
   isGroupActType,
+  lastEndedSlot,
   nextTimeplanEntry,
   normalizationLabel,
+  slotAct,
+  slotItem,
   songFile,
 } from "../../utils";
 import {
+  actPosition,
   endedActIds,
   entryTitle,
   type Live,
@@ -47,6 +57,7 @@ import {
   scheduleOffset,
   type Timeplan,
   type TimeplanAct,
+  type TimeplanFinalist,
 } from "../../live";
 import { formatClock } from "../../waveform";
 import "../elements/cup-waveform.js";
@@ -55,6 +66,7 @@ import "../elements/cup-timeplan.js";
 
 type Act = components["schemas"]["Act"];
 type Playback = components["schemas"]["Playback"];
+type TimeplanSlot = components["schemas"]["TimeplanSlot"];
 type PhotosOverview = components["schemas"]["PhotosOverview"];
 
 /** Lets a reload after a command release the buttons after this long. */
@@ -1015,18 +1027,17 @@ export default class CupViewAdminMusicControl extends LitElement {
     }
   }
 
-  /** The act time of an act's category in seconds; 0 if unknown. */
+  /**
+   * The act time of an act's category (or of the final it is placed in) in
+   * seconds; 0 if unknown. An act placed in a final runs twice: the run
+   * still to come counts.
+   */
   private actDuration(actId: string | undefined) {
-    for (const item of this.timeplan?.items ?? []) {
-      const entry = item.timeplan_entry;
-      if (
-        "Category" in entry &&
-        entry.Category.acts.some((a) => a.id === actId)
-      ) {
-        return entry.Category.act_duration_seconds;
-      }
-    }
-    return 0;
+    const runs = (this.timeplan?.items ?? [])
+      .flatMap(blockPlayedActs)
+      .filter((a) => a.id === actId);
+    const act = runs.find((a) => a.status !== "Ended") ?? runs.at(-1);
+    return act?.act_duration_seconds ?? 0;
   }
 
   /** Sends a remote playback command; says so if it couldn't. */
@@ -1299,14 +1310,16 @@ export default class CupViewAdminMusicControl extends LitElement {
         : live.phase === "done"
           ? "Zeitplan beendet"
           : "Pause";
+    const count = blockStarts(live.acts).length;
+    const start = live.finalist ?? live.act;
     const position =
-      live.category && live.act
-        ? `Kür ${live.category.acts.indexOf(live.act) + 1} von ${live.category.acts.length}`
+      live.acts && start
+        ? actPosition(live.acts, start)
         : // Empty blocks: the "Ohne Küren" chip says it already.
-          live.category?.acts.length
-          ? `${live.category.acts.length} ${
-              live.category.acts.length === 1 ? "Kür" : "Küren"
-            }`
+          count
+          ? live.acts?.final_name
+            ? `${count} ${count === 1 ? "Finalplatz" : "Finalplätze"}`
+            : `${count} ${count === 1 ? "Kür" : "Küren"}`
           : "";
     return html`<div class="status">
       <h1>${title}</h1>
@@ -1334,7 +1347,7 @@ export default class CupViewAdminMusicControl extends LitElement {
     if (!timer) {
       return nothing;
     }
-    const { elapsed, planned } = timer;
+    const { elapsed, planned, remaining } = timer;
     if (timer.waiting) {
       return html`<span
           class="timer muted"
@@ -1343,6 +1356,23 @@ export default class CupViewAdminMusicControl extends LitElement {
             planned ? ` / ${formatDuration(planned)}` : nothing
           }</span
         ><span class="muted">wartet auf Musik</span>`;
+    }
+    // A break counts down; from its end on, it shows how far it ran over.
+    if (remaining !== undefined) {
+      const over = remaining <= 0;
+      return html`<span
+        class=${classMap({ timer: true, over })}
+        title=${
+          over
+            ? "Länger als geplant – die Pause endet erst mit „Weiter“"
+            : "Verbleibende Zeit der Pause"
+        }
+        >${
+          over
+            ? `+${formatDuration(-remaining)}`
+            : `noch ${formatDuration(remaining)}`
+        }</span
+      >`;
     }
     if (!planned) {
       return html`<span class="timer muted" title="Dauer bisher"
@@ -1358,6 +1388,9 @@ export default class CupViewAdminMusicControl extends LitElement {
 
   private renderCurrent(live: Live) {
     const act = live.act ? this.actsById.get(live.act.id) : undefined;
+    if (live.finalist && !live.act) {
+      return this.renderFinalist(live, live.finalist);
+    }
     if (!live.act) {
       return this.renderPlaceholder(live);
     }
@@ -1410,11 +1443,54 @@ export default class CupViewAdminMusicControl extends LitElement {
       }
       ${act.name ? html`<h2 class="act-title">${act.name}</h2>` : nothing}
       ${
+        live.finalist
+          ? html`<div class="muted">
+              ${live.finalist.label} · ${live.finalist.final_description}
+            </div>`
+          : nothing
+      }
+      ${
         act.description
           ? html`<p class="description">${act.description}</p>`
           : nothing
       }
       ${this.renderPhotoPreview(live)}`;
+  }
+
+  /**
+   * A final's reserved slot without a published act: there is no song; one
+   * can be played from the award ceremony view.
+   */
+  private renderFinalist(live: Live, finalist: TimeplanFinalist) {
+    return html`<div class="placeholder">
+        <div class="big">${finalist.label}</div>
+        <span>${finalist.final_description}</span>
+        ${
+          live.phase === "judging"
+            ? html`<span>Wird bewertet.</span>`
+            : html`<span
+                >Für diesen Finalplatz ist keine Kür veröffentlicht
+                (<a href="/admin-categories">Finals</a>). Die Musik lässt sich
+                über die Suche abspielen:
+                <a href="/admin-awards">Musik suchen</a></span
+              >`
+        }
+      </div>
+      ${this.renderPhotoPreview(live)}`;
+  }
+
+  /** The next start is a final's reserved slot. */
+  private renderNextFinalist(finalist: TimeplanFinalist) {
+    return html`<section class="next-card">
+      <header>
+        <b>Als Nächstes</b>
+        <span
+          >${finalist.final_description} · ca.
+          ${formatTime(finalist.predicted_start)}</span
+        >
+      </header>
+      <div>${finalist.label}</div>
+    </section>`;
   }
 
   /** Phases without an act; the status line above already names them. */
@@ -1424,6 +1500,23 @@ export default class CupViewAdminMusicControl extends LitElement {
         return html`<div class="placeholder">
           <div class="big">Einfahrzeit</div>
         </div>`;
+      case "break": {
+        const pause = live.pause;
+        const next = this.nextSlot(live);
+        return pause
+          ? html`<div class="placeholder">
+              <div class="big">${pause.label}</div>
+              <span
+                >Geplant bis ${formatTime(breakEnd(pause))} – die Pause endet
+                erst mit „Weiter“.</span
+              >
+              <span
+                >Danach:
+                ${next ? this.slotLabel(next) : "Ende des Blocks"}</span
+              >
+            </div>`
+          : nothing;
+      }
       case "empty":
         return html`<div class="placeholder">
           <div class="big">Keine Küren</div>
@@ -1460,6 +1553,12 @@ export default class CupViewAdminMusicControl extends LitElement {
   }
 
   private renderNext(live: Live) {
+    const nextStart = live.nextStart?.start;
+    if (nextStart && isFinalist(nextStart) && !nextStart.act) {
+      return this.renderNextFinalist(nextStart);
+    }
+    // The next act runs in this final's slot.
+    const finalist = nextStart && isFinalist(nextStart) ? nextStart : undefined;
     const next = live.next;
     if (!next) {
       // E.g. the award ceremony after the last block.
@@ -1485,15 +1584,38 @@ export default class CupViewAdminMusicControl extends LitElement {
         : null;
     const regularMissing = !!stats?.missing.some((p) => !p.is_replacement);
     const otherBlock = next.item !== live.entry;
-    // Breaks etc. that come before the next act.
-    const between =
-      this.timeplan?.items.filter(
-        (item, index, items) =>
-          item.status === "Planned" &&
-          "Custom" in item.timeplan_entry &&
-          index < items.indexOf(next.item),
-      ) ?? [];
-    const betweenLabels = between.map(entryTitle).join(", ");
+    // Breaks etc. that come before the next act: custom entries, and the
+    // planned breaks of the running block and of the next act's block.
+    const items = this.timeplan?.items ?? [];
+    const between = items
+      .slice(0, items.indexOf(next.item) + 1)
+      .flatMap((item) => {
+        const block = blockOf(item);
+        if (!block) {
+          return item.status === "Planned" ? [entryTitle(item)] : [];
+        }
+        // Empty blocks are skipped, their breaks too.
+        if (item.status === "Ended" || isEmptyBlock(item)) {
+          return [];
+        }
+        const slots =
+          item === next.item
+            ? block.slots.slice(
+                0,
+                block.slots.findIndex(
+                  (slot) => slotAct(slot)?.id === next.act.id,
+                ),
+              )
+            : block.slots;
+        return slots.flatMap((slot) =>
+          "Break" in slot && slot.Break.status === "Planned"
+            ? [slot.Break.label]
+            : [],
+        );
+      });
+    const betweenLabels = between.join(", ");
+    // Its category, unless it's the running block's and that has only one.
+    const showCategory = otherBlock || next.block.categories.length > 1;
     return html`<section
       class=${classMap({
         "next-card": true,
@@ -1504,8 +1626,13 @@ export default class CupViewAdminMusicControl extends LitElement {
       <header>
         <b>Als Nächstes</b>
         <span
-          >${otherBlock ? html`${next.category.description} · ` : nothing}ca.
-          ${formatTime(next.act.predicted_start)}</span
+          >${
+            finalist
+              ? html`${finalist.label} · `
+              : showCategory
+                ? html`${next.act.category_description} · `
+                : nothing
+          }ca. ${formatTime(next.act.predicted_start)}</span
         >
         ${
           betweenLabels
@@ -2034,6 +2161,63 @@ export default class CupViewAdminMusicControl extends LitElement {
     return (act && actParticipantsLabel(act)) || timeplanAct.name || "Kür";
   }
 
+  /**
+   * An act, break or finalist of a block for the labels: „Wer“, Pause
+   * „Name“ or „3. Finalist (U17–U21)“.
+   */
+  private slotLabel(slot: TimeplanSlot) {
+    const act = slotAct(slot);
+    return "Act" in slot
+      ? `„${this.actLabel(slot.Act)}“`
+      : "Break" in slot
+        ? `Pause „${slot.Break.label}“`
+        : act
+          ? `„${this.actLabel(act)}“ (${slot.Finalist.label})`
+          : `„${slot.Finalist.label}“`;
+  }
+
+  /** "Weiter" starting an act, a break or a finalist. */
+  private startLabel(slot: TimeplanSlot) {
+    const act = slotAct(slot);
+    return "Act" in slot
+      ? `Start ${this.actLabel(slot.Act)}`
+      : "Finalist" in slot
+        ? act
+          ? `Start ${this.actLabel(act)} (${slot.Finalist.label})`
+          : `Start ${slot.Finalist.label}`
+        : `Start ${this.slotLabel(slot)}`;
+  }
+
+  /**
+   * The slot of the running block that "Weiter" starts next: the first
+   * planned one after the running act or break (as `timeplan_forward` picks
+   * it).
+   */
+  private nextSlot(live: Live) {
+    const slots = live.acts?.slots ?? [];
+    const running = slots.findIndex(
+      (slot) => slotItem(slot).status === "Started",
+    );
+    return slots
+      .slice(running + 1)
+      .find((slot) => slotItem(slot).status === "Planned");
+  }
+
+  /**
+   * Undoing the start of a slot that followed a break also reopens the
+   * break, since ending it started the slot.
+   */
+  private reopenedBreak(live: Live) {
+    const slots = live.acts?.slots ?? [];
+    const running = slots.findIndex(
+      (slot) => slotItem(slot).status === "Started",
+    );
+    const before = running > 0 ? slots[running - 1] : undefined;
+    return before && "Break" in before
+      ? ` · ${this.slotLabel(before)} läuft wieder`
+      : "";
+  }
+
   /** What `timeplan_forward` will do next, or null if nothing is left. */
   private forwardLabel(live: Live): string | null {
     // Nothing is running: the next entry starts.
@@ -2046,29 +2230,31 @@ export default class CupViewAdminMusicControl extends LitElement {
         return `Start ${nextEntry.timeplan_entry.Custom.label}`;
       }
       // Empty blocks before it are skipped in the same step.
-      const next = nextEntry.timeplan_entry.Category;
-      const first = next.acts.find((a) => a.status === "Planned");
+      const next = nextEntry.timeplan_entry.Acts;
       if (next.warmup_seconds > 0) {
         return `Einfahrzeit ${next.description}`;
       }
-      return first
-        ? `Start ${this.actLabel(first)}`
-        : `Start ${next.description}`;
+      // Without a warm-up its first act (or break) starts in the same step.
+      const first = next.slots.find(
+        (slot) => slotItem(slot).status === "Planned",
+      );
+      return first ? this.startLabel(first) : `Start ${next.description}`;
     }
-    const acts = live.category?.acts ?? [];
+    const next = this.nextSlot(live);
     switch (live.phase) {
       case "custom":
         return `${entryTitle(live.entry)} beenden`;
       case "empty":
         return `${entryTitle(live.entry)} beenden (keine Küren)`;
       case "act":
-        return acts.some((a) => a.status === "Planned")
-          ? "Bewertung"
-          : "Bewertung (Blockende)";
-      default: {
-        const next = acts.find((a) => a.status === "Planned");
-        return next ? `Start ${this.actLabel(next)}` : "Block beenden";
-      }
+        return next ? "Bewertung" : "Bewertung (Blockende)";
+      case "break":
+        // Nothing is judged after a break: the next slot starts right away.
+        return next
+          ? `Pause beenden · ${this.slotLabel(next)} startet`
+          : "Pause beenden (Blockende)";
+      default:
+        return next ? this.startLabel(next) : "Block beenden";
     }
   }
 
@@ -2083,20 +2269,28 @@ export default class CupViewAdminMusicControl extends LitElement {
         if (!last) {
           return null;
         }
-        if ("Category" in last.timeplan_entry) {
-          const lastAct = last.timeplan_entry.Category.acts.at(-1);
-          return lastAct
-            ? `„${this.actLabel(lastAct)}“ läuft wieder`
-            : `„${entryTitle(last)}“ läuft wieder`;
-        }
-        return `„${entryTitle(last)}“ läuft wieder`;
+        // Its last act (or break) runs again.
+        const lastSlot = lastEndedSlot(blockOf(last));
+        return lastSlot
+          ? `${this.slotLabel(lastSlot)} läuft wieder`
+          : `„${entryTitle(last)}“ läuft wieder`;
       }
       case "act":
         return live.act
-          ? `Start von „${this.actLabel(live.act)}“ zurücknehmen`
+          ? `Start von „${this.actLabel(live.act)}“ zurücknehmen${this.reopenedBreak(live)}`
+          : live.finalist
+            ? `Start von „${live.finalist.label}“ zurücknehmen${this.reopenedBreak(live)}`
+            : null;
+      case "break":
+        return live.pause
+          ? `Start der Pause „${live.pause.label}“ zurücknehmen${this.reopenedBreak(live)}`
           : null;
       case "judging":
-        return live.act ? `„${this.actLabel(live.act)}“ läuft wieder` : null;
+        return live.act
+          ? `„${this.actLabel(live.act)}“ läuft wieder`
+          : live.finalist
+            ? `„${live.finalist.label}“ läuft wieder`
+            : null;
       case "custom":
       case "warmup":
       case "empty":

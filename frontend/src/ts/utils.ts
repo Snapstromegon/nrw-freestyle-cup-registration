@@ -3,18 +3,151 @@ import type { components } from "./bindings";
 export enum TimeplanStatus {
   Break = "Break",
   Warmup = "Warmup",
+  /** A break inside a start block, e.g. an extra warm-up. */
+  BlockBreak = "BlockBreak",
   Act = "Act",
   Judging = "Judging",
   Award = "Award",
 }
 
+type Timeplan = components["schemas"]["Timeplan"];
+type TimeplanItem = components["schemas"]["TimeplanItem"];
+type TimeplanAct = components["schemas"]["TimeplanAct"];
+type TimeplanBreak = components["schemas"]["TimeplanBreak"];
+export type TimeplanFinalist = components["schemas"]["TimeplanFinalist"];
+type TimeplanSlot = components["schemas"]["TimeplanSlot"];
+/**
+ * What is performed and judged in a start block: an act, or a reserved slot
+ * of a final ("3. Finalist (U17–U21)"), with its placed act once the final's
+ * placement is published.
+ */
+export type TimeplanStart = TimeplanAct | TimeplanFinalist;
+/** A start block: acts of any category and breaks, in `slots`. */
+export type ActsEntry = Extract<
+  components["schemas"]["TimeplanEntry"],
+  { Acts: unknown }
+>["Acts"];
+
+/** The start block of a timeplan item, `undefined` for custom entries. */
+export const blockOf = (item: TimeplanItem | undefined) =>
+  item && "Acts" in item.timeplan_entry ? item.timeplan_entry.Acts : undefined;
+
+/** The act, break or finalist of a slot. */
+export const slotItem = (
+  slot: TimeplanSlot,
+): TimeplanAct | TimeplanBreak | TimeplanFinalist =>
+  "Act" in slot ? slot.Act : "Break" in slot ? slot.Break : slot.Finalist;
+
+/** Whether a start is a final's reserved slot rather than an act. */
+export const isFinalist = (
+  start: TimeplanStart | TimeplanBreak,
+): start is TimeplanFinalist => "final_name" in start;
+
+/**
+ * The act placed in a final's slot as an act of the timeplan, with the
+ * slot's status, times and durations; `undefined` while the slot is open (or
+ * the placement isn't published). Its id is the act's, so its song and riders
+ * are found as for any act.
+ */
+export const finalistAct = (
+  finalist: TimeplanFinalist,
+): TimeplanAct | undefined =>
+  finalist.act
+    ? {
+        id: finalist.act.id,
+        name: finalist.act.name,
+        category: finalist.act.category,
+        category_description: finalist.act.category_description,
+        status: finalist.status,
+        act_duration_seconds: finalist.act_duration_seconds,
+        judge_duration_seconds: finalist.judge_duration_seconds,
+        started_at: finalist.started_at,
+        ended_at: finalist.ended_at,
+        music_started_at: finalist.music_started_at,
+        predicted_start: finalist.predicted_start,
+        predicted_end: finalist.predicted_end,
+        planned_start: finalist.planned_start,
+        planned_end: finalist.planned_end,
+      }
+    : undefined;
+
+/** The act performing in a slot: its act, or a finalist slot's placed act. */
+export const slotAct = (slot: TimeplanSlot): TimeplanAct | undefined =>
+  "Act" in slot
+    ? slot.Act
+    : "Finalist" in slot
+      ? finalistAct(slot.Finalist)
+      : undefined;
+
+/**
+ * The name of a start: the act's title, or for a finalist slot its placed
+ * act's title and otherwise the slot's label.
+ */
+export const startName = (start: TimeplanStart) =>
+  isFinalist(start) ? start.act?.name || start.label : start.name;
+
+/** The act performing in a start: the act, or a finalist slot's placed act. */
+export const startActId = (start: TimeplanStart | undefined) =>
+  start && isFinalist(start) ? start.act?.id : start?.id;
+
+/** What a start runs in: the act's category or the final, by description. */
+export const startCategory = (start: TimeplanStart) =>
+  isFinalist(start) ? start.final_description : start.category_description;
+
+/** The start of a slot: its act or finalist; `undefined` for a break. */
+export const slotStart = (slot: TimeplanSlot): TimeplanStart | undefined =>
+  "Act" in slot ? slot.Act : "Finalist" in slot ? slot.Finalist : undefined;
+
+/** The slots of a start block, or of an item. */
+const slotsOf = (block: ActsEntry | TimeplanItem | undefined) =>
+  (block && "slots" in block ? block : blockOf(block))?.slots ?? [];
+
+/**
+ * The acts of a start block (or of an item), in order, without breaks and
+ * without a final's reserved slots.
+ */
+export const blockActs = (
+  block: ActsEntry | TimeplanItem | undefined,
+): TimeplanAct[] =>
+  slotsOf(block).flatMap((slot) => ("Act" in slot ? [slot.Act] : []));
+
+/**
+ * The acts performing in a start block (or an item), in order: its acts and
+ * the acts placed in its finalist slots (see `finalistAct`). An act placed in
+ * a final appears twice in the timeplan, in its heat and in the final.
+ */
+export const blockPlayedActs = (
+  block: ActsEntry | TimeplanItem | undefined,
+): TimeplanAct[] =>
+  slotsOf(block).flatMap((slot) => {
+    const act = slotAct(slot);
+    return act ? [act] : [];
+  });
+
+/** The acts and finalists of a start block (or of an item), in order. */
+export const blockStarts = (
+  block: ActsEntry | TimeplanItem | undefined,
+): TimeplanStart[] =>
+  slotsOf(block).flatMap((slot) => {
+    const start = slotStart(slot);
+    return start ? [start] : [];
+  });
+
+/** The running slot of a start block: an act or a break. */
+export const runningSlot = (block: ActsEntry | undefined) =>
+  block?.slots.find((slot) => slotItem(slot).status === "Started");
+
+/** The last ended slot of a start block. */
+export const lastEndedSlot = (block: ActsEntry | undefined) =>
+  block?.slots.findLast((slot) => slotItem(slot).status === "Ended");
+
 /**
  * What the timeplan shows at `now` (ms). After the last act of a block the
- * block has ended, but the act is still being judged for the category's
+ * block has ended, but the act is still being judged for its category's
  * `judge_duration_seconds` (see `judgingAfterBlockEnd`).
  */
 export const timeplanStatus = (
-  timeplan: components["schemas"]["Timeplan"],
+  timeplan: Timeplan,
   now = Date.now(),
 ): TimeplanStatus => {
   const entry = currentTimeplanEntry(timeplan);
@@ -23,140 +156,128 @@ export const timeplanStatus = (
       ? TimeplanStatus.Judging
       : TimeplanStatus.Break;
   }
-  if ("Category" in entry.timeplan_entry) {
-    // A category block that lost its acts while running (e.g. its only group
-    // became incomplete) is ended by the next step forward.
-    if (entry.timeplan_entry.Category.acts.length === 0) {
-      return TimeplanStatus.Break;
-    }
-    const currentAct = currentTimeplanAct(timeplan);
-    if (currentAct) {
-      return TimeplanStatus.Act;
-    }
-    if (
-      entry.timeplan_entry.Category.acts[0].status === "Planned" &&
-      entry.timeplan_entry.Category.warmup_seconds > 0
-    ) {
-      return TimeplanStatus.Warmup;
-    }
-    return TimeplanStatus.Judging;
+  const block = blockOf(entry);
+  if (!block) {
+    return TimeplanStatus.Award;
   }
-  return TimeplanStatus.Award;
+  // A block that lost its acts while running (e.g. its only group became
+  // incomplete) is ended by the next step forward.
+  if (blockStarts(block).length === 0) {
+    return TimeplanStatus.Break;
+  }
+  const running = runningSlot(block);
+  if (running) {
+    // A finalist runs like an act.
+    return "Break" in running ? TimeplanStatus.BlockBreak : TimeplanStatus.Act;
+  }
+  if (!lastEndedSlot(block)) {
+    return block.warmup_seconds > 0
+      ? TimeplanStatus.Warmup
+      : TimeplanStatus.Judging;
+  }
+  return TimeplanStatus.Judging;
 };
 
-export const currentTimeplanEntry = (
-  timeplan: components["schemas"]["Timeplan"],
-) => {
+export const currentTimeplanEntry = (timeplan: Timeplan) => {
   return timeplan?.items.find((item) => item.status === "Started");
 };
 
-type TimeplanItem = components["schemas"]["TimeplanItem"];
-
 /**
- * A category block without acts. "Weiter" skips it, so it takes no time and
- * an ended empty block was skipped rather than run.
+ * A start block without acts (or finalists). "Weiter" skips it, so it takes
+ * no time and an ended empty block was skipped rather than run.
  */
 export const isEmptyBlock = (item: TimeplanItem) =>
-  "Category" in item.timeplan_entry &&
-  item.timeplan_entry.Category.acts.length === 0;
+  "Acts" in item.timeplan_entry && blockStarts(item).length === 0;
 
 /** The next entry "Weiter" starts; empty blocks are skipped. */
-export const nextTimeplanEntry = (
-  timeplan: components["schemas"]["Timeplan"],
-) => {
+export const nextTimeplanEntry = (timeplan: Timeplan) => {
   return timeplan?.items.find(
     (item) => item.status === "Planned" && !isEmptyBlock(item),
   );
 };
 
 /** The last entry that really ran, not a skipped empty block. */
-export const lastTimeplanEntry = (
-  timeplan: components["schemas"]["Timeplan"],
-) => {
+export const lastTimeplanEntry = (timeplan: Timeplan) => {
   return timeplan?.items.findLast(
     (item) => item.status === "Ended" && !isEmptyBlock(item),
   );
 };
 
-export const currentTimeplanAct = (
-  timeplan: components["schemas"]["Timeplan"],
-) => {
-  const entry = currentTimeplanEntry(timeplan);
-  if (!entry || !("Category" in entry.timeplan_entry)) {
-    return undefined;
-  }
-  return entry.timeplan_entry.Category.acts.find(
+/** The running act (or finalist). */
+export const currentTimeplanAct = (timeplan: Timeplan) => {
+  return blockStarts(currentTimeplanEntry(timeplan)).find(
     (act) => act.status == "Started",
   );
 };
 
-export const nextTimeplanAct = (
-  timeplan: components["schemas"]["Timeplan"],
-) => {
-  const currentEntry = currentTimeplanEntry(timeplan);
-  if (currentEntry && "Category" in currentEntry.timeplan_entry) {
-    const act = currentEntry.timeplan_entry.Category.acts.find(
-      (act) => act.status == "Planned",
-    );
-    if (act) {
-      return act;
-    }
-  }
+/** The running break inside the current start block, if any. */
+export const currentTimeplanBreak = (timeplan: Timeplan) => {
+  const slot = runningSlot(blockOf(currentTimeplanEntry(timeplan)));
+  return slot && "Break" in slot ? slot.Break : undefined;
+};
 
-  const nextEntry = nextTimeplanEntry(timeplan);
-  if (!nextEntry || !("Category" in nextEntry.timeplan_entry)) {
-    return undefined;
+/**
+ * The planned end of a started break: `started_at + duration_seconds`. It
+ * doesn't end by itself there, only with "Weiter". `undefined` before it
+ * started.
+ */
+export const breakEnd = (pause: TimeplanBreak) =>
+  pause.started_at
+    ? new Date(Date.parse(pause.started_at) + pause.duration_seconds * 1000)
+    : undefined;
+
+/** The next act (or finalist) to start. */
+export const nextTimeplanAct = (timeplan: Timeplan) => {
+  const act = blockStarts(currentTimeplanEntry(timeplan)).find(
+    (act) => act.status == "Planned",
+  );
+  if (act) {
+    return act;
   }
-  return nextEntry.timeplan_entry.Category.acts.find(
+  return blockStarts(nextTimeplanEntry(timeplan)).find(
     (act) => act.status == "Planned",
   );
 };
 
-export const lastTimeplanAct = (
-  timeplan: components["schemas"]["Timeplan"],
-) => {
-  const currentEntry = currentTimeplanEntry(timeplan);
-  if (currentEntry && "Category" in currentEntry.timeplan_entry) {
-    const act = currentEntry.timeplan_entry.Category.acts.findLast(
-      (act) => act.status == "Ended",
-    );
-    if (act) {
-      return act;
-    }
+/** The last act (or finalist) that ended. */
+export const lastTimeplanAct = (timeplan: Timeplan) => {
+  const act = blockStarts(currentTimeplanEntry(timeplan)).findLast(
+    (act) => act.status == "Ended",
+  );
+  if (act) {
+    return act;
   }
-
-  const lastEntry = lastTimeplanEntry(timeplan);
-  if (!lastEntry || !("Category" in lastEntry.timeplan_entry)) {
-    return undefined;
-  }
-  return lastEntry.timeplan_entry.Category.acts.findLast(
+  return blockStarts(lastTimeplanEntry(timeplan)).findLast(
     (act) => act.status == "Ended",
   );
 };
 
 /**
  * Ending the last act of a block also ends the block, but that act is judged
- * afterwards. While no entry is running and the last ended block's last act
- * ended less than its `judge_duration_seconds` before `now` (ms), returns that
- * block (`entry`), its category and the act; otherwise `undefined`.
+ * afterwards. While no entry is running and the last ended block ended with
+ * an act (or finalist) that ended less than its `judge_duration_seconds`
+ * before `now` (ms), returns that block (`entry`, `block`) and the act;
+ * otherwise `undefined`.
  */
 export const judgingAfterBlockEnd = (
-  timeplan: components["schemas"]["Timeplan"] | null | undefined,
+  timeplan: Timeplan | null | undefined,
   now = Date.now(),
 ) => {
   if (!timeplan || currentTimeplanEntry(timeplan)) {
     return undefined;
   }
   const entry = lastTimeplanEntry(timeplan);
-  if (!entry || !("Category" in entry.timeplan_entry)) {
+  const block = blockOf(entry);
+  const last = lastEndedSlot(block);
+  const act = last && slotStart(last);
+  // A block ending with a break has nothing left to judge.
+  if (!entry || !block || !act) {
     return undefined;
   }
-  const category = entry.timeplan_entry.Category;
-  const act = category.acts.findLast((a) => a.status === "Ended");
-  const endedAt = act?.ended_at ? new Date(act.ended_at).getTime() : NaN;
+  const endedAt = act.ended_at ? new Date(act.ended_at).getTime() : NaN;
   // Written so that a missing time or duration (NaN) means "not judging".
-  return act && now - endedAt < category.judge_duration_seconds * 1000
-    ? { entry, category, act }
+  return now - endedAt < act.judge_duration_seconds * 1000
+    ? { entry, block, act }
     : undefined;
 };
 
@@ -284,36 +405,95 @@ export const isGroupActType = (
 
 /** Groups need at least this many regular riders to get a category. */
 export const MIN_GROUP_SIZE = 3;
-/** Groups with more regular riders are Großgruppen. */
+/** A Kleingruppe has at most this many regular riders, a Großgruppe more. */
 export const MAX_SMALL_GROUP_SIZE = 8;
 
 /**
- * The act type of a group with `regular` riders (replacements don't count),
- * or `null` while it is incomplete.
+ * Why a group of the chosen `type` with `regular` riders (replacements don't
+ * count) doesn't fit its type, or `null` if it does (and for acts that aren't
+ * groups). Such groups keep their category and start, so this is only a
+ * warning. Groups with fewer than `MIN_GROUP_SIZE` riders are incomplete
+ * instead (see `describeGroup`).
  */
-export const groupTypeForSize = (regular: number): GroupActType | null => {
+export const groupSizeWarning = (
+  type: ActType,
+  regular: number,
+): string | null => {
   if (regular < MIN_GROUP_SIZE) {
     return null;
   }
-  return regular <= MAX_SMALL_GROUP_SIZE ? "group_small" : "group_large";
+  if (type === "group_large" && regular <= MAX_SMALL_GROUP_SIZE) {
+    return `zu klein für eine Großgruppe – mindestens ${MAX_SMALL_GROUP_SIZE + 1} Fahrer`;
+  }
+  if (type === "group_small" && regular > MAX_SMALL_GROUP_SIZE) {
+    return `zu groß für eine Kleingruppe – höchstens ${MAX_SMALL_GROUP_SIZE} Fahrer`;
+  }
+  return null;
 };
+
+/** The size warning of an act (see `groupSizeWarning`). */
+export const actSizeWarning = (act: {
+  act_type: ActType;
+  participants: { is_replacement?: boolean | null }[];
+}) =>
+  groupSizeWarning(
+    act.act_type,
+    act.participants.filter((p) => !p.is_replacement).length,
+  );
 
 /**
  * One-line summary of a group, e.g. "KG Junior Expert · 7 Fahrer + 1 Ersatz".
  * `isU15` is `null` when the age group is unknown (it is then left out).
  */
 export const describeGroup = (
+  type: ActType,
   regular: number,
   replacements: number,
   isU15: boolean | null,
 ) => {
-  const type = groupTypeForSize(regular);
-  if (!type) {
+  if (regular < MIN_GROUP_SIZE) {
     return `unvollständig – mindestens ${MIN_GROUP_SIZE} Fahrer`;
   }
   const age = isU15 === null ? "" : isU15 ? " Junior Expert" : " Expert";
   const extra = replacements > 0 ? ` + ${replacements} Ersatz` : "";
   return `${actTypeShort[type]}${age} · ${regular} Fahrer${extra}`;
+};
+
+/** A run of a final's reserved slots, e.g. 5 slots "U11–U15". */
+export type SlotGroup = components["schemas"]["SlotGroup"];
+
+/** Slot groups as admins type them: "5 × U11–U15, 4 × U23+". */
+export const formatSlotGroups = (groups: SlotGroup[]) =>
+  groups
+    .map((group) =>
+      group.label ? `${group.count} × ${group.label}` : String(group.count),
+    )
+    .join(", ");
+
+/**
+ * Parses slot groups typed like "5 × U11–U15, 4 × U23+" ("x", "*" or no
+ * sign work too; the label may be left out). `null` if a part has no count
+ * of at least 1 or nothing is given.
+ */
+export const parseSlotGroups = (text: string): SlotGroup[] | null => {
+  const parts = text
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (!parts.length) {
+    return null;
+  }
+  const groups: SlotGroup[] = [];
+  for (const part of parts) {
+    // The sign must stand alone, so "3 Xtreme" keeps its label.
+    const match = /^(\d+)\s*(?:[×xX*](?=\s|$)\s*)?(.*)$/.exec(part);
+    const count = match ? Number(match[1]) : 0;
+    if (!match || count < 1) {
+      return null;
+    }
+    groups.push({ count, label: (match[2] ?? "").trim() });
+  }
+  return groups;
 };
 
 /**

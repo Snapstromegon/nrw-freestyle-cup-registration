@@ -14,6 +14,7 @@ import { type User, userContext } from "../../contexts/user";
 import { iconStyles, resetStyles } from "../../styles/base";
 import { clubManagerStyles } from "../../styles/club-manager";
 import {
+  actSizeWarning,
   actTypeLabels,
   formatDate,
   isGroupActType,
@@ -424,6 +425,7 @@ export default class CupClubActManager extends LitElement {
       return actTypeLabels[act.act_type];
     }
     const regular = act.participants.filter((p) => !p.is_replacement).length;
+    const sizeWarning = actSizeWarning(act);
     return html`${actTypeLabels[act.act_type]}<br /><strong
         >${act.group_name}</strong
       >${
@@ -431,7 +433,9 @@ export default class CupClubActManager extends LitElement {
           ? html`<br /><small class="warn"
               >⌛ unvollständig – mindestens ${MIN_GROUP_SIZE} Fahrer</small
             >`
-          : nothing
+          : sizeWarning
+            ? html`<br /><small class="warn">⚠️ ${sizeWarning}</small>`
+            : nothing
       }`;
   }
 

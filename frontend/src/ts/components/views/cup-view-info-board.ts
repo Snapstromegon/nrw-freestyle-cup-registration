@@ -16,27 +16,26 @@ import {
 import {
   actClubNames,
   actParticipantsLabel,
+  blockOf,
+  breakEnd,
   competitionName,
   currentTimeplanAct,
+  currentTimeplanBreak,
   currentTimeplanEntry,
   isGroupActType,
   lastTimeplanAct,
   lastTimeplanEntry,
   nextTimeplanEntry,
   participantName,
+  startCategory,
+  startActId,
+  startName,
   TimeplanStatus,
   timeplanStatus,
 } from "../../utils";
 
 type Act = components["schemas"]["Act"];
 type Timeplan = components["schemas"]["Timeplan"];
-type TimeplanItem = components["schemas"]["TimeplanItem"];
-
-/** The description of a timeplan item's category, if it is one. */
-const categoryDescription = (item: TimeplanItem | undefined) =>
-  item && "Category" in item.timeplan_entry
-    ? item.timeplan_entry.Category.description
-    : nothing;
 
 @customElement("cup-view-info-board")
 export default class CupViewInfoBoard extends LitElement {
@@ -191,6 +190,7 @@ export default class CupViewInfoBoard extends LitElement {
 
       .break,
       .warmup,
+      .block-break,
       .award,
       .act {
         display: flex;
@@ -354,7 +354,7 @@ export default class CupViewInfoBoard extends LitElement {
     const timeplan = unwrap(
       await client.GET("/api/query/predict_timeplan", { signal }),
     );
-    const shownActs = `${currentTimeplanAct(timeplan)?.id}/${lastTimeplanAct(timeplan)?.id}`;
+    const shownActs = `${startActId(currentTimeplanAct(timeplan))}/${startActId(lastTimeplanAct(timeplan))}`;
     if (shownActs !== this.actsLoadedFor) {
       try {
         const acts = unwrap(
@@ -428,6 +428,8 @@ export default class CupViewInfoBoard extends LitElement {
     const lastAct = lastTimeplanAct(timeplan);
     const lastEntry = lastTimeplanEntry(timeplan);
     const nextEntry = nextTimeplanEntry(timeplan);
+    const currentBlock = blockOf(currentEntry);
+    const nextBlock = blockOf(nextEntry);
     switch (status) {
       case TimeplanStatus.Break:
         return html`<div class="break">
@@ -444,28 +446,38 @@ export default class CupViewInfoBoard extends LitElement {
       case TimeplanStatus.Warmup:
         return html`<div class="warmup">
           <h1>Einfahrzeit</h1>
-          <h2>${categoryDescription(currentEntry)}</h2>
+          <h2>${currentBlock?.description}</h2>
           ${
-            nextEntry &&
-            "Category" in nextEntry.timeplan_entry &&
-            nextEntry.timeplan_entry.Category.einfahrzeit_seconds === 0
-              ? html`<h2>${nextEntry.timeplan_entry.Category.description}</h2>`
+            // The next block warms up together with this one.
+            nextBlock?.einfahrzeit_seconds === 0
+              ? html`<h2>${nextBlock.description}</h2>`
               : nothing
           }
           <cup-countdown
             .time=${new Date(
               new Date(currentEntry?.predicted_start || "").getTime() +
-                (currentEntry && "Category" in currentEntry.timeplan_entry
-                  ? currentEntry.timeplan_entry.Category.warmup_seconds * 1000
-                  : 0),
+                (currentBlock?.warmup_seconds ?? 0) * 1000,
             )}
           ></cup-countdown>
         </div>`;
+      case TimeplanStatus.BlockBreak: {
+        // It runs until "Weiter"; the countdown stays at 0 after its time.
+        const pause = currentTimeplanBreak(timeplan);
+        return html`<div class="block-break">
+          <h1>${pause?.label}</h1>
+          <h2>${currentBlock?.description}</h2>
+          ${
+            pause
+              ? html`<cup-countdown .time=${breakEnd(pause)}></cup-countdown>`
+              : nothing
+          }
+        </div>`;
+      }
       case TimeplanStatus.Act:
         return html`<div class="act">
-          ${currentAct?.name ? html`<h1>${currentAct.name}</h1>` : nothing}
-          ${this.renderPerformers(currentAct?.id)}
-          <h3>${categoryDescription(currentEntry)}</h3>
+          ${currentAct && startName(currentAct) ? html`<h1>${startName(currentAct)}</h1>` : nothing}
+          ${this.renderPerformers(startActId(currentAct))}
+          <h3>${currentAct && startCategory(currentAct)}</h3>
         </div>`;
       case TimeplanStatus.Judging:
         return html`<div class="judging">
@@ -474,9 +486,9 @@ export default class CupViewInfoBoard extends LitElement {
           ></cup-fotobox>
           <section>
             <h3>Das war...</h3>
-            ${lastAct?.name ? html`<h1>${lastAct.name}</h1>` : nothing}
-            ${this.renderPerformers(lastAct?.id)}
-            <h3>${categoryDescription(currentEntry ?? lastEntry)}</h3>
+            ${lastAct && startName(lastAct) ? html`<h1>${startName(lastAct)}</h1>` : nothing}
+            ${this.renderPerformers(startActId(lastAct))}
+            <h3>${lastAct && startCategory(lastAct)}</h3>
             <cup-clock></cup-clock>
           </section>
         </div>`;

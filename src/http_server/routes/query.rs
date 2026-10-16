@@ -13,6 +13,7 @@ mod list_club_acts;
 mod list_club_groups;
 mod list_club_starters;
 mod list_clubs;
+mod list_finals;
 mod list_groups;
 mod list_starters;
 mod list_timeplan;
@@ -35,6 +36,7 @@ pub fn get_query_router() -> OpenApiRouter {
         .routes(routes!(list_club_acts::list_club_acts))
         .routes(routes!(list_acts::list_acts))
         .routes(routes!(list_categories::list_categories))
+        .routes(routes!(list_finals::list_finals))
         .routes(routes!(list_timeplan::list_timeplan))
         .routes(routes!(startlist::startlist))
         .routes(routes!(get_startlist_csv::get_startlist_csv))

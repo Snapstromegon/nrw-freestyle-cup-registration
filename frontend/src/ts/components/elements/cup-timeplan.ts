@@ -7,33 +7,59 @@ import { client } from "../../apiClient";
 import type { components } from "../../bindings";
 import { iconStyles, resetStyles } from "../../styles/base";
 import {
+  type ActsEntry,
   actClubNames,
+  blockPlayedActs,
+  blockStarts,
   type CheckInMap,
   checkInStats,
+  finalistAct,
+  formatDuration,
   formatTime,
   groupByDay,
   isGroupActType,
   participantName,
+  slotAct,
+  slotItem,
+  type TimeplanFinalist,
 } from "../../utils";
 
 type Act = components["schemas"]["Act"];
 type Timeplan = components["schemas"]["Timeplan"];
 type TimeplanItem = components["schemas"]["TimeplanItem"];
+type TimeplanItemStatus = components["schemas"]["TimeplanItemStatus"];
 type TimeplanAct = components["schemas"]["TimeplanAct"];
+type TimeplanBreak = components["schemas"]["TimeplanBreak"];
+type TimeplanSlot = components["schemas"]["TimeplanSlot"];
 type TimeplanEntry = components["schemas"]["TimeplanEntry"];
-type CategoryEntry = Extract<TimeplanEntry, { Category: unknown }>["Category"];
 type CustomEntry = Extract<TimeplanEntry, { Custom: unknown }>["Custom"];
 
 /** Upcoming acts with riders missing at check-in get red this early. */
 const CALL_IN_SECONDS = 30 * 60;
 
+/** Acts by id; breaks and finalists by theirs, prefixed so they can't clash. */
+const slotKey = (slot: TimeplanSlot) =>
+  "Act" in slot
+    ? slot.Act.id
+    : "Break" in slot
+      ? `break:${slot.Break.id}`
+      : `finalist:${slot.Finalist.id}`;
+
+/** A block's short name, e.g. "EMU13": its label, home category or final. */
+const blockShortName = (block: ActsEntry) =>
+  block.label ||
+  block.home_category ||
+  block.final_name ||
+  block.categories.join(", ");
+
 /**
- * The (upcoming) timeplan: category blocks with their acts and custom entries.
+ * The (upcoming) timeplan: start blocks with their acts and breaks, and
+ * custom entries. Acts in a block with several categories show their own.
  *
  * - Public (info board, moderation): the dark display look. Groups show their
  *   name and clubs instead of every member.
- * - `is-admin`: adds the music state per act and category and, with
- *   `.checkIns`, the check-in state per rider, act ("✓ x/y") and category.
+ * - `is-admin`: adds the music state per act and block and, with
+ *   `.checkIns`, the check-in state per rider, act ("✓ x/y") and block.
  * - `dense`: a compact light list for admin pages, one line per act.
  *
  * Acts come from `.acts` if set (also `null` while the parent is still
@@ -67,6 +93,28 @@ export default class CupTimeplan extends LitElement {
 
         .event {
           background: linear-gradient(to right, #400 66%, #fff0);
+        }
+
+        /* Breaks inside a block, e.g. an extra warm-up. */
+        .pause {
+          font-style: italic;
+
+          &.running {
+            background: linear-gradient(to right, #00509a 66%, #00509a00);
+          }
+
+          &.ended {
+            opacity: 0.6;
+          }
+        }
+
+        .act-category {
+          opacity: 0.75;
+        }
+
+        /* A final's reserved slots: the finalists aren't known yet. */
+        .finalist h4 {
+          font-style: italic;
         }
       }
 
@@ -211,6 +259,7 @@ export default class CupTimeplan extends LitElement {
 
       .dense > .cat,
       .dense > .act,
+      .dense > .pause,
       .dense > .custom {
         display: flex;
         align-items: center;
@@ -245,6 +294,10 @@ export default class CupTimeplan extends LitElement {
         font-weight: 600;
       }
 
+      .dense > .act.finalist .who {
+        font-style: italic;
+      }
+
       .dense > .act.call {
         background: color-mix(in srgb, var(--cup-red) 10%, var(--cup-surface));
       }
@@ -253,6 +306,28 @@ export default class CupTimeplan extends LitElement {
         background: var(--cup-surface-2);
         color: var(--cup-muted);
         font-style: italic;
+      }
+
+      .dense > .pause {
+        color: var(--cup-muted);
+        font-style: italic;
+      }
+
+      .dense > .pause.running {
+        background: color-mix(in srgb, var(--cup-blue-2) 45%, var(--cup-surface));
+        color: var(--cup-text);
+        font-weight: 600;
+      }
+
+      .dense > .pause.ended {
+        opacity: 0.6;
+      }
+
+      .dense .act-cat {
+        flex: none;
+        color: var(--cup-muted);
+        font-size: 0.85em;
+        font-weight: 600;
       }
 
       .dense .time {
@@ -361,13 +436,10 @@ export default class CupTimeplan extends LitElement {
             day.day ? html`<h2 class="day">${day.label}</h2>` : nothing
           }${repeat(
             day.items,
+            (item) => item.id,
             (item) =>
-              "Category" in item.timeplan_entry
-                ? `category:${item.timeplan_entry.Category.name}`
-                : `custom:${item.planned_start}:${item.timeplan_entry.Custom.label}`,
-            (item) =>
-              "Category" in item.timeplan_entry
-                ? this.renderCategory(item, item.timeplan_entry.Category)
+              "Acts" in item.timeplan_entry
+                ? this.renderBlock(item, item.timeplan_entry.Acts)
                 : this.renderCustom(item, item.timeplan_entry.Custom),
           )}`,
       )}
@@ -379,20 +451,43 @@ export default class CupTimeplan extends LitElement {
     </div>`;
   }
 
-  private renderCategory(item: TimeplanItem, category: CategoryEntry) {
-    const shown = category.acts.filter(
-      (a) =>
-        (this.includePast || a.status !== "Ended") &&
-        (this.includeActiveAct || a.status !== "Started"),
+  /** Whether an act or break is shown: past and running ones only if asked. */
+  private isShown(status: TimeplanItemStatus) {
+    return (
+      (this.includePast || status !== "Ended") &&
+      (this.includeActiveAct || status !== "Started")
     );
-    if (this.dense) {
-      return this.renderDenseCategory(item, category, shown);
-    }
-    if (!shown.length) {
+  }
+
+  private renderBlock(item: TimeplanItem, block: ActsEntry) {
+    const shown = block.slots.filter((slot) =>
+      this.isShown(slotItem(slot).status),
+    );
+    // Empty blocks are skipped, their breaks too, and blocks whose shown
+    // slots are all over need no attention either.
+    if (!blockStarts(block).length || !shown.length) {
       return nothing;
     }
+    // With the acts placed in a final's slots.
+    const shownActs = shown.flatMap((slot) => {
+      const act = slotAct(slot);
+      return act ? [act] : [];
+    });
+    const mixed = block.categories.length > 1;
+    const slots = repeat(shown, slotKey, (slot) =>
+      "Act" in slot
+        ? this.dense
+          ? this.renderDenseAct(slot.Act, mixed)
+          : this.renderAct(slot.Act, mixed)
+        : "Break" in slot
+          ? this.renderBreak(slot.Break)
+          : this.renderFinalist(slot.Finalist),
+    );
+    if (this.dense) {
+      return html`${this.renderDenseBlock(item, block, shownActs)}${slots}`;
+    }
     return html`<section class="category-header">
-        <h3 class="title">${category.description}</h3>
+        <h3 class="title">${block.description}</h3>
         ${
           item.started_at
             ? nothing
@@ -405,30 +500,86 @@ export default class CupTimeplan extends LitElement {
             </p>`
         }
         ${
-          this.isAdmin
+          // A final's open slots have no acts (yet): no music, no check-ins.
+          this.isAdmin && blockPlayedActs(block).length
             ? html`<input
                 type="checkbox"
-                ?checked=${category.acts.every(
+                ?checked=${blockPlayedActs(block).every(
                   (a) => this.actsById.get(a.id)?.song_checked,
                 )}
                 disabled
-              />${this.renderCategoryCheckIns(shown)}`
+              />${this.renderCategoryCheckIns(shownActs)}`
             : nothing
         }
       </section>
-      ${repeat(
-        shown,
-        (act) => act.id,
-        (act) => this.renderAct(act),
-      )}`;
+      ${slots}`;
   }
 
-  private renderAct(timeplanAct: TimeplanAct) {
+  /**
+   * A reserved slot of a final, e.g. "3. Finalist (U17–U21)"; once the
+   * placement is published, with its act.
+   */
+  private renderFinalist(finalist: TimeplanFinalist) {
+    const act = finalistAct(finalist);
+    if (act) {
+      return this.dense
+        ? this.renderDenseAct(act, false, finalist)
+        : this.renderAct(act, false, finalist);
+    }
+    const classes = {
+      // Dense, it lines up with the acts.
+      act: this.dense,
+      finalist: true,
+      current: finalist.status === "Started",
+    };
+    if (this.dense) {
+      return html`<div class=${classMap(classes)}>
+        ${this.renderDenseTime(finalist.predicted_start, finalist.planned_start)}
+        <span class="who" title=${finalist.final_description}
+          >${finalist.label}</span
+        >
+      </div>`;
+    }
+    return html`<section class=${classMap(classes)}>
+      <h4>${finalist.label}</h4>
+      <p class="time">
+        ${niceTime(finalist.predicted_start)}${
+          this.includeOriginalTime
+            ? html` (${niceTime(finalist.planned_start)})`
+            : nothing
+        }
+      </p>
+    </section>`;
+  }
+
+  /**
+   * One act. In a block with several categories it shows its own; on the
+   * displays in full, as there is nothing to hover. In a final's slot
+   * (`finalist`), it shows the slot.
+   */
+  private renderAct(
+    timeplanAct: TimeplanAct,
+    mixed: boolean,
+    finalist?: TimeplanFinalist,
+  ) {
     const act = this.actsById.get(timeplanAct.id);
     return html`
       <section>
         <h3>${act ? this.renderNames(act) : nothing}</h3>
-        <h4>${timeplanAct.name}</h4>
+        <h4>
+          ${
+            finalist
+              ? [finalist.label, timeplanAct.name].filter(Boolean).join(" · ")
+              : timeplanAct.name
+          }
+        </h4>
+        ${
+          mixed
+            ? html`<p class="act-category">
+                ${timeplanAct.category_description}
+              </p>`
+            : nothing
+        }
         <p class="time">
           ${niceTime(timeplanAct.predicted_start)}${
             this.includeOriginalTime
@@ -488,23 +639,46 @@ export default class CupTimeplan extends LitElement {
     `;
   }
 
-  private renderDenseCategory(
+  /** A break inside a block, e.g. an extra warm-up, with its planned length. */
+  private renderBreak(pause: TimeplanBreak) {
+    const classes = {
+      pause: true,
+      running: pause.status === "Started",
+      ended: pause.status === "Ended",
+    };
+    if (this.dense) {
+      return html`<div class=${classMap(classes)}>
+        ${this.renderDenseTime(pause.predicted_start, pause.planned_start)}
+        <span class="who" title=${pause.label}>${pause.label}</span>
+        <span title="Geplante Dauer"
+          >${formatDuration(pause.duration_seconds)}</span
+        >
+      </div>`;
+    }
+    return html`<section class=${classMap(classes)}>
+      <h3 class="title">${pause.label}</h3>
+      <p class="time">
+        ${niceTime(pause.predicted_start)}${
+          this.includeOriginalTime
+            ? html` (${niceTime(pause.planned_start)})`
+            : nothing
+        }
+        · Dauer ${formatDuration(pause.duration_seconds)}
+      </p>
+    </section>`;
+  }
+
+  /** The block's line; its acts and breaks follow. */
+  private renderDenseBlock(
     item: TimeplanItem,
-    category: CategoryEntry,
+    block: ActsEntry,
     shown: TimeplanAct[],
   ) {
-    // Empty blocks are skipped, and blocks whose shown acts are all over
-    // need no attention either.
-    if (!shown.length) {
-      return nothing;
-    }
     return html`<div
         class="cat"
-        title=${
-          category.description
-            ? `${category.name} – ${category.description}`
-            : category.name
-        }
+        title=${[block.categories.join(", "), block.description]
+          .filter(Boolean)
+          .join(" – ")}
       >
         ${
           item.started_at
@@ -512,33 +686,38 @@ export default class CupTimeplan extends LitElement {
             : this.renderDenseTime(item.predicted_start, item.planned_start)
         }
         <span class="who"
-          ><span class="long">${category.description || category.name}</span
-          ><span class="short">${category.name}</span></span
+          ><span class="long"
+            >${block.description || blockShortName(block)}</span
+          ><span class="short">${blockShortName(block)}</span></span
         >
         ${
-          // For admins the music chip ("♪ x/y") already counts the acts.
-          this.isAdmin
-            ? nothing
-            : html`<span class="count"
-                >${shown.length} ${shown.length === 1 ? "Kür" : "Küren"}</span
+          block.final_name
+            ? html`<span class="count"
+                >${blockStarts(block).length} Finalplätze</span
               >`
+            : // For admins the music chip ("♪ x/y") already counts the acts.
+              this.isAdmin
+              ? nothing
+              : html`<span class="count"
+                  >${shown.length} ${shown.length === 1 ? "Kür" : "Küren"}</span
+                >`
         }
         ${
-          this.isAdmin
+          this.isAdmin && !block.final_name
             ? html`${this.renderCategoryCheckIns(shown)}${this.renderCategorySongs(
                 shown,
               )}`
             : nothing
         }
-      </div>
-      ${repeat(
-        shown,
-        (act) => act.id,
-        (act) => this.renderDenseAct(act),
-      )}`;
+      </div>`;
   }
 
-  private renderDenseAct(timeplanAct: TimeplanAct) {
+  /** One act in a line; in a final's slot (`finalist`), with the slot. */
+  private renderDenseAct(
+    timeplanAct: TimeplanAct,
+    mixed: boolean,
+    finalist?: TimeplanFinalist,
+  ) {
     const act = this.actsById.get(timeplanAct.id);
     const stats =
       act && this.isAdmin && this.checkIns
@@ -559,6 +738,19 @@ export default class CupTimeplan extends LitElement {
       })}
     >
       ${this.renderDenseTime(timeplanAct.predicted_start, timeplanAct.planned_start)}
+      ${
+        finalist
+          ? html`<span class="act-cat" title=${finalist.label}
+              >${finalist.number}. ${finalist.group_label}</span
+            >`
+          : mixed
+            ? html`<span
+                class="act-cat"
+                title=${timeplanAct.category_description}
+                >${timeplanAct.category}</span
+              >`
+            : nothing
+      }
       <span class="who" title=${this.tooltip(timeplanAct, act)}
         >${act ? this.renderDenseNames(act) : timeplanAct.name}</span
       >
@@ -646,7 +838,7 @@ export default class CupTimeplan extends LitElement {
     >`;
   }
 
-  /** Checked-in riders of the shown acts of a category. */
+  /** Checked-in riders of the shown acts of a block. */
   private renderCategoryCheckIns(shown: TimeplanAct[]) {
     if (!this.checkIns) {
       return nothing;
@@ -677,7 +869,7 @@ export default class CupTimeplan extends LitElement {
     >`;
   }
 
-  /** Checked songs of the shown acts of a category. */
+  /** Checked songs of the shown acts of a block. */
   private renderCategorySongs(shown: TimeplanAct[]) {
     const acts = shown.map((a) => this.actsById.get(a.id));
     const checked = acts.filter((a) => a?.song_checked).length;

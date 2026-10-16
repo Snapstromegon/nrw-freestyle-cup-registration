@@ -291,17 +291,20 @@ name = "Einrad-Freunde Aachen"
 owner = "Sabine Koch"
 payment = 30
 
-# Groups: name (unique), owner (the club that created it and manages its name)
-# and the full names of the regular riders (members) and replacement riders
-# (replacements, Ersatzfahrer), from any club. Up to 8 regular riders make a
-# small group (Kleingruppe), more a large group (Großgruppe); with fewer than 3
-# the group has no category yet. Replacements don't count towards the size,
-# but towards the age. A rider can be in one small and one large group.
+# Groups: name (unique), owner (the club that created it and manages its name),
+# act_type ("group_small" for a Kleingruppe, "group_large" for a Großgruppe, as
+# the owner chose it) and the full names of the regular riders (members) and
+# replacement riders (replacements, Ersatzfahrer), from any club. A Kleingruppe
+# should have 3 to 8 regular riders, a Großgruppe more; outside that range the
+# group keeps its category, with a warning. With fewer than 3 the group has no
+# category yet. Replacements don't count towards the size, but towards the
+# age. A rider can be in one small and one large group.
 
 # Small group U15 across three clubs, with a replacement.
 [[groups]]
 name = "Rollende Rebellen"
 owner = "SSV Nümbrecht"
+act_type = "group_small"
 members = [
   "Ben Fischer",
   "Noah Fischer",
@@ -315,6 +318,7 @@ replacements = ["Lea Hoffmann"]
 [[groups]]
 name = "Einrad-Express"
 owner = "RSC Köln"
+act_type = "group_large"
 members = [
   "Julia Krüger",
   "Max Krüger",
@@ -332,6 +336,7 @@ members = [
 [[groups]]
 name = "Die Neuen"
 owner = "RV Bonn"
+act_type = "group_small"
 members = ["Felix Braun", "Leon Lehmann"]
 
 # Act details. An act exists for every single starter, every linked pair and
@@ -863,6 +868,18 @@ einfahrzeit_minutes = 10
 act_duration_minutes = 5
 judge_duration_minutes = 3
 
+# A final (as in config.example.toml): reserved slots for the best riders of
+# the heats, planned before the results are known.
+[[finals]]
+name = "Finale EW"
+description = "Finale Einzel Weiblich"
+act_type = "single"
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 4
+slots = [{ label = "U11–U15", count = 3 }, { label = "U17+", count = 3 }]
+categories = ["EWU11", "EWU13", "EWU15", "EWU17", "EWU19", "EWU21", "EWU23", "EWU25", "EWU30", "EWU50", "EWU70", "EW70+"]
+
 # Timeplan entries can also carry their live state: started_at and ended_at.
 [[timeplan]]
 category = "EMU11"
@@ -980,6 +997,9 @@ category = "PU70"
 
 [[timeplan]]
 category = "P70+"
+
+[[timeplan]]
+final = "Finale EW"
 
 [[timeplan]]
 category = "KGU15"

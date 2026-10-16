@@ -23,15 +23,17 @@ Event settings only come from the config file:
 - `[competition]`: name, location, dates, the determining day for ages,
   registration and music upload deadlines, fees and payment details. It is
   written to the `competition` table on every start.
-- `[[categories]]` and `[[timeplan]]`: only written into empty tables, so changes
-  made in the admin UI are kept.
+- `[[categories]]`, `[[finals]]` and `[[timeplan]]`: only written into empty
+  tables, so changes made in the admin UI are kept. A final reserves slots for
+  the best riders of the heats ("1. Finalist (U11–U15)") before the results are
+  known; a `[[timeplan]]` entry with `final = "…"` plans it.
 
 The database migrations only create the schema and don't insert any data.
 
 ## Setting up a new season
 
 1. Copy `config.example.toml` to `config.toml` and set the competition, the
-   categories and the timeplan.
+   categories, the finals and the timeplan.
 2. Start with a fresh database (archive the old `db.sqlite`).
 3. Start the server. It migrates the database and seeds it from the config.
 
@@ -131,7 +133,7 @@ users in every state, clubs with full, partial, missing and excess payments,
 starters in single and pair starts (incl. partners across clubs and
 unregistered partners), groups (a small group across clubs with a replacement
 rider, a large group and an incomplete group without category), acts with
-names, songs and orders, a timeplan that is partly run and a check-in in
+names, songs and orders, a final, a timeplan that is partly run and a check-in in
 progress (one club fully, one partly, one not checked in). The file lists the
 logins at the top. The database and data path are resolved like for the
 server; use `--demo` / `DEMO_DATA` for another file. Tests can load it with

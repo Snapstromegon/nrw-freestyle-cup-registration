@@ -108,7 +108,7 @@ pub fn closed_registration() -> StatusOptions {
     }
 }
 
-/// Seeds the competition, categories and timeplan from `tests/fixtures/config.toml`
+/// Seeds the competition, categories, finals and timeplan from `tests/fixtures/config.toml`
 /// and sets the registration dates of the competition to `status`.
 pub async fn seed_db(db: &SqlitePool, status: &StatusOptions) {
     let file = ConfigFile::parse(include_str!("../fixtures/config.toml")).unwrap();
@@ -116,6 +116,7 @@ pub async fn seed_db(db: &SqlitePool, status: &StatusOptions) {
         db,
         file.competition.as_ref(),
         &file.categories,
+        &file.finals,
         &file.timeplan,
     )
     .await
@@ -435,12 +436,32 @@ impl TestApp {
         ids
     }
 
-    /// Creates a group owned by `club_id` and returns its act id.
+    /// Creates a small group (Kleingruppe) owned by `club_id` and returns its
+    /// act id.
     pub async fn create_group(&self, cookie: &str, club_id: Uuid, group_name: &str) -> Uuid {
+        self.create_group_of_type(cookie, club_id, group_name, "group_small")
+            .await
+    }
+
+    /// Creates a large group (Großgruppe) owned by `club_id` and returns its
+    /// act id.
+    pub async fn create_large_group(&self, cookie: &str, club_id: Uuid, group_name: &str) -> Uuid {
+        self.create_group_of_type(cookie, club_id, group_name, "group_large")
+            .await
+    }
+
+    /// Creates a group of `act_type` owned by `club_id` and returns its act id.
+    pub async fn create_group_of_type(
+        &self,
+        cookie: &str,
+        club_id: Uuid,
+        group_name: &str,
+        act_type: &str,
+    ) -> Uuid {
         let response = self
             .post(
                 "/api/command/create_club_group",
-                json!({ "club_id": club_id, "group_name": group_name }),
+                json!({ "club_id": club_id, "group_name": group_name, "act_type": act_type }),
                 Some(cookie),
             )
             .await;

@@ -543,7 +543,7 @@ async fn only_the_club_and_admins_change_its_starters(db: SqlitePool) {
         )
         .await;
     assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
-    assert_eq!(response.body["warnings"], json!([]));
+    assert_eq!(response.body, json!({}));
     assert_eq!(list_starters(&app, &cookie, club_id).await.len(), 1);
     assert!(
         list_starters(&app, &intruder, intruder_club_id)

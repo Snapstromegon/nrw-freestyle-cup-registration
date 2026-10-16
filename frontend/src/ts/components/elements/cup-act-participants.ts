@@ -5,6 +5,7 @@ import { repeat } from "lit/directives/repeat.js";
 import {
   type ActLike,
   actClubNames,
+  actSizeWarning,
   type CheckInMap,
   checkInStats,
   isGroupActType,
@@ -199,6 +200,7 @@ export default class CupActParticipants extends LitElement {
     const list = this.layout === "list";
     const regular = act.participants.filter((p) => !p.is_replacement).length;
     const replacements = act.participants.length - regular;
+    const sizeWarning = actSizeWarning(act);
     const clubs = actClubNames(act);
     const stats = this.checkIns
       ? checkInStats(act.participants, this.checkIns)
@@ -226,7 +228,11 @@ export default class CupActParticipants extends LitElement {
             ? html`<span class="incomplete" title="Mindestens ${MIN_GROUP_SIZE} Fahrer nötig"
               >unvollständig</span
             >`
-            : nothing
+            : sizeWarning
+              ? html`<span class="incomplete" title=${sizeWarning}
+                >${act.act_type === "group_large" ? "zu klein für GG" : "zu groß für KG"}</span
+              >`
+              : nothing
         }
         ${stats && stats.total > 0 ? this.renderCount(stats) : nothing}
         ${

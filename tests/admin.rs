@@ -351,11 +351,12 @@ async fn predicted_timeplan_is_contiguous_and_planned(db: SqlitePool) {
 
     // A category without acts is skipped: it takes no time, not even for the
     // warm-up, but still reports its configured warm-up time.
-    let first = &items[0]["timeplan_entry"]["Category"];
-    assert_eq!(first["name"], "EMU11");
+    let first = &items[0]["timeplan_entry"]["Acts"];
+    assert_eq!(first["home_category"], "EMU11");
+    assert_eq!(first["manually_ordered"], false);
     assert_eq!(first["duration_seconds"], 0);
     assert!(first["einfahrzeit_seconds"].as_i64().unwrap() > 0);
-    assert!(first["acts"].as_array().unwrap().is_empty());
+    assert!(first["slots"].as_array().unwrap().is_empty());
     assert_eq!(items[0]["planned_start"], items[1]["planned_start"]);
 
     let lunch = items
@@ -381,7 +382,7 @@ async fn timeplan_forward_starts_first_entry(db: SqlitePool) {
         .await;
     assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
 
-    // Without acts, every category block is empty: they are skipped up to
+    // Without acts, every start block is empty: they are skipped up to
     // the first custom entry, which starts.
     let timeplan = app.get("/api/query/predict_timeplan", None).await;
     let items = timeplan.body["items"].as_array().unwrap();

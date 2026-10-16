@@ -62,6 +62,7 @@ async fn main() -> eyre::Result<()> {
         &db,
         settings.competition.as_ref(),
         &settings.categories,
+        &settings.finals,
         &settings.timeplan,
     )
     .await

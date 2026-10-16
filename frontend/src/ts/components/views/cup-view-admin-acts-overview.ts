@@ -302,6 +302,11 @@ export default class CupViewAdminActsOverview extends LitElement {
   @state() private checkIns: CheckInMap = new Map();
   /** Categories whose timeplan block has started (or ended). */
   @state() private categoryStatus = new Map<string, "started" | "ended">();
+  /**
+   * Categories whose start block was re-planned by hand in the timeplan:
+   * their order here no longer applies there.
+   */
+  @state() private manualOrder = new Set<string>();
   @state() private loaded = false;
   /** Errors of the admin's own commands. */
   @state() private error: string | null = null;
@@ -388,12 +393,17 @@ export default class CupViewAdminActsOverview extends LitElement {
 
   private setTimeplan(entries: TimeplanEntry[]) {
     const status = new Map<string, "started" | "ended">();
+    const manual = new Set<string>();
     for (const entry of entries) {
       if (entry.category && entry.started_at) {
         status.set(entry.category, entry.ended_at ? "ended" : "started");
       }
+      if (entry.category && entry.manually_ordered) {
+        manual.add(entry.category);
+      }
     }
     this.categoryStatus = status;
+    this.manualOrder = manual;
   }
 
   private async load(signal?: AbortSignal) {
@@ -595,7 +605,12 @@ export default class CupViewAdminActsOverview extends LitElement {
     }
     const regular = act.participants.filter((p) => !p.is_replacement).length;
     if (isGroupActType(act.act_type) && regular < MIN_GROUP_SIZE) {
-      return describeGroup(regular, act.participants.length - regular, null);
+      return describeGroup(
+        act.act_type,
+        regular,
+        act.participants.length - regular,
+        null,
+      );
     }
     if (act.participants.length === 0) {
       return "keine Teilnehmer";
@@ -941,6 +956,15 @@ export default class CupViewAdminActsOverview extends LitElement {
               status
                 ? html`<span class="chip ${status === "started" ? "info" : "ok"}"
                     >${status === "started" ? "läuft" : "beendet"}</span
+                  >`
+                : nothing
+            }
+            ${
+              this.manualOrder.has(category.name)
+                ? html`<span
+                    class="chip info"
+                    title="Im Zeitplan wurde die Reihenfolge dieses Startblocks von Hand geändert. Mischen und Verschieben hier wirken sich dort erst nach „Reihenfolge zurücksetzen“ aus."
+                    >im Zeitplan umgeplant</span
                   >`
                 : nothing
             }

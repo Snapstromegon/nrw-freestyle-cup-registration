@@ -4,23 +4,33 @@ use tracing::instrument;
 use crate::{
     http_server::{ClientError, HttpError, extractor::auth::Auth},
     reloadable_sqlite::ReloadableSqlite,
+    timeplan::EntryKind,
 };
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct TimeplanListEntry {
     id: i64,
+    kind: EntryKind,
     #[serde(with = "time::serde::iso8601::option")]
     earliest_start_time: Option<time::OffsetDateTime>,
     duration_seconds: Option<i64>,
     label: Option<String>,
     category: Option<String>,
+    /// Start blocks only: the final running here instead of a category.
+    final_name: Option<String>,
+    /// Start blocks only: overrides the home category's (or final's)
+    /// Einfahrzeit.
+    einfahrzeit_seconds: Option<i64>,
+    /// Start blocks only: the order was edited by hand (`set_block_order`),
+    /// so the category's start order no longer applies to it.
+    manually_ordered: bool,
     #[serde(with = "time::serde::iso8601::option")]
     started_at: Option<time::OffsetDateTime>,
     #[serde(with = "time::serde::iso8601::option")]
     ended_at: Option<time::OffsetDateTime>,
 }
 
-/// List all timeplan entries.
+/// List all timeplan entries, in order.
 #[utoipa::path(
     get,
     tags=["query"],
@@ -40,8 +50,21 @@ pub async fn list_timeplan(
     let timeplan_entries = sqlx::query_as!(
         TimeplanListEntry,
         r#"
-        SELECT id, earliest_start_time, duration_seconds, label, category, started_at, ended_at
-        FROM timeplan ORDER BY id ASC
+        SELECT
+            id,
+            kind as "kind: EntryKind",
+            earliest_start_time,
+            duration_seconds,
+            label,
+            category,
+            final_name,
+            einfahrzeit_seconds,
+            EXISTS (
+                SELECT 1 FROM timeplan_slots WHERE timeplan_slots.timeplan_id = timeplan.id
+            ) as "manually_ordered!: bool",
+            started_at,
+            ended_at
+        FROM timeplan ORDER BY position, id
         "#
     )
     .fetch_all(&db)

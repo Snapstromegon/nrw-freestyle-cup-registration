@@ -160,7 +160,7 @@ pub async fn list_club_groups(
 
     let mut club_groups = Vec::with_capacity(groups.len());
     for group in groups {
-        let conflict = type_conflict_message(&mut connection, group.id, None).await?;
+        let conflict = type_conflict_message(&mut connection, group.id).await?;
         club_groups.push(ClubGroup {
             id: group.id,
             group_name: group.group_name,

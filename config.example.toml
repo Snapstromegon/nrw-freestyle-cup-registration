@@ -502,9 +502,83 @@ einfahrzeit_minutes = 10
 act_duration_minutes = 5
 judge_duration_minutes = 3
 
-# Timeplan in order. An entry either runs a category (its duration comes from
-# the category and its acts) or is a custom entry with a label and duration.
-# earliest_start is optional. Example times: replace them with the real ones.
+# Finals: reserved slots for the best riders of the heats, planned before the
+# results are known. Each slot runs like an act with the final's durations;
+# slots lists them in start order as groups, e.g. 5 slots "U11–U15" become
+# "1. Finalist (U11–U15)" … "5. Finalist (U11–U15)". A [[timeplan]] entry with
+# final = "<name>" plans a final (each final once). act_type and single_male
+# name the discipline. categories lists the categories whose acts admins can
+# place in the slots once the heats are judged (optional, also editable in
+# the admin UI); the placement shows in the timeplan once it is published.
+
+[[finals]]
+name = "Finale 1 EM"
+description = "Finale 1 Einzel Männlich (U11–U15)"
+act_type = "single"
+single_male = true
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 4
+slots = [{ label = "U11–U15", count = 5 }]
+categories = ["EMU11", "EMU13", "EMU15"]
+
+[[finals]]
+name = "Finale 2 EM"
+description = "Finale 2 Einzel Männlich (U17 und älter)"
+act_type = "single"
+single_male = true
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 6
+slots = [{ label = "U17–U21", count = 4 }, { label = "U23+", count = 4 }]
+categories = ["EMU17", "EMU19", "EMU21", "EMU23", "EMU25", "EMU30", "EMU50", "EMU70", "EM70+"]
+
+[[finals]]
+name = "Finale 1 EW"
+description = "Finale 1 Einzel Weiblich (U11–U15)"
+act_type = "single"
+single_male = false
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 4
+slots = [{ label = "U11–U15", count = 5 }]
+categories = ["EWU11", "EWU13", "EWU15"]
+
+[[finals]]
+name = "Finale 2 EW"
+description = "Finale 2 Einzel Weiblich (U17 und älter)"
+act_type = "single"
+single_male = false
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 6
+slots = [{ label = "U17–U21", count = 4 }, { label = "U23+", count = 4 }]
+categories = ["EWU17", "EWU19", "EWU21", "EWU23", "EWU25", "EWU30", "EWU50", "EWU70", "EW70+"]
+
+[[finals]]
+name = "Finale 1 P"
+description = "Finale 1 Paar (U11–U15)"
+act_type = "pair"
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 2
+slots = [{ label = "U11–U15", count = 5 }]
+categories = ["PU11", "PU13", "PU15"]
+
+[[finals]]
+name = "Finale 2 P"
+description = "Finale 2 Paar (U17 und älter)"
+act_type = "pair"
+einfahrzeit_minutes = 10
+act_duration_minutes = 3
+judge_duration_minutes = 2
+slots = [{ label = "U17–U21", count = 4 }, { label = "U23+", count = 4 }]
+categories = ["PU17", "PU19", "PU21", "PU23", "PU25", "PU30", "PU50", "PU70", "P70+"]
+
+# Timeplan in order. An entry runs a category (its duration comes from the
+# category and its acts), a final (from the final and its slots), or is a
+# custom entry with a label and duration. earliest_start is optional. Example
+# times: replace them with the real ones.
 
 [[timeplan]]
 category = "EMU11"
@@ -618,6 +692,24 @@ category = "PU70"
 
 [[timeplan]]
 category = "P70+"
+
+[[timeplan]]
+final = "Finale 1 EM"
+
+[[timeplan]]
+final = "Finale 2 EM"
+
+[[timeplan]]
+final = "Finale 1 EW"
+
+[[timeplan]]
+final = "Finale 2 EW"
+
+[[timeplan]]
+final = "Finale 1 P"
+
+[[timeplan]]
+final = "Finale 2 P"
 
 [[timeplan]]
 category = "KGU15"

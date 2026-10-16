@@ -87,6 +87,7 @@ pub struct ConfigFile {
     pub photos: PhotosConfig,
     pub competition: Option<CompetitionConfig>,
     pub categories: Vec<CategoryConfig>,
+    pub finals: Vec<FinalConfig>,
     pub timeplan: Vec<TimeplanEntryConfig>,
 }
 
@@ -307,11 +308,38 @@ pub struct CategoryConfig {
     pub judge_duration_minutes: f64,
 }
 
+/// A final: reserved slots for the best riders of the heats, e.g. 5 slots
+/// "U11–U15", planned before the results are known (see `crate::finals`).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FinalConfig {
+    /// Unique; `[[timeplan]] final = …` refers to it.
+    pub name: String,
+    pub description: Option<String>,
+    pub act_type: ActType,
+    #[serde(default)]
+    pub single_male: bool,
+    #[serde(default)]
+    pub einfahrzeit_minutes: f64,
+    #[serde(default)]
+    pub act_duration_minutes: f64,
+    #[serde(default)]
+    pub judge_duration_minutes: f64,
+    /// The slots in start order, as groups like `{ label = "U11–U15", count = 5 }`.
+    pub slots: Vec<crate::finals::SlotGroup>,
+    /// The categories whose acts can be placed in the slots.
+    #[serde(default)]
+    pub categories: Vec<String>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TimeplanEntryConfig {
     /// Name of the category this entry runs. Leave empty for custom entries.
     pub category: Option<String>,
+    /// Name of the final this entry runs, instead of a category.
+    #[serde(rename = "final")]
+    pub final_name: Option<String>,
     /// Label of a custom entry, e.g. "Mittagspause".
     pub label: Option<String>,
     /// Duration of a custom entry.
@@ -377,6 +405,7 @@ pub struct Settings {
     pub photos: Option<crate::photos::PhotosSettings>,
     pub competition: Option<CompetitionConfig>,
     pub categories: Vec<CategoryConfig>,
+    pub finals: Vec<FinalConfig>,
     pub timeplan: Vec<TimeplanEntryConfig>,
     /// Problems that don't stop the server, e.g. insecure defaults.
     pub warnings: Vec<String>,
@@ -491,6 +520,7 @@ impl Settings {
                 }),
             competition: file.competition,
             categories: file.categories,
+            finals: file.finals,
             timeplan: file.timeplan,
             warnings,
         })
@@ -709,8 +739,12 @@ music_upload_end = 2027-01-20T23:59:59+01:00";
             .iter()
             .map(|c| c.name.clone())
             .collect::<Vec<_>>();
-        crate::seed::validate_timeplan(&file.timeplan, &category_names).unwrap();
+        let finals = crate::seed::resolve_finals(&file.finals).unwrap();
+        let final_names = finals.iter().map(|f| f.name.clone()).collect::<Vec<_>>();
+        crate::seed::validate_timeplan(&file.timeplan, &category_names, &final_names).unwrap();
         let warnings = crate::seed::unscheduled_category_warnings(&file.timeplan, &category_names);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        let warnings = crate::seed::unscheduled_final_warnings(&file.timeplan, &final_names);
         assert!(warnings.is_empty(), "{warnings:?}");
     }
 }
