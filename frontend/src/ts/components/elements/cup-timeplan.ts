@@ -377,6 +377,11 @@ export default class CupTimeplan extends LitElement {
   @property({ type: Boolean }) description = false;
   /** Compact light list for admin pages: one line per act. */
   @property({ type: Boolean }) dense = false;
+  /**
+   * Slots left out, e.g. the ones a screen already shows in big: act ids,
+   * finalist slots as `finalist:<id>` (see `slotKey`).
+   */
+  @property({ attribute: false }) hiddenSlots: string[] = [];
 
   /** The acts loaded by the element itself, if `acts` isn't set. */
   @state() private fetchedActs?: Act[];
@@ -460,8 +465,10 @@ export default class CupTimeplan extends LitElement {
   }
 
   private renderBlock(item: TimeplanItem, block: ActsEntry) {
-    const shown = block.slots.filter((slot) =>
-      this.isShown(slotItem(slot).status),
+    const shown = block.slots.filter(
+      (slot) =>
+        this.isShown(slotItem(slot).status) &&
+        !this.hiddenSlots.includes(slotKey(slot)),
     );
     // Empty blocks are skipped, their breaks too, and blocks whose shown
     // slots are all over need no attention either.

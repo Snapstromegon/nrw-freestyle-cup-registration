@@ -1,0 +1,315 @@
+// The data of the club portal (cup-club-portal) and what follows from it: the
+// state of each registration step and the open issues. Only type imports and
+// pure helpers, so the unit tests can import it without a DOM.
+import type { components } from "./bindings";
+import {
+  type ActType,
+  type Competition,
+  getStarterPrice,
+  groupSizeWarning,
+  isGroupActType,
+  MIN_GROUP_SIZE,
+} from "./utils";
+
+export type ClubStarter = components["schemas"]["ClubStarter"];
+export type ClubAct = components["schemas"]["ClubAct"];
+export type ClubGroup = components["schemas"]["ClubGroup"];
+export type GroupSummary = components["schemas"]["GroupSummary"];
+export type Club = components["schemas"]["Club"];
+/** A starter of any club, as admins list them. */
+export type AnyStarter = components["schemas"]["Starter"];
+
+/** Everything the portal loads for a club. */
+export interface ClubData {
+  club: Club;
+  /** Sorted by last name, then first name. */
+  starters: ClubStarter[];
+  acts: ClubAct[];
+  groups: ClubGroup[];
+  /** All groups of the competition, to join one of another club. */
+  allGroups: GroupSummary[];
+  /** For admins: the starters of all clubs, to pick riders of any club. */
+  allStarters?: AnyStarter[];
+}
+
+/** The steps of the registration, in order. */
+export const STEPS = [
+  { id: "verein", label: "Verein", icon: "groups" },
+  { id: "fahrer", label: "Fahrer", icon: "person_add" },
+  { id: "kueren", label: "Küren", icon: "library_music" },
+  { id: "startgeld", label: "Startgeld", icon: "payments" },
+] as const;
+
+export type StepId = (typeof STEPS)[number]["id"];
+
+export const isStepId = (id: string): id is StepId =>
+  STEPS.some((step) => step.id === id);
+
+/** "Anna Muster". */
+export const starterName = (starter: { firstname: string; lastname: string }) =>
+  `${starter.firstname} ${starter.lastname}`;
+
+export const sortStarters = (starters: ClubStarter[]) =>
+  [...starters].sort(
+    (a, b) =>
+      a.lastname.localeCompare(b.lastname, "de") ||
+      a.firstname.localeCompare(b.firstname, "de"),
+  );
+
+/** The order of the act sections: singles, pairs, small, large groups. */
+export const ACT_TYPE_ORDER: ActType[] = [
+  "single",
+  "pair",
+  "group_small",
+  "group_large",
+];
+
+/** The acts a starter rides in (as regular or replacement rider). */
+export const actsOfStarter = (acts: ClubAct[], starterId: string) =>
+  acts.filter((act) => act.participants.some((p) => p.id === starterId));
+
+/** The act of a starter's single or pair, if it exists. */
+export const actOfType = (
+  acts: ClubAct[],
+  starterId: string,
+  type: "single" | "pair",
+) =>
+  acts.find(
+    (act) =>
+      act.act_type === type && act.participants.some((p) => p.id === starterId),
+  );
+
+/**
+ * A pair whose partner isn't linked (yet): the partner rides for another
+ * club and the organizer still has to confirm them, or no partner is named.
+ */
+export const isPendingPair = (starter: ClubStarter) =>
+  starter.pair && !starter.partner_id;
+
+/** Whether a starter is registered for anything. */
+export const hasStart = (starter: ClubStarter) =>
+  starter.single_male ||
+  starter.single_female ||
+  starter.pair ||
+  starter.group_count > 0;
+
+/** Regular riders and replacements of an act or group. */
+export const riderCounts = (participants: { is_replacement: boolean }[]) => {
+  const regular = participants.filter((p) => !p.is_replacement).length;
+  return { regular, replacements: participants.length - regular };
+};
+
+/** Amount, paid and open amount (negative when overpaid), in euros. */
+export const paymentState = (
+  data: Pick<ClubData, "club" | "starters">,
+  competition: Competition | null | undefined,
+) => {
+  const amount = data.starters.reduce(
+    (sum, starter) => sum + getStarterPrice(starter, competition),
+    0,
+  );
+  const paid = data.club.payment ?? 0;
+  const open = Math.round((amount - paid) * 100) / 100;
+  return { amount, paid, open };
+};
+
+export type IssueLevel = "error" | "warn" | "info";
+
+/** Something the club still has to do (or should know), with its step. */
+export interface Issue {
+  level: IssueLevel;
+  step: StepId;
+  text: string;
+  /** Optional act or starter to jump to. */
+  target?: string;
+}
+
+/**
+ * The open issues, most important first. `musicOpen`: music can still be
+ * uploaded, so missing music is something to do.
+ */
+export const clubIssues = (
+  data: ClubData,
+  competition: Competition | null | undefined,
+  { musicOpen = true }: { musicOpen?: boolean } = {},
+): Issue[] => {
+  const issues: Issue[] = [];
+  if (data.starters.length === 0) {
+    issues.push({
+      level: "info",
+      step: "fahrer",
+      text: "Noch keine Fahrer angelegt.",
+    });
+  }
+  for (const starter of data.starters) {
+    if (!hasStart(starter)) {
+      issues.push({
+        level: "warn",
+        step: "kueren",
+        text: `${starterName(starter)} ist noch in keiner Kür.`,
+        target: starter.id,
+      });
+    }
+    if (starter.pair && !starter.partner_name) {
+      issues.push({
+        level: "error",
+        step: "kueren",
+        text: `${starterName(starter)}: Paarkür ohne Partner.`,
+        target: starter.id,
+      });
+    } else if (isPendingPair(starter)) {
+      issues.push({
+        level: "info",
+        step: "kueren",
+        text: `Paarkür ${starterName(starter)} & ${starter.partner_name}: wartet auf Bestätigung durch den Veranstalter.`,
+        target: starter.id,
+      });
+    }
+  }
+  for (const group of data.groups) {
+    const { regular } = riderCounts(group.members);
+    if (regular < MIN_GROUP_SIZE) {
+      issues.push({
+        level: "error",
+        step: "kueren",
+        text: `Gruppe „${group.group_name}“ ist unvollständig (${regular}/${MIN_GROUP_SIZE} Fahrer).`,
+        target: group.id,
+      });
+    } else if (group.conflict) {
+      issues.push({
+        level: "error",
+        step: "kueren",
+        text: group.conflict,
+        target: group.id,
+      });
+    } else {
+      const warning = groupSizeWarning(group.act_type, regular);
+      if (warning) {
+        issues.push({
+          level: "warn",
+          step: "kueren",
+          text: `Gruppe „${group.group_name}“: ${warning}.`,
+          target: group.id,
+        });
+      }
+    }
+  }
+  const ownActs = data.acts.filter(
+    (act) => !act.withdrawn && ownsAct(data, act),
+  );
+  const withoutMusic = ownActs.filter((act) => !act.song_file);
+  if (musicOpen && withoutMusic.length) {
+    issues.push({
+      level: "warn",
+      step: "kueren",
+      text:
+        withoutMusic.length === 1
+          ? `1 Kür ohne Musik.`
+          : `${withoutMusic.length} Küren ohne Musik.`,
+      target: withoutMusic.length === 1 ? withoutMusic[0].id : undefined,
+    });
+  }
+  const withoutTitle = ownActs.filter((act) => !act.name.trim());
+  if (musicOpen && withoutTitle.length) {
+    issues.push({
+      level: "info",
+      step: "kueren",
+      text:
+        withoutTitle.length === 1
+          ? `1 Kür ohne Titel.`
+          : `${withoutTitle.length} Küren ohne Titel.`,
+      target: withoutTitle.length === 1 ? withoutTitle[0].id : undefined,
+    });
+  }
+  const { open } = paymentState(data, competition);
+  if (open >= 0.01) {
+    issues.push({
+      level: "warn",
+      step: "startgeld",
+      text: `Startgeld offen.`,
+    });
+  }
+  const order: IssueLevel[] = ["error", "warn", "info"];
+  return issues.sort((a, b) => order.indexOf(a.level) - order.indexOf(b.level));
+};
+
+/**
+ * Whether the club looks after the act's title, description and music: all
+ * singles and pairs it rides in, and groups it created. A group of another
+ * club is looked after by that club.
+ */
+export const ownsAct = (data: Pick<ClubData, "club">, act: ClubAct) =>
+  !isGroupActType(act.act_type) ||
+  !act.owner_club_id ||
+  act.owner_club_id === data.club.id;
+
+export type StepState = "done" | "open" | "todo";
+
+/** The state of each step and a short summary for the step list. */
+export const stepSummaries = (
+  data: ClubData,
+  competition: Competition | null | undefined,
+  issues: Issue[],
+): Record<StepId, { state: StepState; summary: string }> => {
+  const count = (n: number, one: string, many: string) =>
+    `${n} ${n === 1 ? one : many}`;
+  const blocking = (step: StepId) =>
+    issues.some((issue) => issue.step === step && issue.level !== "info");
+  const { amount, open } = paymentState(data, competition);
+  // A pair with an unconfirmed partner has no act yet, but counts as one.
+  const acts = data.acts.length + data.starters.filter(isPendingPair).length;
+  return {
+    verein: { state: "done", summary: data.club.name },
+    fahrer: {
+      state: data.starters.length ? "done" : "todo",
+      summary: count(data.starters.length, "Fahrer", "Fahrer"),
+    },
+    kueren: {
+      state: acts === 0 ? "todo" : blocking("kueren") ? "open" : "done",
+      summary: (() => {
+        const n = issues.filter(
+          (issue) => issue.step === "kueren" && issue.level !== "info",
+        ).length;
+        return `${count(acts, "Kür", "Küren")}${n ? ` · ${n} offen` : ""}`;
+      })(),
+    },
+    startgeld: {
+      state: amount === 0 ? "todo" : open >= 0.01 ? "open" : "done",
+      summary:
+        amount === 0
+          ? "nichts zu zahlen"
+          : open >= 0.01
+            ? `${formatEuro(open)} offen`
+            : "bezahlt",
+    },
+  };
+};
+
+/** "135 €" or "12,50 €", for compact displays. */
+export const formatEuro = (amount: number) =>
+  `${amount.toLocaleString("de-DE", {
+    minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+    maximumFractionDigits: 2,
+  })}\u00a0€`;
+
+/** Age in whole years on the competition's determining day. */
+export const ageOnDeterminingDay = (
+  birthdate: string | Date,
+  competition: Pick<Competition, "determining_day"> | null | undefined,
+) => {
+  const day = competition ? new Date(competition.determining_day) : new Date();
+  const birth = new Date(birthdate);
+  let age = day.getUTCFullYear() - birth.getUTCFullYear();
+  if (
+    day.getUTCMonth() < birth.getUTCMonth() ||
+    (day.getUTCMonth() === birth.getUTCMonth() &&
+      day.getUTCDate() < birth.getUTCDate())
+  ) {
+    age--;
+  }
+  return age;
+};
+
+/** Whole days from `now` until `date` (negative once it has passed). */
+export const daysUntil = (date: string, now = Date.now()) =>
+  Math.ceil((Date.parse(date) - now) / (24 * 60 * 60 * 1000));

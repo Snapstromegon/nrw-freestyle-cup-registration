@@ -87,6 +87,10 @@ async fn categories_follow_gender_and_age(db: SqlitePool) {
     let starter = |name: &str, birthdate: &str, male: bool, female: bool, pair: bool| {
         let mut body = starter_body(club_id, name, female, pair);
         body["single_male"] = json!(male);
+        if male {
+            // The gender follows from the single.
+            body["gender"] = Value::Null;
+        }
         body["birthdate"] = json!(birthdate);
         body
     };

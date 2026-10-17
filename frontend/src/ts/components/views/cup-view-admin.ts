@@ -1,7 +1,7 @@
 import { consume } from "@lit/context";
 import { Task, TaskStatus } from "@lit/task";
 import { css, html, LitElement, nothing, type TemplateResult } from "lit";
-import { customElement, state } from "lit/decorators.js";
+import { customElement, query, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 import { errorMessage, PollController, unwrap } from "../../api";
 import { client, type components } from "../../apiClient";
@@ -9,6 +9,10 @@ import {
   type SystemStatus,
   systemStatusContext,
 } from "../../contexts/systemStatus";
+import { type PairCandidate, unconfirmedPairs } from "../../pairs";
+import type { PickerOption } from "../elements/cup-rider-picker";
+import "../elements/cup-rider-picker.js";
+import { linkPartners } from "../elements/club/club-actions";
 import { adminStyles } from "../../styles/admin";
 import { iconStyles, resetStyles } from "../../styles/base";
 import {
@@ -240,8 +244,8 @@ const buildIssues = (
     key: "partners",
     tone: "warn",
     label: "Partner nicht zugeordnet",
-    href: "/admin-starters",
-    view: "Starter",
+    href: "#paare",
+    view: "Bestätigen",
     items: unresolved.map(
       (s) => `${participantName(s)} (${s.club_name}) → „${s.partner_name}“`,
     ),
@@ -379,8 +383,8 @@ const openAmount = (open: number, due: number): TemplateResult => {
 
 /**
  * The admin landing page: key figures, things to look at, every club with
- * its starts, music, check-in and payment state (expandable to the full club
- * manager) and the users without a club.
+ * its starts, music, check-in and payment state (linking to the club's
+ * portal, `/?club=<id>`) and the users without a club.
  */
 @customElement("cup-view-admin")
 export default class CupViewAdmin extends LitElement {
@@ -452,18 +456,6 @@ export default class CupViewAdmin extends LitElement {
         }
       }
 
-      .dense tbody tr.detail > td {
-        padding: 0.25rem 0.5rem 0.75rem 1.75rem;
-        background: var(--cup-surface);
-        border-bottom: 2px solid var(--cup-blue-2);
-        white-space: normal;
-        font-size: 14px;
-      }
-
-      .dense tbody tr.detail:hover > td {
-        box-shadow: none;
-      }
-
       /* Auffälligkeiten */
       .issues {
         list-style: none;
@@ -533,20 +525,21 @@ export default class CupViewAdmin extends LitElement {
 
   @state() sort: Sort = { key: "name", desc: false };
   @state() search = "";
-  /** Clubs whose club manager is shown. */
-  @state() expanded: ReadonlySet<string> = new Set();
   /** Check-in times, polled; `null` until the first load. */
   @state() checkIns: CheckInMap | null = null;
   @state() error: string | null = null;
+  @query("#paare") pairsSection?: HTMLDetailsElement;
+
+  /** Unconfirmed pairs: the partner chosen per rider, if not the suggested. */
+  @state() pairChoice = new Map<string, string>();
+  /** Riders whose pair is being confirmed. */
+  @state() linking = new Set<string>();
 
   /**
    * The last data that loaded. A failed reload sets the task's value to
-   * `undefined`; the page keeps showing this instead, so an open club
-   * manager isn't unmounted with its unsaved edits.
+   * `undefined`; the page keeps showing this instead.
    */
   private lastData?: DashboardData;
-  /** Debounces reloads after changes in an expanded club manager. */
-  private refreshTimer?: ReturnType<typeof setTimeout>;
 
   data = new Task(this, {
     task: async () => {
@@ -566,15 +559,27 @@ export default class CupViewAdmin extends LitElement {
     },
   });
 
-  checkInPoll = new PollController(this, 15000, (signal) =>
-    this.refreshCheckIns(signal),
-  );
+  override connectedCallback() {
+    super.connectedCallback?.();
+    window.addEventListener("hashchange", this.onHashChange);
+  }
 
   override disconnectedCallback() {
     super.disconnectedCallback?.();
-    clearTimeout(this.refreshTimer);
-    this.refreshTimer = undefined;
+    window.removeEventListener("hashchange", this.onHashChange);
   }
+
+  /** "#paare" (from the issues) scrolls to the unconfirmed pairs. */
+  private onHashChange = () => {
+    if (location.hash === "#paare" && this.pairsSection) {
+      this.pairsSection.open = true;
+      this.pairsSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
+  checkInPoll = new PollController(this, 15000, (signal) =>
+    this.refreshCheckIns(signal),
+  );
 
   async refreshCheckIns(signal?: AbortSignal) {
     if (!(this.data.value ?? this.lastData)) {
@@ -642,7 +647,7 @@ export default class CupViewAdmin extends LitElement {
     return html`
       <h1 class="sr-only">Übersicht</h1>
       ${this.renderKpis(data, rows)}
-      ${this.renderIssues(issues)}
+      ${this.renderIssues(issues)} ${this.renderUnconfirmedPairs(data)}
       <div class="toolbar">
         <h2>Vereine</h2>
         <input
@@ -654,13 +659,6 @@ export default class CupViewAdmin extends LitElement {
           @input=${this.onSearchInput}
         />
         <span class="spacer"></span>
-        ${
-          this.expanded.size
-            ? html`<button class="btn small" @click=${this.onCollapseAllClick}>
-                Alle zuklappen
-              </button>`
-            : nothing
-        }
         <button
           class="btn small"
           ?disabled=${pending}
@@ -843,20 +841,180 @@ export default class CupViewAdmin extends LitElement {
     </details>`;
   }
 
+  /**
+   * Pair riders whose partner rides for another club. Both clubs register
+   * their rider with the other's name; an admin links them here.
+   */
+  renderUnconfirmedPairs(data: DashboardData) {
+    const pairs = unconfirmedPairs(data.starters);
+    if (!pairs.length) {
+      return html`<details class="block">
+        <summary>
+          Unbestätigte Paarküren <span class="chip ok">keine</span>
+        </summary>
+        <p class="ok-line text-ok">Alle vereinsübergreifenden Paare sind verbunden.</p>
+      </details>`;
+    }
+    const matchLabels: Record<PairCandidate["match"], string> = {
+      mutual: "Namen passen",
+      exact: "Name passt einseitig",
+      similar: "ähnlicher Name",
+    };
+    const rows = pairs.map(({ starter, partner, candidates }) => {
+      const chosenId =
+        this.pairChoice.get(starter.id) ?? partner?.starter.id ?? "";
+      const chosen = candidates.find((c) => c.starter.id === chosenId);
+      const busy = this.linking.has(starter.id);
+      const suggested = new Set(candidates.map((c) => c.starter.id));
+      const nameOf = (s: Starter) => `${s.firstname} ${s.lastname}`;
+      const detail = (s: Starter) =>
+        `(${s.club_name})${s.partner_name ? ` – nennt ${s.partner_name}` : ""}`;
+      // The suggestions first; then everyone without a linked partner, for
+      // pairs the names don't give away (e.g. first names only).
+      const options: PickerOption[] = [
+        ...candidates.map((c) => ({
+          value: c.starter.id,
+          label: nameOf(c.starter),
+          detail: detail(c.starter),
+          group: "Vorschläge",
+        })),
+        ...data.starters
+          .filter(
+            (s) => s.id !== starter.id && !s.partner_id && !suggested.has(s.id),
+          )
+          .sort(
+            (a, b) =>
+              a.firstname.localeCompare(b.firstname, "de") ||
+              a.lastname.localeCompare(b.lastname, "de"),
+          )
+          .map((s) => ({
+            value: s.id,
+            label: nameOf(s),
+            detail: detail(s),
+            group: "Alle Fahrer ohne Partner",
+          })),
+      ];
+      return html`<tr>
+        <td>
+          <a href="/?club=${encodeURIComponent(starter.club_id)}#kueren"
+            >${starter.firstname} ${starter.lastname}</a
+          >
+          <span class="muted">(${starter.club_name})</span>
+        </td>
+        <td>
+          ${
+            starter.partner_name
+              ? starter.partner_name
+              : html`<span class="chip warn">kein Partner angegeben</span>`
+          }
+        </td>
+        <td>
+          <cup-rider-picker
+            label="Partner für ${nameOf(starter)}"
+            placeholder="Partner suchen…"
+            data-id=${starter.id}
+            .options=${options}
+            .value=${chosenId}
+            @change=${this.onPairChoice}
+          ></cup-rider-picker>
+          ${
+            chosen
+              ? html`<span
+                  class="chip ${chosen.match === "similar" ? "warn" : chosen.match === "mutual" ? "ok" : "info"}"
+                  >${matchLabels[chosen.match]}</span
+                >`
+              : chosenId
+                ? html`<span class="chip">von Hand gewählt</span>`
+                : candidates.length
+                  ? nothing
+                  : html`<span class="muted">kein Vorschlag</span>`
+          }
+        </td>
+        <td class="actions">
+          <button
+            class="btn small ${chosen?.match === "mutual" ? "primary" : ""}"
+            data-id=${starter.id}
+            ?disabled=${!chosenId || busy}
+            @click=${this.onConfirmPair}
+          >
+            ${busy ? "Verbindet…" : "Bestätigen"}
+          </button>
+        </td>
+      </tr>`;
+    });
+    return html`<details class="block" id="paare" open>
+      <summary>
+        Unbestätigte Paarküren
+        <span class="chip warn">${pairs.length}</span>
+        <span class="muted"
+          >Paare mit Partnern aus anderen Vereinen: prüfen und verbinden</span
+        >
+      </summary>
+      <div class="scroll">
+        <table class="dense fit">
+          <thead>
+            <tr>
+              <th>Fahrer</th>
+              <th>Nennt als Partner</th>
+              <th>Partner</th>
+              <th class="actions"></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+      </div>
+    </details>`;
+  }
+
+  onPairChoice(e: CustomEvent<{ value: string }>) {
+    const picker = e.currentTarget as HTMLElement;
+    this.pairChoice = new Map(this.pairChoice).set(
+      picker.dataset.id!,
+      e.detail.value,
+    );
+  }
+
+  /** Links the rider to the chosen partner; the server creates the act. */
+  async onConfirmPair(e: Event) {
+    const id = (e.currentTarget as HTMLElement).dataset.id!;
+    const data = this.data.value ?? this.lastData;
+    const starter = data?.starters.find((s) => s.id === id);
+    const pair =
+      data && unconfirmedPairs(data.starters).find((p) => p.starter.id === id);
+    const partnerId = this.pairChoice.get(id) ?? pair?.partner?.starter.id;
+    const partner = data?.starters.find((s) => s.id === partnerId);
+    if (!starter || !partner || !data) {
+      return;
+    }
+    this.linking = new Set(this.linking).add(id);
+    try {
+      // Also pairs riders who aren't registered for a pair yet.
+      await linkPartners(starter, partner, data.starters);
+      const choice = new Map(this.pairChoice);
+      choice.delete(id);
+      this.pairChoice = choice;
+      this.data.run();
+    } catch (error) {
+      this.error = `Paar konnte nicht verbunden werden: ${errorMessage(error)}`;
+    } finally {
+      const linking = new Set(this.linking);
+      linking.delete(id);
+      this.linking = linking;
+    }
+  }
+
   renderClubTable(allRows: ClubRow[]) {
     if (!allRows.length) {
       return html`<p class="empty">Noch keine Vereine angemeldet.</p>`;
     }
     const needle = this.search.trim().toLowerCase();
-    // Expanded clubs stay: hiding them would unmount the club manager and
-    // lose its unsaved edits.
     const rows = needle
-      ? allRows.filter(
-          (row) =>
-            this.expanded.has(row.club.id) ||
-            [row.club.name, row.club.owner_name, row.club.owner_email].some(
-              (text) => text.toLowerCase().includes(needle),
-            ),
+      ? allRows.filter((row) =>
+          [row.club.name, row.club.owner_name, row.club.owner_email].some(
+            (text) => text.toLowerCase().includes(needle),
+          ),
         )
       : [...allRows];
     const { key, desc } = this.sort;
@@ -972,9 +1130,11 @@ export default class CupViewAdmin extends LitElement {
 
   renderClubRow(row: ClubRow, musicTone: string) {
     const { club } = row;
-    const expanded = this.expanded.has(club.id);
-    return html`<tr class=${expanded ? "info" : ""}>
-        <td class="trunc name" title=${club.name}>${club.name}</td>
+    const href = `/?club=${encodeURIComponent(club.id)}`;
+    return html`<tr>
+        <td class="trunc name" title=${club.name}>
+          <a href=${href}>${club.name}</a>
+        </td>
         <td class="contact" title=${`${club.owner_name} <${club.owner_email}>`}>
           ${club.owner_name}
           <a
@@ -1013,29 +1173,16 @@ export default class CupViewAdmin extends LitElement {
         </td>
         <td class="num">${openAmount(row.open, row.due)}</td>
         <td class="actions">
-          <button
+          <a
             class="icon-btn"
-            data-id=${club.id}
-            aria-expanded=${expanded ? "true" : "false"}
-            title=${expanded ? "Verein zuklappen" : "Starter und Küren des Vereins anzeigen"}
-            aria-label=${expanded ? "Verein zuklappen" : "Starter und Küren des Vereins anzeigen"}
-            @click=${this.onToggleClick}
+            href=${href}
+            title="Verein öffnen: Fahrer, Küren und Startgeld"
+            aria-label="${club.name} öffnen"
           >
-            ${expanded ? "expand_more" : "chevron_right"}
-          </button>
+            chevron_right
+          </a>
         </td>
-      </tr>
-      ${
-        expanded
-          ? html`<tr class="detail">
-              <td colspan="16" @club-data-changed=${this.onClubDataChanged}>
-                <cup-context-club club-id=${club.id}>
-                  <cup-club-manager admin-mode></cup-club-manager>
-                </cup-context-club>
-              </td>
-            </tr>`
-          : nothing
-      }`;
+      </tr>`;
   }
 
   renderSortHeader(key: SortKey, label: string, cls = "", hint = "") {
@@ -1070,44 +1217,6 @@ export default class CupViewAdmin extends LitElement {
 
   onSearchInput(e: Event) {
     this.search = (e.target as HTMLInputElement).value;
-  }
-
-  async onToggleClick(e: Event) {
-    const id = (e.currentTarget as HTMLElement).dataset.id!;
-    const expanded = new Set(this.expanded);
-    if (expanded.has(id)) {
-      expanded.delete(id);
-      this.expanded = expanded;
-      return;
-    }
-    expanded.add(id);
-    this.expanded = expanded;
-    // The club manager is only needed once a club is expanded.
-    try {
-      await Promise.all([
-        import("../elements/cup-context-club.js"),
-        import("../elements/cup-club-manager.js"),
-      ]);
-    } catch (error) {
-      this.error = `Vereinsansicht konnte nicht geladen werden: ${errorMessage(error)}`;
-    }
-  }
-
-  onCollapseAllClick() {
-    this.expanded = new Set();
-  }
-
-  /**
-   * A change in an expanded club manager (payment, starters, groups, …):
-   * reload, so the club's row, the KPIs and the issues follow. The club
-   * manager reloads itself; the event is neither cancelled nor stopped here.
-   */
-  onClubDataChanged() {
-    clearTimeout(this.refreshTimer);
-    this.refreshTimer = setTimeout(() => {
-      this.refreshTimer = undefined;
-      this.data.run();
-    }, 300);
   }
 
   onReloadClick() {

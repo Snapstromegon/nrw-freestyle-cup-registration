@@ -3,6 +3,7 @@ pub mod competition;
 pub mod config;
 pub mod demo;
 pub mod finals;
+pub mod gender;
 pub mod groups;
 pub mod http_server;
 pub mod jwt;

@@ -3,6 +3,7 @@ use tracing::instrument;
 use uuid::Uuid;
 
 use crate::{
+    gender::Gender,
     groups::ensure_club_access,
     http_server::{ClientError, HttpError, extractor::auth::Auth},
     reloadable_sqlite::ReloadableSqlite,
@@ -16,6 +17,9 @@ pub struct ClubStarter {
     lastname: String,
     #[serde(with = "time::serde::iso8601")]
     birthdate: time::OffsetDateTime,
+    /// Decides whether the single is Einzel weiblich or männlich. Missing for
+    /// riders registered before it was asked.
+    gender: Option<Gender>,
     single_male: bool,
     single_female: bool,
     pair: bool,
@@ -70,6 +74,7 @@ pub async fn list_club_starters(
             starter.firstname,
             starter.lastname,
             starter.birthdate,
+            starter.gender as "gender: Gender",
             starter.single_male,
             starter.single_female,
             starter.pair,

@@ -28,6 +28,16 @@ import "../elements/cup-waveform.js";
 type Act = components["schemas"]["Act"];
 type Playback = components["schemas"]["Playback"];
 
+/** The timeplan slots of the current and the next start, shown in big. */
+function shownSlots(live: Live) {
+  const start = live.nextStart?.start;
+  return [
+    live.finalist ? `finalist:${live.finalist.id}` : live.act?.id,
+    start && isFinalist(start) ? `finalist:${start.id}` : start?.id,
+    live.next?.act.id,
+  ].filter((id): id is string => !!id);
+}
+
 /**
  * The moderator's screen: the clock, how far the plan is off as a big timer,
  * the current act with its progress (the act time and, while its song plays,
@@ -120,8 +130,8 @@ export default class CupViewAdminModeration extends LitElement {
     }
 
     .delay .value {
-      font-size: 11vh;
-      font-weight: 750;
+      font-size: 7vh;
+      font-weight: 600;
       font-variant-numeric: tabular-nums;
     }
 
@@ -305,6 +315,7 @@ export default class CupViewAdminModeration extends LitElement {
           description
           include-active-act
           include-original-time
+          .hiddenSlots=${live ? shownSlots(live) : []}
         ></cup-timeplan>
       </aside>
     </div>`;

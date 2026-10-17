@@ -92,8 +92,10 @@ verification_token = "00000000-0000-4000-8000-000000000001"
 #
 # Starters: single is "male" or "female" (or missing). A pair starter either
 # names a registered partner (any club, linked both ways), names an
-# unregistered partner with partner_name, or has no partner yet. checked_in_at
-# is set for starters who already checked in on competition day.
+# unregistered partner with partner_name, or has no partner yet. A partner of
+# another club named with partner_name on both sides is an unconfirmed pair:
+# the organizer links them (admin overview). gender defaults to the single's.
+# checked_in_at is set for starters who already checked in on competition day.
 #
 # Every start costs 15 €, group starts (replacements included) as well, but at
 # most 45 € per starter.
@@ -183,7 +185,7 @@ birthdate = 1952-01-20
 single = "male"
 checked_in_at = 2027-06-05T09:31:00+02:00
 
-# 18 starts, 270 € due: paid partially. Half of the starters checked in.
+# 20 starts, 300 € due: paid partially. Half of the starters checked in.
 [[clubs]]
 name = "RSC Köln"
 owner = "Jonas Becker"
@@ -232,13 +234,34 @@ lastname = "Zimmermann"
 birthdate = 1999-12-24
 single = "male"
 
-# Pair partner who isn't registered (yet).
+# Unconfirmed pair with Clara Berg (RV Bonn): both clubs name each other.
 [[clubs.starters]]
 firstname = "Laura"
 lastname = "Schulz"
 birthdate = 2003-07-19
+gender = "female"
 pair = true
 partner_name = "Clara Berg"
+
+# Unconfirmed pair with Ida Naumann (RV Bonn), but both clubs spelled the
+# names a little differently.
+[[clubs.starters]]
+firstname = "Paul"
+lastname = "Krämer"
+birthdate = 2006-10-12
+gender = "male"
+pair = true
+partner_name = "Ida Neumann"
+
+# Unconfirmed pair with Jonas Richter (RV Bonn). Both clubs only entered the
+# first name, so the matcher can't suggest it; an admin can still tell.
+[[clubs.starters]]
+firstname = "Mila"
+lastname = "Hartmann"
+birthdate = 2009-08-21
+gender = "female"
+pair = true
+partner_name = "Jonas"
 
 # Pair without a partner.
 [[clubs.starters]]
@@ -247,7 +270,7 @@ lastname = "Wolf"
 birthdate = 2011-05-25
 pair = true
 
-# 10 starts, 150 € due: nothing paid. Nobody checked in yet.
+# 13 starts, 195 € due: nothing paid. Nobody checked in yet.
 [[clubs]]
 name = "RV Bonn"
 owner = "Lena Schmitz"
@@ -278,6 +301,33 @@ lastname = "Lehmann"
 birthdate = 2004-05-05
 single = "male"
 pair = true
+
+# Unconfirmed pair with Laura Schulz (RSC Köln).
+[[clubs.starters]]
+firstname = "Clara"
+lastname = "Berg"
+birthdate = 2003-02-14
+gender = "female"
+pair = true
+partner_name = "Laura Schulz"
+
+# Unconfirmed pair with Paul Krämer (RSC Köln), spelled "Paul Kramer" here.
+[[clubs.starters]]
+firstname = "Ida"
+lastname = "Naumann"
+birthdate = 2007-03-30
+gender = "female"
+pair = true
+partner_name = "Paul Kramer"
+
+# Unconfirmed pair with Mila Hartmann (RSC Köln), named by first name only.
+[[clubs.starters]]
+firstname = "Jonas"
+lastname = "Richter"
+birthdate = 2008-11-03
+gender = "male"
+pair = true
+partner_name = "Mila"
 
 # Registered, but without any start.
 [[clubs.starters]]

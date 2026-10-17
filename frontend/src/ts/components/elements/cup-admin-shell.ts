@@ -303,7 +303,9 @@ export default class CupAdminShell extends LitElement {
     const isAdmin = !!this.user?.is_admin;
     const name = competitionName(this.systemStatus?.competition);
     return html`<header>
-        <a class="brand" href="/admin" title=${name}>${name}</a>
+        <a class="brand" href="/" title="${name} – zur Vereinsanmeldung"
+          >${name}</a
+        >
         ${isAdmin ? this.renderNav() : nothing}
         <span class="spacer"></span>
         ${isAdmin ? this.renderStatus() : nothing}

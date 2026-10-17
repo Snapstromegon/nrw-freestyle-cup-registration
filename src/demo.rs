@@ -23,6 +23,7 @@ use crate::{
         CategoryConfig, CompetitionConfig, FinalConfig, TimeplanEntryConfig, toml_date,
         toml_datetime_option,
     },
+    gender::Gender,
     groups, seed, utils,
 };
 
@@ -113,6 +114,8 @@ pub struct DemoStarter {
     #[serde(deserialize_with = "toml_date")]
     pub birthdate: Date,
     pub single: Option<Single>,
+    /// Defaults to the single's.
+    pub gender: Option<Single>,
     #[serde(default)]
     pub pair: bool,
     /// Full name of a registered pair partner, in any club. The partner is
@@ -398,18 +401,28 @@ impl DemoData {
                 let single_male = starter.single == Some(Single::Male);
                 let single_female = starter.single == Some(Single::Female);
                 let checked_in_at = starter.checked_in_at.map(utc);
+                if starter.single.is_some()
+                    && starter.gender.is_some_and(|g| Some(g) != starter.single)
+                {
+                    return Err(format!("Starter {name}: single doesn't match the gender."));
+                }
+                let gender = starter.gender.or(starter.single).map(|g| match g {
+                    Single::Female => Gender::Female,
+                    Single::Male => Gender::Male,
+                });
                 sqlx::query!(
                     r#"
                     INSERT INTO starter (
-                        id, club_id, firstname, lastname, birthdate,
+                        id, club_id, firstname, lastname, birthdate, gender,
                         single_male, single_female, pair, partner_name, checked_in_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     "#,
                     id,
                     club_id,
                     starter.firstname,
                     starter.lastname,
                     birthdate,
+                    gender,
                     single_male,
                     single_female,
                     starter.pair,

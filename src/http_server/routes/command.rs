@@ -27,6 +27,7 @@ mod register;
 mod reload_db;
 mod rename_club;
 mod rename_club_group;
+mod replace_act_rider;
 mod request_password_reset;
 mod resend_mail_validation;
 mod reset_block_order;
@@ -81,6 +82,7 @@ pub fn get_command_router() -> OpenApiRouter {
         .routes(routes!(rename_club_group::rename_club_group))
         .routes(routes!(delete_club_group::delete_club_group))
         .routes(routes!(edit_club_act::edit_club_act))
+        .routes(routes!(replace_act_rider::replace_act_rider))
         .routes(routes!(save_act_song::save_act_song))
         .routes(routes!(set_payment::set_payment))
         .routes(routes!(set_photo_hidden::set_photo_hidden))

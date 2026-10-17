@@ -30,6 +30,7 @@ const COMMANDS: &[&str] = &[
     "reload_db",
     "rename_club",
     "rename_club_group",
+    "replace_act_rider",
     "request_password_reset",
     "resend_mail_validation",
     "reset_block_order",

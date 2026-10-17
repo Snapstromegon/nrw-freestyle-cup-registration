@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::{
     act_type::ActType,
+    gender::Gender,
     groups::{ensure_club_access, ensure_partner_in_club},
     http_server::{ClientError, HttpError, extractor::auth::Auth},
     reloadable_sqlite::ReloadableSqlite,
@@ -25,6 +26,10 @@ pub struct AddClubStarterBody {
     lastname: String,
     #[serde(with = "time::serde::iso8601")]
     birthdate: time::OffsetDateTime,
+    /// Required, unless it follows from the single (`single_female` or
+    /// `single_male`).
+    #[serde(default)]
+    gender: Option<Gender>,
     single_male: bool,
     single_female: bool,
     pair: bool,
@@ -62,6 +67,12 @@ pub async fn add_club_starter(
         return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
     }
     check_single_start(body.single_male, body.single_female).map_err(HttpError::ErrorMessages)?;
+    Gender::check_single(body.gender, body.single_male, body.single_female)
+        .map_err(HttpError::ErrorMessages)?;
+    let gender = body
+        .gender
+        .or(Gender::of_single(body.single_male, body.single_female))
+        .ok_or_else(|| HttpError::ErrorMessages("Bitte gib das Geschlecht an.".to_string()))?;
     let db = db.get().await.clone();
     {
         let mut conn = db.acquire().await?;
@@ -114,18 +125,20 @@ pub async fn add_club_starter(
           firstname,
           lastname,
           birthdate,
+          gender,
           single_male,
           single_female,
           pair,
           partner_id,
           partner_name
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
         "#,
         starter_id,
         body.club_id,
         body.firstname,
         body.lastname,
         body.birthdate,
+        gender,
         body.single_male,
         body.single_female,
         body.pair,

@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::{
     act_type::ActType,
+    gender::Gender,
     groups::{ensure_partner_in_club, ensure_starter_access},
     http_server::{ClientError, HttpError, extractor::auth::Auth},
     reloadable_sqlite::ReloadableSqlite,
@@ -23,6 +24,9 @@ pub struct EditClubStarterBody {
     lastname: String,
     #[serde(with = "time::serde::iso8601")]
     birthdate: time::OffsetDateTime,
+    /// Missing keeps the stored gender (or takes the single's).
+    #[serde(default)]
+    gender: Option<Gender>,
     single_male: bool,
     single_female: bool,
     pair: bool,
@@ -62,6 +66,21 @@ pub async fn edit_club_starter(
     check_single_start(body.single_male, body.single_female).map_err(HttpError::ErrorMessages)?;
     let db = db.get().await.clone();
     let club_id = ensure_starter_access(&mut *db.acquire().await?, &auth, body.starter_id).await?;
+
+    let stored_gender = sqlx::query_scalar!(
+        r#"SELECT gender as "gender: Gender" FROM starter WHERE id = ?"#,
+        body.starter_id,
+    )
+    .fetch_one(&db)
+    .await?;
+    // Clients without the field (the admin's starter table) keep the gender;
+    // a single of the other gender then changes it.
+    let gender = match body.gender {
+        Some(gender) => Some(gender),
+        None => Gender::of_single(body.single_male, body.single_female).or(stored_gender),
+    };
+    Gender::check_single(gender, body.single_male, body.single_female)
+        .map_err(HttpError::ErrorMessages)?;
 
     let self_name = format!("{} {}", body.firstname, body.lastname);
 
@@ -144,8 +163,16 @@ pub async fn edit_club_starter(
             }
         }
 
-        // Reset partner of partner
+        // Reset partner of partner; the pair act of the old pair goes with it.
         if let Some(existing_partner_id) = existing_partner_id {
+            if let Some(own_act_id) = get_act_id_for_starter_id(&db, body.starter_id, ActType::Pair)
+                .await
+                .map_err(HttpError::ErrorMessages)?
+            {
+                delete_act(&db, own_act_id)
+                    .await
+                    .map_err(HttpError::ErrorMessages)?;
+            }
             sqlx::query!(
                 r#"
                 UPDATE starter SET partner_id = NULL, partner_name = NULL WHERE id = ?
@@ -206,6 +233,7 @@ pub async fn edit_club_starter(
           firstname = ?,
           lastname = ?,
           birthdate = ?,
+          gender = ?,
           single_male = ?,
           single_female = ?,
           pair = ?,
@@ -216,6 +244,7 @@ pub async fn edit_club_starter(
         body.firstname,
         body.lastname,
         body.birthdate,
+        gender,
         body.single_male,
         body.single_female,
         body.pair,

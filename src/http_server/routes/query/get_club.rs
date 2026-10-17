@@ -17,6 +17,10 @@ pub struct Club {
     /// Short code for the transfer reference, e.g. "EV-K7Q3"; stays the
     /// same when the club is renamed.
     code: String,
+    /// The user who registered the club. Only for the club itself and
+    /// admins.
+    owner_name: Option<String>,
+    owner_email: Option<String>,
 }
 
 #[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
@@ -24,7 +28,8 @@ pub struct GetClubQuery {
     club_id: Option<Uuid>,
 }
 
-/// Get information about a club.
+/// Get information about a club. The owner's name and email address are only
+/// included for the club itself and admins.
 #[utoipa::path(
     get,
     tags=["query", "club"],
@@ -44,7 +49,7 @@ pub async fn get_club(
 ) -> Result<Json<Club>, HttpError> {
     let db = db.get().await.clone();
     let mut club_id = query.club_id;
-    if let Some(auth) = auth
+    if let Some(auth) = &auth
         && club_id.is_none()
     {
         club_id = auth.club_id;
@@ -53,13 +58,29 @@ pub async fn get_club(
         let mut club = sqlx::query_as!(
             Club,
             r#"
-        SELECT id as "id!: Uuid", name, owner_id as "owner_id: Uuid", payment, '' as "code!" FROM clubs WHERE id = ?
+        SELECT
+            clubs.id as "id!: Uuid",
+            clubs.name,
+            clubs.owner_id as "owner_id: Uuid",
+            clubs.payment,
+            '' as "code!",
+            users.name as "owner_name?: String",
+            users.email as "owner_email?: String"
+        FROM clubs LEFT JOIN users ON users.id = clubs.owner_id
+        WHERE clubs.id = ?
         "#,
             club_id
         )
         .fetch_one(&db)
         .await?;
         club.code = club_code(&club.id);
+        let may_see_owner = auth
+            .as_ref()
+            .is_some_and(|auth| auth.is_admin() || auth.club_id == Some(club.id));
+        if !may_see_owner {
+            club.owner_name = None;
+            club.owner_email = None;
+        }
         Ok(Json(club))
     } else {
         Err(HttpError::NotFound)

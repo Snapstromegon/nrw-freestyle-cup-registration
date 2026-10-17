@@ -526,7 +526,10 @@ pub fn email_for(name: &str) -> String {
 /// Body for `add_club_starter`. The birthdate places single female starters in
 /// the seeded `EWU13` category (12 years old on the determining day 2027-06-01).
 pub fn starter_body(club_id: Uuid, firstname: &str, single: bool, pair: bool) -> Value {
+    // A single implies the gender; everyone else needs one.
+    let gender = if single { Value::Null } else { json!("female") };
     json!({
+        "gender": gender,
         "club_id": club_id,
         "firstname": firstname,
         "lastname": "Muster",
