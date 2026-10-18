@@ -45,6 +45,7 @@ mod set_final_published;
 mod set_payment;
 mod set_photo_hidden;
 mod set_song_checked;
+mod set_user_admin;
 mod timeplan_backward;
 mod timeplan_forward;
 mod verify_email;
@@ -87,6 +88,7 @@ pub fn get_command_router() -> OpenApiRouter {
         .routes(routes!(set_payment::set_payment))
         .routes(routes!(set_photo_hidden::set_photo_hidden))
         .routes(routes!(set_song_checked::set_song_checked))
+        .routes(routes!(set_user_admin::set_user_admin))
         .routes(routes!(set_act_withdrawn::set_act_withdrawn))
         .routes(routes!(set_act_order::set_act_order))
         .routes(routes!(set_act_music_started::set_act_music_started))

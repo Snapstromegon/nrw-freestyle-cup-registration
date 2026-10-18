@@ -47,6 +47,7 @@ const COMMANDS: &[&str] = &[
     "set_payment",
     "set_photo_hidden",
     "set_song_checked",
+    "set_user_admin",
     "set_act_withdrawn",
     "timeplan_backward",
     "timeplan_forward",

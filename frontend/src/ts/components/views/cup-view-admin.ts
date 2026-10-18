@@ -9,6 +9,7 @@ import {
   type SystemStatus,
   systemStatusContext,
 } from "../../contexts/systemStatus";
+import { type User as CurrentUser, userContext } from "../../contexts/user";
 import { type PairCandidate, unconfirmedPairs } from "../../pairs";
 import type { PickerOption } from "../elements/cup-rider-picker";
 import "../elements/cup-rider-picker.js";
@@ -522,6 +523,8 @@ export default class CupViewAdmin extends LitElement {
 
   @consume({ context: systemStatusContext, subscribe: true })
   systemStatus: SystemStatus | null = null;
+  @consume({ context: userContext, subscribe: true })
+  currentUser: CurrentUser | null = null;
 
   @state() sort: Sort = { key: "name", desc: false };
   @state() search = "";
@@ -534,6 +537,8 @@ export default class CupViewAdmin extends LitElement {
   @state() pairChoice = new Map<string, string>();
   /** Riders whose pair is being confirmed. */
   @state() linking = new Set<string>();
+  /** Users whose role update is in flight. */
+  @state() updatingUserRoles = new Set<string>();
 
   /**
    * The last data that loaded. A failed reload sets the task's value to
@@ -640,10 +645,7 @@ export default class CupViewAdmin extends LitElement {
     const competition = this.systemStatus?.competition;
     const rows = buildClubRows(data, this.checkIns, competition);
     const issues = buildIssues(data, rows, competition);
-    const ownerIds = new Set(data.clubs.map((c) => c.owner_id));
-    const usersWithoutClub = data.users.filter(
-      (u) => !u.club_id && !ownerIds.has(u.id),
-    );
+    const adminCount = data.users.filter((user) => user.is_admin).length;
     return html`
       <h1 class="sr-only">Übersicht</h1>
       ${this.renderKpis(data, rows)}
@@ -672,22 +674,23 @@ export default class CupViewAdmin extends LitElement {
       ${this.renderClubTable(rows)}
       <details class="block" open>
         <summary>
-          Nutzer ohne Verein
-          <span class="muted">${usersWithoutClub.length}</span>
+          Nutzer
+          <span class="muted">${data.users.length}</span>
         </summary>
         ${
-          usersWithoutClub.length
+          data.users.length
             ? html`<table class="dense fit">
                 <thead>
                   <tr>
                     <th>Name</th>
                     <th>E-Mail</th>
                     <th>Status</th>
+                    <th class="actions">Rolle</th>
                   </tr>
                 </thead>
                 <tbody>
                   ${repeat(
-                    usersWithoutClub,
+                    data.users,
                     (u) => u.id,
                     (u) => html`<tr>
                       <td>${u.name}</td>
@@ -708,11 +711,32 @@ export default class CupViewAdmin extends LitElement {
                           }
                         </span>
                       </td>
+                      <td class="actions">
+                        <button
+                          class="btn small"
+                          data-user-id=${u.id}
+                          ?disabled=${
+                            this.updatingUserRoles.has(u.id) ||
+                            (u.is_admin &&
+                              (u.id === this.currentUser?.id ||
+                                adminCount === 1))
+                          }
+                          @click=${this.onToggleUserAdmin}
+                        >
+                          ${
+                            this.updatingUserRoles.has(u.id)
+                              ? "Speichert…"
+                              : u.is_admin
+                                ? "Adminrechte entziehen"
+                                : "Zum Admin machen"
+                          }
+                        </button>
+                      </td>
                     </tr>`,
                   )}
                 </tbody>
               </table>`
-            : html`<p class="empty">Alle Nutzer gehören zu einem Verein.</p>`
+            : html`<p class="empty">Keine Nutzer registriert.</p>`
         }
       </details>
     `;
@@ -1225,5 +1249,31 @@ export default class CupViewAdmin extends LitElement {
 
   onCloseErrorClick() {
     this.error = null;
+  }
+
+  async onToggleUserAdmin(e: Event) {
+    const userId = (e.currentTarget as HTMLElement).dataset.userId;
+    const user = (this.data.value ?? this.lastData)?.users.find(
+      (candidate) => candidate.id === userId,
+    );
+    if (!user || !userId) {
+      return;
+    }
+
+    this.updatingUserRoles = new Set(this.updatingUserRoles).add(userId);
+    try {
+      unwrap(
+        await client.POST("/api/command/set_user_admin", {
+          body: { user_id: userId, is_admin: !user.is_admin },
+        }),
+      );
+      await this.data.run();
+    } catch (error) {
+      this.error = `Nutzerrolle konnte nicht geändert werden: ${errorMessage(error)}`;
+    } finally {
+      const updating = new Set(this.updatingUserRoles);
+      updating.delete(userId);
+      this.updatingUserRoles = updating;
+    }
   }
 }
