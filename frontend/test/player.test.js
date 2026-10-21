@@ -1,6 +1,6 @@
 /* global Blob, console, setImmediate */
 import assert from "node:assert/strict";
-import { afterEach, beforeEach, describe, mock, test } from "node:test";
+import { afterEach, beforeEach, describe, test, vi } from "vite-plus/test";
 import {
   connectionLabel,
   interpolatePosition,
@@ -206,11 +206,11 @@ const fakeCache = (limit = 2) => {
 
 describe("SongCache", () => {
   beforeEach(() => {
-    mock.method(console, "warn", () => undefined);
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
   });
 
   afterEach(() => {
-    mock.restoreAll();
+    vi.restoreAllMocks();
   });
 
   test("loads the songs into object URLs", async () => {
@@ -277,7 +277,10 @@ describe("SongCache", () => {
     await answer("/b");
     cache.setCurrent("/a");
     cache.clear();
-    assert.deepEqual(revoked.sort(), ["blob:1", "blob:2"]);
+    assert.deepEqual(
+      revoked.sort((a, b) => a.localeCompare(b)),
+      ["blob:1", "blob:2"],
+    );
     assert.deepEqual(cache.list(), []);
   });
 });
@@ -339,13 +342,13 @@ describe("PlayerSocket", () => {
     changes = 0;
     opens = 0;
     name = "A";
-    mock.timers.enable({ apis: ["setTimeout", "Date"] });
-    mock.method(console, "warn", () => undefined);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
   });
 
   afterEach(() => {
-    mock.timers.reset();
-    mock.restoreAll();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   test("connects, receives and sends JSON", () => {
@@ -377,7 +380,7 @@ describe("PlayerSocket", () => {
       const count = FakeSocket.all.length;
       let waited = 0;
       while (FakeSocket.all.length === count) {
-        mock.timers.tick(500);
+        vi.advanceTimersByTime(500);
         waited += 500;
       }
       delays.push(waited);
@@ -389,15 +392,15 @@ describe("PlayerSocket", () => {
     const socket = create();
     socket.open();
     FakeSocket.all[0].serverCloses();
-    mock.timers.tick(1000);
+    vi.advanceTimersByTime(1000);
     FakeSocket.all[1].serverCloses();
     assert.equal(socket.failures, 2);
-    mock.timers.tick(2000);
+    vi.advanceTimersByTime(2000);
     FakeSocket.all[2].serverOpens();
     assert.equal(socket.failures, 0);
     FakeSocket.all[2].serverCloses();
     assert.equal(connectionLabel(socket), "getrennt – neuer Versuch in 1 s");
-    mock.timers.tick(1000);
+    vi.advanceTimersByTime(1000);
     assert.equal(FakeSocket.all.length, 4);
   });
 
@@ -410,7 +413,7 @@ describe("PlayerSocket", () => {
     assert.equal(first.closed, true);
     assert.equal(socket.state, "closed");
     assert.equal(connectionLabel(socket), "getrennt");
-    mock.timers.tick(60_000);
+    vi.advanceTimersByTime(60_000);
     assert.equal(FakeSocket.all.length, 1);
     // Late events of the closed socket change nothing.
     first.onmessage?.({ data: '{"type":"play"}' });

@@ -27,7 +27,8 @@
 # url = "sqlite://./db.sqlite?mode=rwc"              # DATABASE_URL
 
 [smtp]
-# server = "smtp.example.org"                        # SMTP_SERVER
+# server = "smtp.example.org"                        # SMTP_SERVER (or smtp://host:port)
+# For an SMTP URL, put relay credentials in the URL if it requires them.
 # user = "anmeldung@example.org"                     # SMTP_USER
 # password = "…"                                     # SMTP_PASSWORD
 

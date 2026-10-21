@@ -1,6 +1,6 @@
 /* global process, DOMException */
 import assert from "node:assert/strict";
-import { describe, test } from "node:test";
+import { describe, test } from "vite-plus/test";
 import { ApiError, errorMessage, unwrap } from "../src/ts/api.ts";
 import {
   actClubNames,

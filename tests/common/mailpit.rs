@@ -91,7 +91,7 @@ impl Mailpit {
     }
 
     pub fn mailer(&self) -> Mailer {
-        Mailer::from_url(&self.smtp_url, FROM_ADDRESS).unwrap()
+        Mailer::new(&self.smtp_url, "test", "test", FROM_ADDRESS)
     }
 
     async fn get_json(&self, path: &str) -> Value {

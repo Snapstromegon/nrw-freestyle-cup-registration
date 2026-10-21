@@ -1,6 +1,6 @@
 /* global TextEncoder */
 import assert from "node:assert/strict";
-import { describe, test } from "node:test";
+import { describe, test } from "vite-plus/test";
 import { encode } from "uqr";
 import {
   buildEpcPayload,

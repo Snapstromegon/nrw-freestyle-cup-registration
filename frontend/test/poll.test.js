@@ -1,6 +1,6 @@
 /* global console, document, Event, EventTarget, setImmediate */
 import assert from "node:assert/strict";
-import { afterEach, beforeEach, describe, mock, test } from "node:test";
+import { afterEach, beforeEach, describe, test, vi } from "vite-plus/test";
 import { PollController } from "../src/ts/api.ts";
 
 /** Lets pending promise callbacks run (`setImmediate` isn't mocked). */
@@ -47,38 +47,40 @@ describe("PollController", () => {
     globalThis.document = Object.assign(new EventTarget(), {
       visibilityState: "visible",
     });
-    mock.timers.enable({ apis: ["setInterval", "setTimeout"] });
-    mock.method(console, "error", () => undefined);
+    vi.useFakeTimers({
+      toFake: ["setInterval", "clearInterval", "setTimeout", "clearTimeout"],
+    });
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
   });
 
   afterEach(() => {
-    mock.timers.reset();
-    mock.restoreAll();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
     delete globalThis.document;
   });
 
   test("runs every interval, not on connect", async () => {
     const { calls } = connected();
-    mock.timers.tick(999);
+    vi.advanceTimersByTime(999);
     assert.equal(calls.length, 0);
-    mock.timers.tick(1);
+    vi.advanceTimersByTime(1);
     assert.equal(calls.length, 1);
     await flush();
-    mock.timers.tick(1000);
+    vi.advanceTimersByTime(1000);
     assert.equal(calls.length, 2);
   });
 
   test("skips ticks while a call is still running", async () => {
     const pending = deferred();
     const { calls } = connected(() => pending.promise);
-    mock.timers.tick(1000);
-    mock.timers.tick(1000);
+    vi.advanceTimersByTime(1000);
+    vi.advanceTimersByTime(1000);
     await flush();
-    mock.timers.tick(1000);
+    vi.advanceTimersByTime(1000);
     assert.equal(calls.length, 1);
     pending.resolve();
     await flush();
-    mock.timers.tick(1000);
+    vi.advanceTimersByTime(1000);
     assert.equal(calls.length, 2);
   });
 
@@ -97,35 +99,35 @@ describe("PollController", () => {
   test("pauses while the page is hidden and runs at once when shown", async () => {
     const { calls } = connected();
     setVisibility("hidden");
-    mock.timers.tick(5000);
+    vi.advanceTimersByTime(5000);
     assert.equal(calls.length, 0);
     setVisibility("visible");
     assert.equal(calls.length, 1);
     await flush();
-    mock.timers.tick(1000);
+    vi.advanceTimersByTime(1000);
     assert.equal(calls.length, 2);
   });
 
   test("doesn't start while the page is hidden", () => {
     document.visibilityState = "hidden";
     const { calls } = connected();
-    mock.timers.tick(5000);
+    vi.advanceTimersByTime(5000);
     assert.equal(calls.length, 0);
   });
 
   test("stops on disconnect and resumes on reconnect", async () => {
     const { poll, calls } = connected();
     poll.hostDisconnected();
-    mock.timers.tick(5000);
+    vi.advanceTimersByTime(5000);
     setVisibility("visible");
     assert.equal(calls.length, 0);
     poll.hostConnected();
-    mock.timers.tick(1000);
+    vi.advanceTimersByTime(1000);
     assert.equal(calls.length, 1);
     await flush();
     // Connecting again doesn't start a second timer.
     poll.hostConnected();
-    mock.timers.tick(1000);
+    vi.advanceTimersByTime(1000);
     assert.equal(calls.length, 2);
   });
 
@@ -133,11 +135,11 @@ describe("PollController", () => {
     const { calls } = connected(() => {
       throw new Error("Kaputt");
     });
-    mock.timers.tick(1000);
+    vi.advanceTimersByTime(1000);
     await flush();
-    assert.equal(console.error.mock.callCount(), 1);
-    assert.equal(console.error.mock.calls[0].arguments[0].message, "Kaputt");
-    mock.timers.tick(1000);
+    assert.equal(console.error.mock.calls.length, 1);
+    assert.equal(console.error.mock.calls[0][0].message, "Kaputt");
+    vi.advanceTimersByTime(1000);
     assert.equal(calls.length, 2);
   });
 
@@ -145,7 +147,7 @@ describe("PollController", () => {
     // Never settles, like a request lost on the network.
     const { calls } = connected(() => new Promise(() => undefined));
     for (let i = 0; i < 11; i++) {
-      mock.timers.tick(1000);
+      vi.advanceTimersByTime(1000);
       await flush();
     }
     // The first call started at 1 s and timed out at 11 s (at least 10 s).
@@ -153,29 +155,29 @@ describe("PollController", () => {
     const [signal] = calls;
     assert.equal(signal.aborted, true);
     assert.equal(signal.reason.name, "TimeoutError");
-    assert.equal(console.error.mock.calls[0].arguments[0], signal.reason);
-    mock.timers.tick(1000);
+    assert.equal(console.error.mock.calls[0][0], signal.reason);
+    vi.advanceTimersByTime(1000);
     assert.equal(calls.length, 2);
     assert.equal(calls[1].aborted, false);
   });
 
   test("uses three intervals or a custom time limit", async () => {
     const { calls } = connected(() => new Promise(() => undefined), 2500);
-    mock.timers.tick(1000);
+    vi.advanceTimersByTime(1000);
     await flush();
-    mock.timers.tick(2500);
+    vi.advanceTimersByTime(2500);
     await flush();
     assert.equal(calls[0].aborted, true);
-    mock.timers.tick(500);
+    vi.advanceTimersByTime(500);
     assert.equal(calls.length, 2);
   });
 
   test("doesn't abort a call that finished in time", async () => {
     const { calls } = connected(() => Promise.resolve());
-    mock.timers.tick(1000);
+    vi.advanceTimersByTime(1000);
     await flush();
-    mock.timers.tick(30_000);
+    vi.advanceTimersByTime(30_000);
     assert.equal(calls[0].aborted, false);
-    assert.equal(console.error.mock.callCount(), 0);
+    assert.equal(console.error.mock.calls.length, 0);
   });
 });

@@ -6,6 +6,16 @@ use common::mailpit::{FROM_ADDRESS, Mailpit};
 use nrw_freestyle_cup_registration::mailer::Mailer;
 
 #[tokio::test]
+async fn creates_transport_from_smtp_url_for_local_mail_services() {
+    let _mailer = Mailer::new(
+        "smtp://localhost:1025",
+        "noreply@localhost",
+        "test-only",
+        FROM_ADDRESS,
+    );
+}
+
+#[tokio::test]
 async fn sends_plain_text_mail() {
     let mailpit = Mailpit::start().await;
 

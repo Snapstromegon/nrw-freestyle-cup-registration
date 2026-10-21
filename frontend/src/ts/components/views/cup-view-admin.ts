@@ -2,6 +2,7 @@ import { consume } from "@lit/context";
 import { Task, TaskStatus } from "@lit/task";
 import { css, html, LitElement, nothing, type TemplateResult } from "lit";
 import { customElement, query, state } from "lit/decorators.js";
+import { ifDefined } from "lit/directives/if-defined.js";
 import { repeat } from "lit/directives/repeat.js";
 import { errorMessage, PollController, unwrap } from "../../api";
 import { client, type components } from "../../apiClient";
@@ -1214,7 +1215,7 @@ export default class CupViewAdmin extends LitElement {
     return html`<th
       class="sortable ${cls}"
       data-key=${key}
-      title=${hint || nothing}
+      title=${ifDefined(hint)}
       tabindex="0"
       aria-sort=${sorted ? (this.sort.desc ? "descending" : "ascending") : "none"}
       @click=${this.onSortClick}

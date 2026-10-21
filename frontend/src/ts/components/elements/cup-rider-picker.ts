@@ -149,6 +149,7 @@ export default class CupRiderPicker extends LitElement {
   @query("input") input!: HTMLInputElement;
   @query("[popover]") list!: HTMLElement;
 
+  // eslint-disable-next-line no-useless-assignment -- read by the next picker
   private readonly listId = `rider-picker-${nextId++}`;
   /** The animation frame that keeps the list at the field. */
   private frame = 0;

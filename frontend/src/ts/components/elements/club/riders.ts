@@ -30,24 +30,22 @@ export const ridersOf = (data: ClubData, admin: boolean): Rider[] => {
   }
   const others = data.allStarters
     .filter((s: AnyStarter) => s.club_id !== data.club.id)
-    .map(
-      (s): Rider => ({
-        id: s.id,
-        club_id: s.club_id,
-        club_name: s.club_name,
-        firstname: s.firstname,
-        lastname: s.lastname,
-        birthdate: s.birthdate,
-        gender: s.gender,
-        single_male: s.single_male,
-        single_female: s.single_female,
-        pair: s.pair,
-        partner_id: s.partner_id,
-        partner_name: s.partner_name,
-        group_count: s.group_count,
-        waived_count: s.waived_count,
-      }),
-    )
+    .map((s): Rider => ({
+      id: s.id,
+      club_id: s.club_id,
+      club_name: s.club_name,
+      firstname: s.firstname,
+      lastname: s.lastname,
+      birthdate: s.birthdate,
+      gender: s.gender,
+      single_male: s.single_male,
+      single_female: s.single_female,
+      pair: s.pair,
+      partner_id: s.partner_id,
+      partner_name: s.partner_name,
+      group_count: s.group_count,
+      waived_count: s.waived_count,
+    }))
     .sort(byFirstname);
   return [...own, ...others];
 };

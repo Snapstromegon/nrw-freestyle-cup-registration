@@ -9,12 +9,21 @@ pub struct Mailer {
 }
 
 impl Mailer {
+    /// `server` can be a relay hostname (using `username` and `password` for
+    /// SMTP authentication) or an `smtp://`/`smtps://` URL. Include URL
+    /// credentials in the URL when required; `from_address` is always the
+    /// sender address.
     pub fn new(server: &str, username: &str, password: &str, from_address: &str) -> Self {
-        let creds = Credentials::new(username.to_owned(), password.to_owned());
-        let transport = lettre::AsyncSmtpTransport::<Tokio1Executor>::relay(server)
-            .unwrap()
-            .credentials(creds)
-            .build();
+        let transport = if server.starts_with("smtp://") || server.starts_with("smtps://") {
+            AsyncSmtpTransport::<Tokio1Executor>::from_url(server)
+                .expect("invalid SMTP server configuration")
+                .build()
+        } else {
+            AsyncSmtpTransport::<Tokio1Executor>::relay(server)
+                .expect("invalid SMTP server configuration")
+                .credentials(Credentials::new(username.to_owned(), password.to_owned()))
+                .build()
+        };
         Self {
             transport,
             from_address: from_address.to_owned(),

@@ -275,11 +275,11 @@ export class SongCache {
       .filter((entry) => entry.state !== "error")
       .map((entry) => entry.url);
     const plan = prefetchPlan(usable, this.wanted, this.current, this.limit);
-    for (const entry of [...this.entries.values()]) {
-      if (entry.state === "error" || plan.evict.includes(entry.url)) {
-        this.free(entry.url);
-      }
-    }
+    this.entries
+      .values()
+      .filter((entry) => entry.state === "loading")
+      .filter((entry) => !plan.fetch.includes(entry.url))
+      .forEach((entry) => this.free(entry.url));
     for (const url of plan.fetch) {
       void this.load(url);
     }
