@@ -164,11 +164,13 @@ export default class CupContextUser extends LitElement {
     event.preventDefault();
     const form = event.target as HTMLFormElement;
     const formData = new FormData(form);
-    const response = await client.POST("/api/command/login", {
+    const response = await client.login({
       body: {
         email: formData.get("email") as string,
         password: formData.get("password") as string,
       },
+      // Errors are shown below, not thrown.
+      throwOnError: false,
     });
     if (response.response.status === 401) {
       this.error = "Invalid email or password.";

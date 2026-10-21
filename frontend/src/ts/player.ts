@@ -4,18 +4,17 @@
 //
 // This module only has type imports and touches no DOM API at import time,
 // so the unit tests can import it in Node.
-import type { components } from "./bindings";
+import type { schemas } from "./apiClient";
 
-type Schemas = components["schemas"];
-export type ToPlayer = Schemas["ToPlayer"];
-export type ToController = Schemas["ToController"];
-export type ControllerMessage = Schemas["ControllerMessage"];
-export type PlayerMessage = Schemas["PlayerMessage"];
-export type HubState = Schemas["HubState"];
-export type PlayerStatus = Schemas["PlayerStatus"];
-export type PlayerInfo = Schemas["PlayerInfo"];
-export type PlaybackState = Schemas["PlaybackState"];
-export type Song = Schemas["Song"];
+export type ToPlayer = schemas.ToPlayer;
+export type ToController = schemas.ToController;
+export type ControllerMessage = schemas.ControllerMessage;
+export type PlayerMessage = schemas.PlayerMessage;
+export type HubState = schemas.HubState;
+export type PlayerStatus = schemas.PlayerStatus;
+export type PlayerInfo = schemas.PlayerInfo;
+export type PlaybackState = schemas.PlaybackState;
+export type Song = schemas.Song;
 
 export type Role = "controller" | "player";
 
@@ -277,8 +276,10 @@ export class SongCache {
     const plan = prefetchPlan(usable, this.wanted, this.current, this.limit);
     this.entries
       .values()
-      .filter((entry) => entry.state === "loading")
-      .filter((entry) => !plan.fetch.includes(entry.url))
+      .filter(
+        (entry) => entry.state === "error" || plan.evict.includes(entry.url),
+      )
+      .toArray()
       .forEach((entry) => this.free(entry.url));
     for (const url of plan.fetch) {
       void this.load(url);

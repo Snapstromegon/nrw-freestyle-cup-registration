@@ -131,10 +131,12 @@ export default class CupViewRequestPasswordReset extends LitElement {
       email: string;
     };
 
-    const resp = await client.POST("/api/command/request_password_reset", {
+    const resp = await client.requestPasswordReset({
       body: {
         email: data.email,
       },
+      // Errors are shown below, not thrown.
+      throwOnError: false,
     });
 
     if (resp.response.status === 404) {

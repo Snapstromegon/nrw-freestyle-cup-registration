@@ -4,7 +4,7 @@ import { customElement, query, state } from "lit/decorators.js";
 import { classMap } from "lit/directives/class-map.js";
 import { repeat } from "lit/directives/repeat.js";
 import { errorMessage, unwrap } from "../../api";
-import { client, type components } from "../../apiClient";
+import { client, type schemas } from "../../apiClient";
 import { adminStyles } from "../../styles/admin";
 import { iconStyles, resetStyles } from "../../styles/base";
 import {
@@ -17,7 +17,7 @@ import {
 } from "../../utils";
 import "../elements/cup-admin-finals.js";
 
-type Category = components["schemas"]["Category"];
+type Category = schemas.Category;
 
 interface Data {
   categories: Category[];
@@ -256,19 +256,19 @@ export default class CupViewAdminCategories extends LitElement {
     args: () => [],
     task: async (): Promise<Data> => {
       const [categories, acts] = await Promise.all([
-        client.GET("/api/query/list_categories"),
-        client.GET("/api/query/list_acts"),
+        unwrap(client.listCategories()),
+        unwrap(client.listActs()),
       ]);
       const actCounts = new Map<string, number>();
       let uncategorized = 0;
-      for (const act of unwrap(acts)) {
+      for (const act of acts) {
         if (act.category) {
           actCounts.set(act.category, (actCounts.get(act.category) ?? 0) + 1);
         } else {
           uncategorized++;
         }
       }
-      this.last = { categories: unwrap(categories), actCounts, uncategorized };
+      this.last = { categories: categories, actCounts, uncategorized };
       return this.last;
     },
   });
@@ -933,10 +933,10 @@ export default class CupViewAdminCategories extends LitElement {
     this.error = "";
     try {
       if (editing.original === null) {
-        unwrap(await client.POST("/api/command/add_category", { body }));
+        await unwrap(client.addCategory({ body }));
       } else {
-        unwrap(
-          await client.POST("/api/command/edit_category", {
+        await unwrap(
+          client.editCategory({
             body: { ...body, name: editing.original, new_name: body.name },
           }),
         );
@@ -977,15 +977,13 @@ export default class CupViewAdminCategories extends LitElement {
     }
     await this.command(`Löschen von „${name}“ fehlgeschlagen`, async () => {
       if (carry) {
-        unwrap(
-          await client.POST("/api/command/edit_timeplan_entry", {
+        await unwrap(
+          client.editTimeplanEntry({
             body: carry.body,
           }),
         );
       }
-      unwrap(
-        await client.POST("/api/command/delete_category", { body: { name } }),
-      );
+      await unwrap(client.deleteCategory({ body: { name } }));
       if (this.editing?.original === name) {
         this.editing = null;
       }
@@ -999,9 +997,7 @@ export default class CupViewAdminCategories extends LitElement {
    */
   private async timeplanCarryOver(name: string) {
     try {
-      const [first, next] = unwrap(
-        await client.GET("/api/query/list_timeplan"),
-      );
+      const [first, next] = await unwrap(client.listTimeplan());
       const start = first?.earliest_start_time;
       if (first?.category !== name || !next || !start) {
         return null;
@@ -1034,12 +1030,14 @@ export default class CupViewAdminCategories extends LitElement {
   private async onMoveUp(e: Event) {
     const name = (e.currentTarget as HTMLElement).dataset.name;
     if (name) {
-      await this.command("Verschieben fehlgeschlagen", async () =>
-        unwrap(
-          await client.POST("/api/command/move_category_up", {
-            body: { name },
-          }),
-        ),
+      await this.command(
+        "Verschieben fehlgeschlagen",
+        async () =>
+          await unwrap(
+            client.moveCategoryUp({
+              body: { name },
+            }),
+          ),
       );
     }
   }
@@ -1047,12 +1045,14 @@ export default class CupViewAdminCategories extends LitElement {
   private async onMoveDown(e: Event) {
     const name = (e.currentTarget as HTMLElement).dataset.name;
     if (name) {
-      await this.command("Verschieben fehlgeschlagen", async () =>
-        unwrap(
-          await client.POST("/api/command/move_category_down", {
-            body: { name },
-          }),
-        ),
+      await this.command(
+        "Verschieben fehlgeschlagen",
+        async () =>
+          await unwrap(
+            client.moveCategoryDown({
+              body: { name },
+            }),
+          ),
       );
     }
   }

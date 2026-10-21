@@ -4,7 +4,7 @@ import { customElement, state } from "lit/decorators.js";
 import { classMap } from "lit/directives/class-map.js";
 import { repeat } from "lit/directives/repeat.js";
 import { errorMessage, unwrap } from "../../api";
-import { client, type components } from "../../apiClient";
+import { client, type schemas } from "../../apiClient";
 import { adminStyles } from "../../styles/admin";
 import { iconStyles, resetStyles } from "../../styles/base";
 import {
@@ -17,9 +17,9 @@ import {
   parseSlotGroups,
 } from "../../utils";
 
-type Final = components["schemas"]["Final"];
-type Category = components["schemas"]["Category"];
-type Act = components["schemas"]["Act"];
+type Final = schemas.Final;
+type Category = schemas.Category;
+type Act = schemas.Act;
 
 /** The row being edited, with the values as typed. */
 interface FinalDraft {
@@ -197,22 +197,20 @@ export default class CupAdminFinals extends LitElement {
   private finals = new Task(this, {
     args: () => [],
     task: async (_args, { signal }) =>
-      unwrap(await client.GET("/api/query/list_finals", { signal })),
+      await unwrap(client.listFinals({ signal })),
   });
 
   private categories = new Task(this, {
     args: () => [],
     task: async (_args, { signal }) =>
-      unwrap(await client.GET("/api/query/list_categories", { signal })),
+      await unwrap(client.listCategories({ signal })),
   });
 
   /** The acts, loaded once a placement is opened. */
   private acts = new Task(this, {
     args: () => [this.placing !== null],
     task: async ([placing], { signal }) =>
-      placing
-        ? unwrap(await client.GET("/api/query/list_acts", { signal }))
-        : undefined,
+      placing ? await unwrap(client.listActs({ signal })) : undefined,
   });
 
   override render() {
@@ -851,12 +849,14 @@ export default class CupAdminFinals extends LitElement {
         slot_id: slot.id,
         act_id: placing.draft[slot.id] || null,
       }));
-    await this.command("Platzierung nicht gespeichert", async () =>
-      unwrap(
-        await client.POST("/api/command/set_final_placement", {
-          body: { name: final.name, slots },
-        }),
-      ),
+    await this.command(
+      "Platzierung nicht gespeichert",
+      async () =>
+        await unwrap(
+          client.setFinalPlacement({
+            body: { name: final.name, slots },
+          }),
+        ),
     );
     // Reset to what was saved; a failed save keeps the draft.
     const saved = this.finalByName(final.name);
@@ -888,8 +888,8 @@ export default class CupAdminFinals extends LitElement {
         ? "Veröffentlichen fehlgeschlagen"
         : "Zurückziehen fehlgeschlagen",
       async () =>
-        unwrap(
-          await client.POST("/api/command/set_final_published", {
+        await unwrap(
+          client.setFinalPublished({
             body: { name: final.name, published },
           }),
         ),
@@ -960,8 +960,8 @@ export default class CupAdminFinals extends LitElement {
     };
     await this.command("Speichern fehlgeschlagen", async () => {
       if (original) {
-        unwrap(
-          await client.POST("/api/command/edit_final", {
+        await unwrap(
+          client.editFinal({
             body: {
               ...fields,
               name: original.name,
@@ -970,8 +970,8 @@ export default class CupAdminFinals extends LitElement {
           }),
         );
       } else {
-        unwrap(
-          await client.POST("/api/command/add_final", {
+        await unwrap(
+          client.addFinal({
             body: { ...fields, name: draft.name.trim() },
           }),
         );
@@ -996,12 +996,14 @@ export default class CupAdminFinals extends LitElement {
     ) {
       return;
     }
-    await this.command("Löschen fehlgeschlagen", async () =>
-      unwrap(
-        await client.POST("/api/command/delete_final", {
-          body: { name: final.name },
-        }),
-      ),
+    await this.command(
+      "Löschen fehlgeschlagen",
+      async () =>
+        await unwrap(
+          client.deleteFinal({
+            body: { name: final.name },
+          }),
+        ),
     );
   }
 

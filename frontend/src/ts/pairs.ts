@@ -2,9 +2,9 @@
 // another club isn't linked until an admin confirms it. These helpers find
 // the likely partner by the names the clubs entered. Only type imports, so
 // the unit tests can import it without a DOM.
-import type { components } from "./bindings";
+import type { schemas } from "./apiClient";
 
-type Starter = components["schemas"]["Starter"];
+type Starter = schemas.Starter;
 
 /** A name for comparing: lower case, without accents, ß → ss, ä → a. */
 export const normalizeName = (name: string) =>

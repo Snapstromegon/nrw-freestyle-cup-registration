@@ -2,7 +2,7 @@ import { css, html, LitElement, nothing } from "lit";
 import { customElement, query, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 import { errorMessage, PollController, unwrap } from "../../api";
-import { client, type components } from "../../apiClient";
+import { client, type schemas } from "../../apiClient";
 import { adminStyles } from "../../styles/admin";
 import { iconStyles, resetStyles } from "../../styles/base";
 import {
@@ -24,10 +24,10 @@ import {
 import "../elements/cup-waveform.js";
 import "../elements/cup-act-participants.js";
 
-type Act = components["schemas"]["Act"];
-type Category = components["schemas"]["Category"];
-type ClubOverview = components["schemas"]["ClubOverview"];
-type TimeplanEntry = components["schemas"]["TimeplanListEntry"];
+type Act = schemas.Act;
+type Category = schemas.Category;
+type ClubOverview = schemas.ClubOverview;
+type TimeplanEntry = schemas.TimeplanListEntry;
 
 type Filter = "noMusic" | "unchecked" | "notCheckedIn" | "noCategory";
 
@@ -409,17 +409,17 @@ export default class CupViewAdminActsOverview extends LitElement {
   private async load(signal?: AbortSignal) {
     try {
       const [clubs, acts, categories, checkIns, timeplan] = await Promise.all([
-        client.GET("/api/query/list_clubs", { signal }),
-        client.GET("/api/query/list_acts", { signal }),
-        client.GET("/api/query/list_categories", { signal }),
-        client.GET("/api/query/list_check_ins", { signal }),
-        client.GET("/api/query/list_timeplan", { signal }),
+        unwrap(client.listClubs({ signal })),
+        unwrap(client.listActs({ signal })),
+        unwrap(client.listCategories({ signal })),
+        unwrap(client.listCheckIns({ signal })),
+        unwrap(client.listTimeplan({ signal })),
       ]);
-      this.clubs = unwrap(clubs);
-      this.setActs(unwrap(acts));
-      this.categories = unwrap(categories);
-      this.checkIns = checkInMap(unwrap(checkIns));
-      this.setTimeplan(unwrap(timeplan));
+      this.clubs = clubs;
+      this.setActs(acts);
+      this.categories = categories;
+      this.checkIns = checkInMap(checkIns);
+      this.setTimeplan(timeplan);
       this.loaded = true;
       this.error = null;
       this.pollError = null;
@@ -439,15 +439,15 @@ export default class CupViewAdminActsOverview extends LitElement {
     const version = this.version;
     try {
       const [acts, checkIns, timeplan] = await Promise.all([
-        client.GET("/api/query/list_acts", { signal }),
-        client.GET("/api/query/list_check_ins", { signal }),
-        client.GET("/api/query/list_timeplan", { signal }),
+        unwrap(client.listActs({ signal })),
+        unwrap(client.listCheckIns({ signal })),
+        unwrap(client.listTimeplan({ signal })),
       ]);
       if (version === this.version) {
-        this.setActs(unwrap(acts));
+        this.setActs(acts);
       }
-      this.checkIns = checkInMap(unwrap(checkIns));
-      this.setTimeplan(unwrap(timeplan));
+      this.checkIns = checkInMap(checkIns);
+      this.setTimeplan(timeplan);
       this.pollError = null;
     } catch (error) {
       // Shown apart from command errors: the next poll may succeed again.
@@ -1275,8 +1275,8 @@ export default class CupViewAdminActsOverview extends LitElement {
     const checked = input.checked;
     this.updateAct(id, { song_checked: checked });
     try {
-      unwrap(
-        await client.POST("/api/command/set_song_checked", {
+      await unwrap(
+        client.setSongChecked({
           body: { act_id: id, checked },
         }),
       );
@@ -1311,7 +1311,7 @@ export default class CupViewAdminActsOverview extends LitElement {
       return;
     }
     try {
-      unwrap(await client.POST("/api/command/set_act_withdrawn", { body }));
+      await unwrap(client.setActWithdrawn({ body }));
       // The category changes on the server.
       await this.load();
     } catch (error) {
@@ -1392,8 +1392,8 @@ export default class CupViewAdminActsOverview extends LitElement {
     try {
       // One after the other: the server has no batch command.
       for (const [act, order] of orders) {
-        unwrap(
-          await client.POST("/api/command/set_act_order", {
+        await unwrap(
+          client.setActOrder({
             body: { act_id: act.id, order },
           }),
         );

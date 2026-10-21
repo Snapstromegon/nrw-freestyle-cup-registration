@@ -1085,22 +1085,26 @@ describe("errorMessage", () => {
 });
 
 describe("unwrap", () => {
-  // The parts of a fetch Response that unwrap reads.
-  const response = (status) => ({ ok: status >= 200 && status < 300, status });
+  // The parts of the ResponseError the generated client throws.
+  const responseError = (status, data) =>
+    Object.assign(new Error(`failed with status ${status}`), {
+      name: "ResponseError",
+      status,
+      data,
+    });
 
-  test("returns the data of a successful response", () => {
+  test("returns the data of a successful call", async () => {
     const data = [{ id: 1 }];
-    assert.equal(unwrap({ data, response: response(200) }), data);
-    assert.equal(unwrap({ data }), data);
+    assert.equal(await unwrap(Promise.resolve({ status: 200, data })), data);
   });
 
-  test("throws an ApiError with a German message", () => {
-    assert.throws(
-      () =>
-        unwrap({
-          error: { type: "StatusCode", message: 403 },
-          response: response(403),
-        }),
+  test("throws an ApiError with a German message", async () => {
+    await assert.rejects(
+      unwrap(
+        Promise.reject(
+          responseError(403, { type: "StatusCode", message: 403 }),
+        ),
+      ),
       (error) =>
         error instanceof ApiError &&
         error instanceof Error &&
@@ -1109,15 +1113,16 @@ describe("unwrap", () => {
     );
   });
 
-  test("throws for failed responses without a body", () => {
-    assert.throws(
-      () =>
-        unwrap({
-          error: undefined,
-          response: response(404),
-        }),
-      { message: "Nicht gefunden" },
-    );
+  test("throws for failed responses without a body", async () => {
+    await assert.rejects(unwrap(Promise.reject(responseError(404))), {
+      message: "Nicht gefunden",
+      status: 404,
+    });
+  });
+
+  test("passes other errors on", async () => {
+    const offline = new TypeError("Failed to fetch");
+    await assert.rejects(unwrap(Promise.reject(offline)), offline);
   });
 });
 

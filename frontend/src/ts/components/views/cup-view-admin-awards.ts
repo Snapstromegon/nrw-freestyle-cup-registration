@@ -5,7 +5,7 @@ import { keyed } from "lit/directives/keyed.js";
 import { repeat } from "lit/directives/repeat.js";
 import { PollController, unwrap } from "../../api";
 import { client } from "../../apiClient";
-import type { components } from "../../bindings";
+import type { schemas } from "../../apiClient";
 import {
   type ControllerMessage,
   connectionLabel,
@@ -23,7 +23,7 @@ import { iconStyles, resetStyles } from "../../styles/base";
 import { actMatchesSearch, actParticipantsLabel, songFile } from "../../utils";
 import "../elements/cup-waveform.js";
 
-type Act = components["schemas"]["Act"];
+type Act = schemas.Act;
 
 /**
  * The award ceremony's music: search the acts' songs, queue them and play
@@ -188,7 +188,7 @@ export default class CupViewAdminAwards extends LitElement {
   });
 
   actsPoll = new PollController(this, 60_000, async (signal) => {
-    this.acts = unwrap(await client.GET("/api/query/list_acts", { signal }));
+    this.acts = await unwrap(client.listActs({ signal }));
   });
   // The connection label counts down to the next attempt.
   clock = new PollController(this, 1000, () => this.requestUpdate());

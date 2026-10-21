@@ -63,8 +63,10 @@ export default class CupViewVerifyEmail extends LitElement {
       if (!token) {
         throw new Error("No token provided.");
       }
-      const resp = await client.POST("/api/command/verify_email", {
+      const resp = await client.verifyEmail({
         body: { token },
+        // Errors are shown below, not thrown.
+        throwOnError: false,
       });
       if (resp.response.status === 404) {
         throw new Error("Token wurde schon verwendet oder ist abgelaufen.");

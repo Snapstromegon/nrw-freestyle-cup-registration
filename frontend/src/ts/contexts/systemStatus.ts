@@ -1,7 +1,7 @@
 import { createContext } from "@lit/context";
-import type { components } from "../bindings.js";
+import type { schemas } from "../apiClient";
 
-export type SystemStatus = components["schemas"]["SystemStatus"];
+export type SystemStatus = schemas.SystemStatus;
 export const systemStatusContext = createContext<SystemStatus | null>(
   Symbol("system_status"),
 );

@@ -10,7 +10,7 @@ import {
 } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 import { errorMessage, unwrap } from "../../api";
-import { client, type components } from "../../apiClient";
+import { client, type schemas } from "../../apiClient";
 import { type Club, clubContext } from "../../contexts/club";
 import {
   type SystemStatus,
@@ -33,11 +33,11 @@ import {
   MIN_GROUP_SIZE,
 } from "../../utils";
 
-type ClubGroup = components["schemas"]["ClubGroup"];
-type ClubGroupMember = components["schemas"]["ClubGroupMember"];
-type GroupSummary = components["schemas"]["GroupSummary"];
-type ClubStarter = components["schemas"]["ClubStarter"];
-type Category = components["schemas"]["Category"];
+type ClubGroup = schemas.ClubGroup;
+type ClubGroupMember = schemas.ClubGroupMember;
+type GroupSummary = schemas.GroupSummary;
+type ClubStarter = schemas.ClubStarter;
+type Category = schemas.Category;
 
 /** Groups whose oldest rider is younger than this are U15, otherwise 15+. */
 const GROUP_AGE_LIMIT = 15;
@@ -341,9 +341,9 @@ export default class CupClubGroupManager extends LitElement {
       if (!clubId) {
         return [];
       }
-      return unwrap(
-        await client.GET("/api/query/list_club_groups", {
-          params: { query: { club_id: clubId } },
+      return await unwrap(
+        client.listClubGroups({
+          query: { club_id: clubId },
         }),
       );
     },
@@ -356,9 +356,9 @@ export default class CupClubGroupManager extends LitElement {
       if (!clubId) {
         return [];
       }
-      const starters = unwrap(
-        await client.GET("/api/query/list_club_starters", {
-          params: { query: { club_id: clubId } },
+      const starters = await unwrap(
+        client.listClubStarters({
+          query: { club_id: clubId },
         }),
       );
       return starters.sort(
@@ -376,7 +376,7 @@ export default class CupClubGroupManager extends LitElement {
       if (!canEdit) {
         return [];
       }
-      return unwrap(await client.GET("/api/query/list_groups"));
+      return await unwrap(client.listGroups());
     },
     args: () => [this.canEdit, this.refresh],
   });
@@ -384,7 +384,7 @@ export default class CupClubGroupManager extends LitElement {
   /** All categories, to tell a group's age group from its category. */
   categories = new Task(this, {
     task: async (): Promise<Category[]> =>
-      unwrap(await client.GET("/api/query/list_categories")),
+      await unwrap(client.listCategories()),
     args: () => [],
   });
 
@@ -1294,8 +1294,8 @@ export default class CupClubGroupManager extends LitElement {
       case "create":
         this.adding = true;
         try {
-          const { act_id } = unwrap(
-            await client.POST("/api/command/create_club_group", {
+          const { act_id } = await unwrap(
+            client.createClubGroup({
               body: {
                 club_id: this.club.id,
                 group_name: action.name,
@@ -1396,8 +1396,8 @@ export default class CupClubGroupManager extends LitElement {
       edit.otherRegular + edit.otherReplacements === 0
     ) {
       try {
-        unwrap(
-          await client.POST("/api/command/delete_club_group", {
+        await unwrap(
+          client.deleteClubGroup({
             body: { act_id: edit.id },
           }),
         );
@@ -1472,8 +1472,8 @@ export default class CupClubGroupManager extends LitElement {
     let saved = false;
     try {
       if (rename) {
-        unwrap(
-          await client.POST("/api/command/rename_club_group", {
+        await unwrap(
+          client.renameClubGroup({
             body: { act_id: edit.id, group_name: name },
           }),
         );
@@ -1483,8 +1483,8 @@ export default class CupClubGroupManager extends LitElement {
       }
       let warning: string | null | undefined;
       if (typeChanged) {
-        ({ warning } = unwrap(
-          await client.POST("/api/command/set_club_group_type", {
+        ({ warning } = await unwrap(
+          client.setClubGroupType({
             body: { act_id: edit.id, act_type: edit.type },
           }),
         ));
@@ -1493,8 +1493,8 @@ export default class CupClubGroupManager extends LitElement {
       }
       // Saving the riders checks the final state again.
       if (membersChanged) {
-        ({ warning } = unwrap(
-          await client.POST("/api/command/set_club_group_members", {
+        ({ warning } = await unwrap(
+          client.setClubGroupMembers({
             body: {
               club_id: this.club.id,
               act_id: edit.id,
@@ -1540,8 +1540,8 @@ export default class CupClubGroupManager extends LitElement {
       return;
     }
     try {
-      unwrap(
-        await client.POST("/api/command/delete_club_group", {
+      await unwrap(
+        client.deleteClubGroup({
           body: { act_id: group.id },
         }),
       );
@@ -1564,8 +1564,8 @@ export default class CupClubGroupManager extends LitElement {
       return;
     }
     try {
-      unwrap(
-        await client.POST("/api/command/set_club_group_members", {
+      await unwrap(
+        client.setClubGroupMembers({
           body: { club_id: this.club.id, act_id: group.id, members: [] },
         }),
       );

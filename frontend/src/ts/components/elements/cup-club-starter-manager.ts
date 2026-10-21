@@ -4,7 +4,7 @@ import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, query, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 import { errorMessage, unwrap } from "../../api";
-import { client, type components } from "../../apiClient";
+import { client, type schemas } from "../../apiClient";
 import { type Club, clubContext } from "../../contexts/club";
 import {
   type SystemStatus,
@@ -21,10 +21,7 @@ import {
   getStarterPrice,
 } from "../../utils";
 
-type Starter = { birthdate: Date } & Omit<
-  components["schemas"]["ClubStarter"],
-  "birthdate"
->;
+type Starter = { birthdate: Date } & Omit<schemas.ClubStarter, "birthdate">;
 
 type MaybeNewStarter = Omit<Omit<Starter, "id">, "club_id">;
 
@@ -108,9 +105,9 @@ export default class CupClubStarterManager extends LitElement {
       if (!clubId) {
         return [];
       }
-      const starters = unwrap(
-        await client.GET("/api/query/list_club_starters", {
-          params: { query: { club_id: clubId } },
+      const starters = await unwrap(
+        client.listClubStarters({
+          query: { club_id: clubId },
         }),
       );
       return starters.map((starter) => {
@@ -128,9 +125,9 @@ export default class CupClubStarterManager extends LitElement {
       if (!clubId) {
         return memberships;
       }
-      const groups = unwrap(
-        await client.GET("/api/query/list_club_groups", {
-          params: { query: { club_id: clubId } },
+      const groups = await unwrap(
+        client.listClubGroups({
+          query: { club_id: clubId },
         }),
       );
       for (const group of groups) {
@@ -723,8 +720,8 @@ export default class CupClubStarterManager extends LitElement {
     }
 
     try {
-      unwrap(
-        await client.POST("/api/command/edit_club_starter", {
+      await unwrap(
+        client.editClubStarter({
           body: {
             ...starter,
             starter_id: starter.id,
@@ -756,8 +753,8 @@ export default class CupClubStarterManager extends LitElement {
       return;
     }
     try {
-      unwrap(
-        await client.POST("/api/command/delete_club_starter", {
+      await unwrap(
+        client.deleteClubStarter({
           body: { starter_id: starter.id },
         }),
       );
@@ -872,8 +869,8 @@ export default class CupClubStarterManager extends LitElement {
     }
 
     try {
-      unwrap(
-        await client.POST("/api/command/add_club_starter", {
+      await unwrap(
+        client.addClubStarter({
           body: {
             ...this.addStarter,
             club_id: this.club.id,
@@ -935,8 +932,8 @@ export default class CupClubStarterManager extends LitElement {
       );
     }
     try {
-      unwrap(
-        await client.POST("/api/command/set_payment", {
+      await unwrap(
+        client.setPayment({
           body: { club_id: this.club.id, amount },
         }),
       );

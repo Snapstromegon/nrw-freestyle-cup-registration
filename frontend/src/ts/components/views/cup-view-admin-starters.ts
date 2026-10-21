@@ -2,7 +2,7 @@ import { css, html, LitElement, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 import { errorMessage, PollController, unwrap } from "../../api";
-import { client, type components } from "../../apiClient";
+import { client, type schemas } from "../../apiClient";
 import { adminStyles } from "../../styles/admin";
 import { iconStyles, resetStyles } from "../../styles/base";
 import {
@@ -23,9 +23,9 @@ import {
   participantName,
 } from "../../utils";
 
-type Act = components["schemas"]["Act"];
-type Category = components["schemas"]["Category"];
-type Starter = components["schemas"]["Starter"];
+type Act = schemas.Act;
+type Category = schemas.Category;
+type Starter = schemas.Starter;
 
 /** One starter in one section of the starter table. */
 interface Row {
@@ -151,13 +151,13 @@ export default class CupViewAdminStarters extends LitElement {
   private async load(signal?: AbortSignal) {
     try {
       const [starters, acts, categories] = await Promise.all([
-        client.GET("/api/query/list_starters", { signal }),
-        client.GET("/api/query/list_acts", { signal }),
-        client.GET("/api/query/list_categories", { signal }),
+        unwrap(client.listStarters({ signal })),
+        unwrap(client.listActs({ signal })),
+        unwrap(client.listCategories({ signal })),
       ]);
-      this.starters = unwrap(starters);
-      this.acts = unwrap(acts);
-      this.categories = unwrap(categories);
+      this.starters = starters;
+      this.acts = acts;
+      this.categories = categories;
       this.checkIns = checkInMap(
         this.starters.map((s) => ({
           starter_id: s.id,
@@ -178,9 +178,7 @@ export default class CupViewAdminStarters extends LitElement {
       return this.load(signal);
     }
     try {
-      this.checkIns = checkInMap(
-        unwrap(await client.GET("/api/query/list_check_ins", { signal })),
-      );
+      this.checkIns = checkInMap(await unwrap(client.listCheckIns({ signal })));
       this.pollError = null;
     } catch (error) {
       this.pollError = errorMessage(error);

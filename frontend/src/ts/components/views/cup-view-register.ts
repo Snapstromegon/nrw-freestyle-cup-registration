@@ -182,12 +182,14 @@ export default class CupViewRegister extends LitElement {
       return;
     }
 
-    const resp = await client.POST("/api/command/register", {
+    const resp = await client.register({
       body: {
         name: data.name,
         email: data.email,
         password: data.password,
       },
+      // Errors are shown below, not thrown.
+      throwOnError: false,
     });
 
     if (resp.error) {

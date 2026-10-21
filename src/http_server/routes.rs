@@ -14,7 +14,10 @@ use tower_http::{
     trace::TraceLayer,
 };
 use tracing::{error, info_span};
-use utoipa::{OpenApi as OpenApiTrait, openapi::OpenApi};
+use utoipa::{
+    OpenApi as OpenApiTrait,
+    openapi::{OpenApi, RefOr},
+};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -66,9 +69,50 @@ fn get_openapi_router() -> (Router, OpenApi) {
     let command_query_router = OpenApiRouter::new()
         .nest("/command", command::get_command_router())
         .nest("/query", query::get_query_router());
-    OpenApiRouter::with_openapi(ApiDoc::openapi())
+    let (router, mut openapi) = OpenApiRouter::with_openapi(ApiDoc::openapi())
         .nest("/api", command_query_router)
-        .split_for_parts()
+        .split_for_parts();
+    describe_responses(&mut openapi);
+    (router, openapi)
+}
+
+/// Gives every response without a description one from its status code.
+/// OpenAPI requires a description, and the routes only declare the body.
+fn describe_responses(openapi: &mut OpenApi) {
+    for item in openapi.paths.paths.values_mut() {
+        let operations = [
+            &mut item.get,
+            &mut item.put,
+            &mut item.post,
+            &mut item.delete,
+            &mut item.options,
+            &mut item.head,
+            &mut item.patch,
+            &mut item.trace,
+        ];
+        for operation in operations.into_iter().flatten() {
+            for (status, response) in &mut operation.responses.responses {
+                if let RefOr::T(response) = response
+                    && response.description.is_empty()
+                {
+                    response.description = status_description(status).to_owned();
+                }
+            }
+        }
+    }
+}
+
+fn status_description(status: &str) -> &'static str {
+    match status {
+        "200" => "Success",
+        "400" => "Invalid request",
+        "401" => "Not logged in",
+        "403" => "Not allowed",
+        "404" => "Not found",
+        "409" => "Conflict with the current state",
+        "500" => "Internal server error",
+        _ => "Response",
+    }
 }
 
 pub fn get_api_router(

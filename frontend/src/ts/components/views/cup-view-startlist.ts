@@ -4,7 +4,7 @@ import { css, html, LitElement, nothing } from "lit";
 import { customElement } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 import { errorMessage, unwrap } from "../../api";
-import { client, type components } from "../../apiClient";
+import { client, type schemas } from "../../apiClient";
 import {
   type SystemStatus,
   systemStatusContext,
@@ -23,9 +23,9 @@ import {
   participantName,
 } from "../../utils";
 
-type Category = components["schemas"]["Category"];
-type StartlistAct = components["schemas"]["StartlistAct"];
-type Timeplan = components["schemas"]["Timeplan"];
+type Category = schemas.Category;
+type StartlistAct = schemas.StartlistAct;
+type Timeplan = schemas.Timeplan;
 
 /** A warm-up (Einfahrzeit) that one or more consecutive blocks share. */
 interface Warmup {
@@ -271,12 +271,12 @@ export default class CupViewStartlist extends LitElement {
     args: () => [],
     task: async (): Promise<Startlist> => {
       const [categories, acts, timeplan] = await Promise.all([
-        client.GET("/api/query/list_categories"),
-        client.GET("/api/query/startlist"),
-        client.GET("/api/query/predict_timeplan"),
+        unwrap(client.listCategories()),
+        unwrap(client.startlist()),
+        client.predictTimeplan({ throwOnError: false }),
       ]);
       // Without the timeplan the list still works, just without times.
-      return buildStartlist(unwrap(categories), unwrap(acts), timeplan.data);
+      return buildStartlist(categories, acts, timeplan.data);
     },
   });
 

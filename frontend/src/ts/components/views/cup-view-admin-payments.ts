@@ -4,7 +4,7 @@ import { css, html, LitElement, nothing } from "lit";
 import { customElement, query, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 import { errorMessage, unwrap } from "../../api";
-import { client, type components } from "../../apiClient";
+import { client, type schemas } from "../../apiClient";
 import {
   type SystemStatus,
   systemStatusContext,
@@ -18,8 +18,8 @@ import {
   getStarterPrice,
 } from "../../utils";
 
-type ClubOverview = components["schemas"]["ClubOverview"];
-type Starter = components["schemas"]["Starter"];
+type ClubOverview = schemas.ClubOverview;
+type Starter = schemas.Starter;
 
 interface PaymentsData {
   clubs: ClubOverview[];
@@ -255,8 +255,8 @@ export default class CupViewAdminPayments extends LitElement {
   data = new Task(this, {
     task: async (): Promise<PaymentsData> => {
       const [clubs, starters] = await Promise.all([
-        client.GET("/api/query/list_clubs").then(unwrap),
-        client.GET("/api/query/list_starters").then(unwrap),
+        unwrap(client.listClubs()),
+        unwrap(client.listStarters()),
       ]);
       return { clubs, starters };
     },
@@ -738,8 +738,8 @@ export default class CupViewAdminPayments extends LitElement {
    * the club's current state on the server.
    */
   async reloadPayments(clubId: string) {
-    const fresh = unwrap(
-      await client.GET("/api/query/list_clubs", {
+    const fresh = await unwrap(
+      client.listClubs({
         signal: AbortSignal.timeout(10000),
       }),
     );
@@ -860,8 +860,8 @@ export default class CupViewAdminPayments extends LitElement {
       const amount = parsed.add
         ? Math.round(((current ?? 0) + parsed.amount) * 100) / 100
         : parsed.amount;
-      unwrap(
-        await client.POST("/api/command/set_payment", {
+      await unwrap(
+        client.setPayment({
           body: { club_id: club.id, amount },
         }),
       );
@@ -902,8 +902,8 @@ export default class CupViewAdminPayments extends LitElement {
         this.error = `Nicht rückgängig gemacht: Der gezahlte Betrag von „${club.name}“ wurde inzwischen auf ${formatMoney(current ?? 0)} geändert.`;
         return;
       }
-      unwrap(
-        await client.POST("/api/command/set_payment", {
+      await unwrap(
+        client.setPayment({
           body: { club_id: club.id, amount: undo.amount },
         }),
       );

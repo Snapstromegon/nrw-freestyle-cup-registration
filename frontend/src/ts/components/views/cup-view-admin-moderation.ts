@@ -2,7 +2,7 @@ import { css, html, LitElement, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { classMap } from "lit/directives/class-map.js";
 import { PollController, unwrap } from "../../api";
-import { client, type components } from "../../apiClient";
+import { client, type schemas } from "../../apiClient";
 import {
   actPosition,
   entryTitle,
@@ -25,8 +25,8 @@ import "../elements/cup-act-participants.js";
 import "../elements/cup-timeplan.js";
 import "../elements/cup-waveform.js";
 
-type Act = components["schemas"]["Act"];
-type Playback = components["schemas"]["Playback"];
+type Act = schemas.Act;
+type Playback = schemas.Playback;
 
 /** The timeplan slots of the current and the next start, shown in big. */
 function shownSlots(live: Live) {
@@ -283,12 +283,12 @@ export default class CupViewAdminModeration extends LitElement {
 
   private async load(signal: AbortSignal) {
     const [timeplan, playback] = await Promise.all([
-      client.GET("/api/query/predict_timeplan", { signal }),
-      client.GET("/api/query/get_playback", { signal }),
+      unwrap(client.predictTimeplan({ signal })),
+      unwrap(client.getPlayback({ signal })),
     ]);
     this.now = Date.now();
-    this.timeplan = unwrap(timeplan);
-    this.playback = unwrap(playback);
+    this.timeplan = timeplan;
+    this.playback = playback;
     // The riders: at the start, every minute and for acts not seen yet.
     const live = liveState(this.timeplan, this.now);
     const unknown = [live.act?.id, live.next?.act.id].some(
@@ -296,7 +296,7 @@ export default class CupViewAdminModeration extends LitElement {
     );
     if (unknown || this.now - this.actsLoadedAt > 60_000) {
       this.actsLoadedAt = this.now;
-      const acts = unwrap(await client.GET("/api/query/list_acts", { signal }));
+      const acts = await unwrap(client.listActs({ signal }));
       this.actsById = new Map(acts.map((act) => [act.id, act]));
     }
   }

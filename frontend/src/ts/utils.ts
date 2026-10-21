@@ -1,4 +1,4 @@
-import type { components } from "./bindings";
+import type { schemas } from "./apiClient";
 
 export enum TimeplanStatus {
   Break = "Break",
@@ -10,12 +10,12 @@ export enum TimeplanStatus {
   Award = "Award",
 }
 
-type Timeplan = components["schemas"]["Timeplan"];
-type TimeplanItem = components["schemas"]["TimeplanItem"];
-type TimeplanAct = components["schemas"]["TimeplanAct"];
-type TimeplanBreak = components["schemas"]["TimeplanBreak"];
-export type TimeplanFinalist = components["schemas"]["TimeplanFinalist"];
-type TimeplanSlot = components["schemas"]["TimeplanSlot"];
+type Timeplan = schemas.Timeplan;
+type TimeplanItem = schemas.TimeplanItem;
+type TimeplanAct = schemas.TimeplanAct;
+type TimeplanBreak = schemas.TimeplanBreak;
+export type TimeplanFinalist = schemas.TimeplanFinalist;
+type TimeplanSlot = schemas.TimeplanSlot;
 /**
  * What is performed and judged in a start block: an act, or a reserved slot
  * of a final ("3. Finalist (U17–U21)"), with its placed act once the final's
@@ -24,7 +24,7 @@ type TimeplanSlot = components["schemas"]["TimeplanSlot"];
 export type TimeplanStart = TimeplanAct | TimeplanFinalist;
 /** A start block: acts of any category and breaks, in `slots`. */
 export type ActsEntry = Extract<
-  components["schemas"]["TimeplanEntry"],
+  schemas.TimeplanEntry,
   { Acts: unknown }
 >["Acts"];
 
@@ -281,7 +281,7 @@ export const judgingAfterBlockEnd = (
     : undefined;
 };
 
-export type Competition = components["schemas"]["Competition"];
+export type Competition = schemas.Competition;
 
 interface Starts {
   single_male: boolean;
@@ -377,7 +377,7 @@ export const formatDateRange = (start: string, end: string) =>
     ? formatDate(start)
     : `${formatDate(start)} – ${formatDate(end)}`;
 
-export type ActType = components["schemas"]["ActType"];
+export type ActType = schemas.ActType;
 
 /** German name of each act type. */
 export const actTypeLabels: Record<ActType, string> = {
@@ -460,7 +460,7 @@ export const describeGroup = (
 };
 
 /** A run of a final's reserved slots, e.g. 5 slots "U11–U15". */
-export type SlotGroup = components["schemas"]["SlotGroup"];
+export type SlotGroup = schemas.SlotGroup;
 
 /** Slot groups as admins type them: "5 × U11–U15, 4 × U23+". */
 export const formatSlotGroups = (groups: SlotGroup[]) =>

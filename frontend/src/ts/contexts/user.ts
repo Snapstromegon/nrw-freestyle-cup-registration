@@ -1,5 +1,5 @@
 import { createContext } from "@lit/context";
-import type { components } from "../bindings.js";
+import type { schemas } from "../apiClient";
 
-export type User = components["schemas"]["User"];
+export type User = schemas.User;
 export const userContext = createContext<User | null>(Symbol("user"));

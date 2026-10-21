@@ -6,7 +6,7 @@ import { keyed } from "lit/directives/keyed.js";
 import { repeat } from "lit/directives/repeat.js";
 import { errorMessage, PollController, unwrap } from "../../api";
 import { client } from "../../apiClient";
-import type { components } from "../../bindings";
+import type { schemas } from "../../apiClient";
 import { type User, userContext } from "../../contexts/user";
 import {
   BLOCKED_MESSAGE,
@@ -64,10 +64,10 @@ import "../elements/cup-waveform.js";
 import "../elements/cup-act-participants.js";
 import "../elements/cup-timeplan.js";
 
-type Act = components["schemas"]["Act"];
-type Playback = components["schemas"]["Playback"];
-type TimeplanSlot = components["schemas"]["TimeplanSlot"];
-type PhotosOverview = components["schemas"]["PhotosOverview"];
+type Act = schemas.Act;
+type Playback = schemas.Playback;
+type TimeplanSlot = schemas.TimeplanSlot;
+type PhotosOverview = schemas.PhotosOverview;
 
 /** Lets a reload after a command release the buttons after this long. */
 const RELOAD_TIMEOUT_MS = 5000;
@@ -740,13 +740,9 @@ export default class CupViewAdminMusicControl extends LitElement {
     }
     const seq = ++this.loadSeq;
     const [timeplan, acts, checkIns] = await Promise.allSettled([
-      client
-        .GET("/api/query/predict_timeplan", { signal })
-        .then((r) => unwrap(r)),
-      client.GET("/api/query/list_acts", { signal }).then((r) => unwrap(r)),
-      client
-        .GET("/api/query/list_check_ins", { signal })
-        .then((r) => unwrap(r)),
+      unwrap(client.predictTimeplan({ signal })),
+      unwrap(client.listActs({ signal })),
+      unwrap(client.listCheckIns({ signal })),
     ]);
     // A slow, older poll must not overwrite the state after a command.
     if (seq < this.appliedSeq) {
@@ -904,8 +900,8 @@ export default class CupViewAdminMusicControl extends LitElement {
       return;
     }
     try {
-      unwrap(
-        await client.POST("/api/command/set_act_music_started", {
+      await unwrap(
+        client.setActMusicStarted({
           body: { act_id: live.act.id },
         }),
       );
@@ -949,7 +945,7 @@ export default class CupViewAdminMusicControl extends LitElement {
   }
 
   private async loadPhotos(signal: AbortSignal) {
-    this.photos = unwrap(await client.GET("/api/query/get_photos", { signal }));
+    this.photos = await unwrap(client.getPhotos({ signal }));
   }
 
   /**
@@ -1016,8 +1012,8 @@ export default class CupViewAdminMusicControl extends LitElement {
       return;
     }
     try {
-      unwrap(
-        await client.POST("/api/command/set_photo_hidden", {
+      await unwrap(
+        client.setPhotoHidden({
           body: { id, hidden: true },
         }),
       );
@@ -1721,8 +1717,8 @@ export default class CupViewAdminMusicControl extends LitElement {
   private async checkIn(ids: string[], names: string) {
     this.checkingIn = new Set([...this.checkingIn, ...ids]);
     try {
-      unwrap(
-        await client.POST("/api/command/set_checked_in", {
+      await unwrap(
+        client.setCheckedIn({
           body: { starter_ids: ids, checked_in: true },
         }),
       );
@@ -2310,9 +2306,7 @@ export default class CupViewAdminMusicControl extends LitElement {
     if (!label || !confirm(`Einen Schritt zurück?\n\n${label}`)) {
       return;
     }
-    await this.runCommand(async () =>
-      unwrap(await client.POST("/api/command/timeplan_backward")),
-    );
+    await this.runCommand(async () => await unwrap(client.timeplanBackward()));
   }
 
   async timeplanForward(e: MouseEvent) {
@@ -2320,9 +2314,7 @@ export default class CupViewAdminMusicControl extends LitElement {
     if (e.detail > 1) {
       return;
     }
-    await this.runCommand(async () =>
-      unwrap(await client.POST("/api/command/timeplan_forward")),
-    );
+    await this.runCommand(async () => await unwrap(client.timeplanForward()));
   }
 
   /**

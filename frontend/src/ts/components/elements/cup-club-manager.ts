@@ -7,7 +7,7 @@ import "./cup-club-group-manager.js";
 import "./cup-club-act-manager.js";
 import { Task, TaskStatus } from "@lit/task";
 import { unwrap } from "../../api";
-import { client, type components } from "../../apiClient";
+import { client, type schemas } from "../../apiClient";
 import {
   type SystemStatus,
   systemStatusContext,
@@ -17,7 +17,7 @@ import { buildEpcPayload, paymentReference } from "../../epc";
 import { formatDate, formatMoney, getStarterPrice } from "../../utils";
 import "./cup-payment-qr.js";
 
-type Competition = components["schemas"]["Competition"];
+type Competition = schemas.Competition;
 
 /**
  * Everything a club manages: acts, starters and groups. The managers depend
@@ -26,7 +26,7 @@ type Competition = components["schemas"]["Competition"];
  * dispatches a cancelable `club-data-changed` event, this element cancels it
  * (meaning "handled") and bumps the managers' `refresh`.
  */
-type ClubStarter = components["schemas"]["ClubStarter"];
+type ClubStarter = schemas.ClubStarter;
 
 @customElement("cup-club-manager")
 export default class CupClubManager extends LitElement {
@@ -107,9 +107,9 @@ export default class CupClubManager extends LitElement {
       if (!clubId) {
         return [];
       }
-      return unwrap(
-        await client.GET("/api/query/list_club_starters", {
-          params: { query: { club_id: clubId } },
+      return await unwrap(
+        client.listClubStarters({
+          query: { club_id: clubId },
         }),
       );
     },

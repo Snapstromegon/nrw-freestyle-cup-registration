@@ -4,7 +4,7 @@ import { customElement, query, state } from "lit/decorators.js";
 import { classMap } from "lit/directives/class-map.js";
 import { repeat } from "lit/directives/repeat.js";
 import { errorMessage, PollController, unwrap } from "../../api";
-import { client, type components } from "../../apiClient";
+import { client, type schemas } from "../../apiClient";
 import { adminStyles } from "../../styles/admin";
 import { iconStyles, resetStyles } from "../../styles/base";
 import {
@@ -22,14 +22,14 @@ import {
   slotItem,
 } from "../../utils";
 
-type Act = components["schemas"]["Act"];
-type Category = components["schemas"]["Category"];
-type Final = components["schemas"]["Final"];
-type Entry = components["schemas"]["TimeplanListEntry"];
-type TimeplanItem = components["schemas"]["TimeplanItem"];
-type TimeplanSlot = components["schemas"]["TimeplanSlot"];
-type TimeplanFinalist = components["schemas"]["TimeplanFinalist"];
-type SlotInput = components["schemas"]["BlockSlotInput"];
+type Act = schemas.Act;
+type Category = schemas.Category;
+type Final = schemas.Final;
+type Entry = schemas.TimeplanListEntry;
+type TimeplanItem = schemas.TimeplanItem;
+type TimeplanSlot = schemas.TimeplanSlot;
+type TimeplanFinalist = schemas.TimeplanFinalist;
+type SlotInput = schemas.BlockSlotInput;
 
 /** The select value for a start block without a category, e.g. "Nachstarter". */
 const BLOCK = "__block__";
@@ -213,8 +213,8 @@ const applyCarryOver = async (carry: ReturnType<typeof carryOver>) => {
   const { entry, start } = carry;
   // edit_timeplan_entry overwrites every field: send the others back as the
   // server returned them.
-  unwrap(
-    await client.POST("/api/command/edit_timeplan_entry", {
+  await unwrap(
+    client.editTimeplanEntry({
       body: {
         id: entry.id,
         earliest_start_time: start,
@@ -410,15 +410,23 @@ export default class CupViewAdminTimeplan extends LitElement {
     task: async (_args, { signal }): Promise<Data> => {
       const [entries, categories, finals, acts, prediction] = await Promise.all(
         [
-          client.GET("/api/query/list_timeplan", { signal }),
-          client.GET("/api/query/list_categories", { signal }),
-          client.GET("/api/query/list_finals", { signal }),
-          client.GET("/api/query/list_acts", { signal }),
-          client.GET("/api/query/predict_timeplan", { signal }),
+          unwrap(client.listTimeplan({ signal })),
+          unwrap(client.listCategories({ signal })),
+          unwrap(client.listFinals({ signal })),
+          unwrap(client.listActs({ signal })),
+          // The prediction fails while the timeplan is incomplete; the list
+          // is still shown then.
+          unwrap(client.predictTimeplan({ signal })).then(
+            (timeplan) => ({ timeplan, error: "" }),
+            (error: unknown) => ({
+              timeplan: null,
+              error: predictionErrorMessage(errorMessage(error)),
+            }),
+          ),
         ],
       );
-      const list = unwrap(entries);
-      const allActs = unwrap(acts);
+      const list = entries;
+      const allActs = acts;
       const actCounts = new Map<string, number>();
       let uncategorized = 0;
       for (const act of allActs) {
@@ -428,19 +436,11 @@ export default class CupViewAdminTimeplan extends LitElement {
           uncategorized++;
         }
       }
-      // The prediction fails while the timeplan is incomplete; the list is
-      // still shown then.
-      let timeplan: components["schemas"]["Timeplan"] | null = null;
-      let predictionError = "";
-      try {
-        timeplan = unwrap(prediction);
-      } catch (error) {
-        predictionError = predictionErrorMessage(errorMessage(error));
-      }
+      const { timeplan, error: predictionError } = prediction;
       this.last = {
         entries: list,
-        categories: new Map(unwrap(categories).map((c) => [c.name, c])),
-        finals: new Map(unwrap(finals).map((f) => [f.name, f])),
+        categories: new Map(categories.map((c) => [c.name, c])),
+        finals: new Map(finals.map((f) => [f.name, f])),
         acts: new Map(allActs.map((act) => [act.id, act])),
         actCounts,
         uncategorized,
@@ -1856,14 +1856,14 @@ export default class CupViewAdminTimeplan extends LitElement {
     this.error = "";
     try {
       if (original) {
-        unwrap(
-          await client.POST("/api/command/edit_timeplan_entry", {
+        await unwrap(
+          client.editTimeplanEntry({
             body: { ...body, id: original.id },
           }),
         );
       } else {
-        unwrap(
-          await client.POST("/api/command/add_timeplan_entry", {
+        await unwrap(
+          client.addTimeplanEntry({
             body: { ...body, after_id: editing.afterId },
           }),
         );
@@ -1903,8 +1903,8 @@ export default class CupViewAdminTimeplan extends LitElement {
     }
     await this.command("Löschen fehlgeschlagen", async () => {
       await applyCarryOver(carry);
-      unwrap(
-        await client.POST("/api/command/delete_timeplan_entry", {
+      await unwrap(
+        client.deleteTimeplanEntry({
           body: { id: entry.id },
         }),
       );
@@ -1918,9 +1918,7 @@ export default class CupViewAdminTimeplan extends LitElement {
     const carry = entries[1]?.id === id ? carryOver(entries, entries[1]) : null;
     await this.command("Verschieben fehlgeschlagen", async () => {
       await applyCarryOver(carry);
-      unwrap(
-        await client.POST("/api/command/move_timeplan_up", { body: { id } }),
-      );
+      await unwrap(client.moveTimeplanUp({ body: { id } }));
     });
   }
 
@@ -1931,8 +1929,8 @@ export default class CupViewAdminTimeplan extends LitElement {
     const carry = entries[0]?.id === id ? carryOver(entries, entries[1]) : null;
     await this.command("Verschieben fehlgeschlagen", async () => {
       await applyCarryOver(carry);
-      unwrap(
-        await client.POST("/api/command/move_timeplan_down", {
+      await unwrap(
+        client.moveTimeplanDown({
           body: { id },
         }),
       );
@@ -1974,8 +1972,8 @@ export default class CupViewAdminTimeplan extends LitElement {
   /** Sets a block's complete order; see `set_block_order`. */
   private async setOrder(blockId: number, slots: SlotInput[]) {
     await this.command("Umplanen fehlgeschlagen", async () => {
-      unwrap(
-        await client.POST("/api/command/set_block_order", {
+      await unwrap(
+        client.setBlockOrder({
           body: { timeplan_id: blockId, slots },
         }),
       );
@@ -2052,8 +2050,8 @@ export default class CupViewAdminTimeplan extends LitElement {
       return;
     }
     await this.command("Zurücksetzen fehlgeschlagen", async () => {
-      unwrap(
-        await client.POST("/api/command/reset_block_order", {
+      await unwrap(
+        client.resetBlockOrder({
           body: { timeplan_id: blockId },
         }),
       );

@@ -3,7 +3,7 @@ import { css, html, LitElement, nothing } from "lit";
 import { customElement } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 import { errorMessage, unwrap } from "../../api";
-import { client, type components } from "../../apiClient";
+import { client, type schemas } from "../../apiClient";
 import { adminStyles } from "../../styles/admin";
 import { iconStyles, resetStyles } from "../../styles/base";
 
@@ -30,8 +30,8 @@ interface MedalCategory {
 }
 
 const summarize = (
-  categories: components["schemas"]["Category"][],
-  acts: components["schemas"]["StartlistAct"][],
+  categories: schemas.Category[],
+  acts: schemas.StartlistAct[],
 ) => {
   const actsByCategory = new Map<string, typeof acts>();
   for (const act of acts) {
@@ -172,10 +172,10 @@ export default class CupViewAdminMedals extends LitElement {
     args: () => [],
     task: async () => {
       const [categories, startlist] = await Promise.all([
-        client.GET("/api/query/list_categories"),
-        client.GET("/api/query/startlist"),
+        unwrap(client.listCategories()),
+        unwrap(client.startlist()),
       ]);
-      const summary = summarize(unwrap(categories), unwrap(startlist));
+      const summary = summarize(categories, startlist);
       return { summary, sheets: sheetsOf(summary) };
     },
   });

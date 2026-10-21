@@ -1249,8 +1249,8 @@ export default class CupClubStepActs extends LitElement {
       }
       this.checkNewDetails();
       {
-        const { act_id } = unwrap(
-          await client.POST("/api/command/create_club_group", {
+        const { act_id } = await unwrap(
+          client.createClubGroup({
             body: {
               club_id: this.data.club.id,
               group_name: action.name,
@@ -1918,15 +1918,15 @@ export default class CupClubStepActs extends LitElement {
         throw new Error("Bitte gib einen Gruppennamen an.");
       }
       if (name !== group.group_name) {
-        unwrap(
-          await client.POST("/api/command/rename_club_group", {
+        await unwrap(
+          client.renameClubGroup({
             body: { act_id: group.id, group_name: name },
           }),
         );
       }
       if (draft.type !== group.act_type) {
-        const { warning } = unwrap(
-          await client.POST("/api/command/set_club_group_type", {
+        const { warning } = await unwrap(
+          client.setClubGroupType({
             body: { act_id: group.id, act_type: draft.type },
           }),
         );
@@ -1953,12 +1953,14 @@ export default class CupClubStepActs extends LitElement {
     ) {
       return;
     }
-    await this.run(group.id, async () =>
-      unwrap(
-        await client.POST("/api/command/delete_club_group", {
-          body: { act_id: group.id },
-        }),
-      ),
+    await this.run(
+      group.id,
+      async () =>
+        await unwrap(
+          client.deleteClubGroup({
+            body: { act_id: group.id },
+          }),
+        ),
     );
   }
 

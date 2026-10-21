@@ -361,8 +361,8 @@ export default class CupClubStepClub extends LitElement {
     }
     this.saving = true;
     try {
-      unwrap(
-        await client.POST("/api/command/rename_club", {
+      await unwrap(
+        client.renameClub({
           body: { club_id: this.data.club.id, name },
         }),
       );

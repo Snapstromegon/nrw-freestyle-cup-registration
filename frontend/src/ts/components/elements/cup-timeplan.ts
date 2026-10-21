@@ -4,7 +4,7 @@ import { classMap } from "lit/directives/class-map.js";
 import { repeat } from "lit/directives/repeat.js";
 import { PollController, unwrap } from "../../api";
 import { client } from "../../apiClient";
-import type { components } from "../../bindings";
+import type { schemas } from "../../apiClient";
 import { iconStyles, resetStyles } from "../../styles/base";
 import {
   type ActsEntry,
@@ -24,14 +24,14 @@ import {
   type TimeplanFinalist,
 } from "../../utils";
 
-type Act = components["schemas"]["Act"];
-type Timeplan = components["schemas"]["Timeplan"];
-type TimeplanItem = components["schemas"]["TimeplanItem"];
-type TimeplanItemStatus = components["schemas"]["TimeplanItemStatus"];
-type TimeplanAct = components["schemas"]["TimeplanAct"];
-type TimeplanBreak = components["schemas"]["TimeplanBreak"];
-type TimeplanSlot = components["schemas"]["TimeplanSlot"];
-type TimeplanEntry = components["schemas"]["TimeplanEntry"];
+type Act = schemas.Act;
+type Timeplan = schemas.Timeplan;
+type TimeplanItem = schemas.TimeplanItem;
+type TimeplanItemStatus = schemas.TimeplanItemStatus;
+type TimeplanAct = schemas.TimeplanAct;
+type TimeplanBreak = schemas.TimeplanBreak;
+type TimeplanSlot = schemas.TimeplanSlot;
+type TimeplanEntry = schemas.TimeplanEntry;
 type CustomEntry = Extract<TimeplanEntry, { Custom: unknown }>["Custom"];
 
 /** Upcoming acts with riders missing at check-in get red this early. */
@@ -413,7 +413,7 @@ export default class CupTimeplan extends LitElement {
     if (this.acts !== undefined) {
       return;
     }
-    const acts = unwrap(await client.GET("/api/query/list_acts", { signal }));
+    const acts = await unwrap(client.listActs({ signal }));
     const json = JSON.stringify(acts);
     if (json !== this.fetchedActsJson) {
       this.fetchedActsJson = json;

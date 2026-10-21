@@ -2,8 +2,8 @@
 // the API: they are flags of a starter (`single_male`, `single_female`, `pair`
 // with `partner_name`), and the server creates or deletes the act. These
 // helpers turn "add a single", "pair two riders" etc. into those edits.
-import { unwrap } from "../../../api";
-import { client, type components } from "../../../apiClient";
+import { ApiError, unwrap } from "../../../api";
+import { client, type schemas } from "../../../apiClient";
 import {
   type ClubGroup,
   type ClubStarter,
@@ -33,8 +33,8 @@ export const editStarter = async (
   changes: Partial<StarterFields>,
 ) => {
   const next = { ...starter, ...changes };
-  unwrap(
-    await client.POST("/api/command/edit_club_starter", {
+  await unwrap(
+    client.editClubStarter({
       body: {
         starter_id: starter.id,
         firstname: next.firstname.trim(),
@@ -58,8 +58,8 @@ export const addStarter = async (
   birthdate: Date,
   gender: Gender,
 ) => {
-  unwrap(
-    await client.POST("/api/command/add_club_starter", {
+  await unwrap(
+    client.addClubStarter({
       body: {
         club_id: clubId,
         firstname: firstname.trim(),
@@ -77,14 +77,14 @@ export const addStarter = async (
 };
 
 export const deleteStarter = async (starter: ClubStarter) => {
-  unwrap(
-    await client.POST("/api/command/delete_club_starter", {
+  await unwrap(
+    client.deleteClubStarter({
       body: { starter_id: starter.id },
     }),
   );
 };
 
-export type Gender = components["schemas"]["Gender"];
+export type Gender = schemas.Gender;
 
 export const genderLabels: Record<Gender, string> = {
   female: "weiblich",
@@ -126,8 +126,8 @@ export const replaceRider = async (
   starterId: string,
   newStarterId: string,
 ) => {
-  unwrap(
-    await client.POST("/api/command/replace_act_rider", {
+  await unwrap(
+    client.replaceActRider({
       body: {
         act_id: actId,
         starter_id: starterId,
@@ -267,8 +267,8 @@ export const setGroupMembers = async (
   groupId: string,
   members: GroupMember[],
 ) => {
-  const { warning } = unwrap(
-    await client.POST("/api/command/set_club_group_members", {
+  const { warning } = await unwrap(
+    client.setClubGroupMembers({
       body: { club_id: clubId, act_id: groupId, members },
     }),
   );
@@ -313,23 +313,30 @@ export const uploadSong = async (actId: string, file: File) => {
   const data = new FormData();
   data.append("file", file);
   // The generated types don't describe the multipart body and its query.
-  const resp = await client.POST("/api/command/save_act_song", {
-    params: { query: { act_id: actId } } as never,
-    body: data as never,
-  });
-  switch (resp.response.status) {
-    case 413:
-      throw new Error(tooLarge(file));
-    case 400:
-      throw new Error(
-        `„${file.name}“ konnte nicht hochgeladen werden. Bitte lade die Musik als mp3 hoch.`,
-      );
-    case 403:
-      throw new Error(
-        "Der Musik-Meldeschluss ist vorbei. Musikänderungen sind nicht mehr möglich.",
-      );
+  try {
+    await unwrap(
+      client.saveActSong({
+        query: { act_id: actId } as never,
+        body: data as never,
+      }),
+    );
+  } catch (error) {
+    switch (error instanceof ApiError ? error.status : undefined) {
+      case 413:
+        throw new Error(tooLarge(file), { cause: error });
+      case 400:
+        throw new Error(
+          `„${file.name}“ konnte nicht hochgeladen werden. Bitte lade die Musik als mp3 hoch.`,
+          { cause: error },
+        );
+      case 403:
+        throw new Error(
+          "Der Musik-Meldeschluss ist vorbei. Musikänderungen sind nicht mehr möglich.",
+          { cause: error },
+        );
+    }
+    throw error;
   }
-  unwrap(resp);
 };
 
 export const editAct = async (
@@ -337,8 +344,8 @@ export const editAct = async (
   name: string,
   description: string | null,
 ) => {
-  unwrap(
-    await client.POST("/api/command/edit_club_act", {
+  await unwrap(
+    client.editClubAct({
       body: { id: actId, name: name.trim(), description },
     }),
   );
@@ -353,9 +360,9 @@ export const findActOf = async (
   type: "single" | "pair",
   starterId: string,
 ) => {
-  const acts = unwrap(
-    await client.GET("/api/query/list_club_acts", {
-      params: { query: { club_id: clubId } },
+  const acts = await unwrap(
+    client.listClubActs({
+      query: { club_id: clubId },
     }),
   );
   return acts.find(

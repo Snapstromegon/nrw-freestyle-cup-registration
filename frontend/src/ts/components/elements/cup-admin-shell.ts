@@ -457,7 +457,7 @@ export default class CupAdminShell extends LitElement {
 
   private async logout() {
     try {
-      await client.POST("/api/command/logout");
+      await client.logout({ throwOnError: false });
     } finally {
       window.location.href = "/";
     }

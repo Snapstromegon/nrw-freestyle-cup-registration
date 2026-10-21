@@ -4,7 +4,7 @@
  * the plan is off.
  */
 
-import type { components } from "./bindings";
+import type { schemas } from "./apiClient";
 import {
   type ActsEntry,
   blockOf,
@@ -25,10 +25,10 @@ import {
 } from "./utils";
 
 export type { ActsEntry, TimeplanFinalist, TimeplanStart } from "./utils";
-export type Timeplan = components["schemas"]["Timeplan"];
-export type TimeplanItem = components["schemas"]["TimeplanItem"];
-export type TimeplanAct = components["schemas"]["TimeplanAct"];
-export type TimeplanBreak = components["schemas"]["TimeplanBreak"];
+export type Timeplan = schemas.Timeplan;
+export type TimeplanItem = schemas.TimeplanItem;
+export type TimeplanAct = schemas.TimeplanAct;
+export type TimeplanBreak = schemas.TimeplanBreak;
 
 /** What is happening right now. */
 export type Phase =

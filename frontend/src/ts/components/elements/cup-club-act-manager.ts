@@ -3,8 +3,8 @@ import { Task, TaskStatus } from "@lit/task";
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, query, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
-import { errorMessage, unwrap } from "../../api";
-import { client, type components } from "../../apiClient";
+import { ApiError, errorMessage, unwrap } from "../../api";
+import { client, type schemas } from "../../apiClient";
 import { type Club, clubContext } from "../../contexts/club";
 import {
   type SystemStatus,
@@ -22,7 +22,7 @@ import {
   normalizationLabel,
 } from "../../utils";
 
-type Act = components["schemas"]["ClubAct"];
+type Act = schemas.ClubAct;
 
 /** The server accepts song files up to 10 MiB. */
 const MAX_SONG_SIZE = 10 * 1024 * 1024;
@@ -79,9 +79,9 @@ export default class CupClubActManager extends LitElement {
       if (!clubId) {
         return [];
       }
-      return unwrap(
-        await client.GET("/api/query/list_club_acts", {
-          params: { query: { club_id: clubId } },
+      return await unwrap(
+        client.listClubActs({
+          query: { club_id: clubId },
         }),
       );
     },
@@ -495,8 +495,8 @@ export default class CupClubActManager extends LitElement {
       return this.showError("Der Kürname darf nicht leer sein!");
     }
     try {
-      unwrap(
-        await client.POST("/api/command/edit_club_act", {
+      await unwrap(
+        client.editClubAct({
           body: { id: act.id, name: act.name, description: act.description },
         }),
       );
@@ -543,28 +543,27 @@ export default class CupClubActManager extends LitElement {
     this.requestUpdate();
     try {
       // The generated types don't describe the multipart body and its query.
-      const resp = await client.POST("/api/command/save_act_song", {
-        params: { query: { act_id: act.id } } as never,
-        body: data as never,
-      });
-      const status = resp.response.status;
-      if (status === 413) {
-        return this.showError(
-          `„${file.name}“ ist zu groß. Die Musik darf höchstens 10 MB groß sein.`,
-        );
-      }
-      if (status === 400) {
-        return this.showError(
-          `„${file.name}“ konnte nicht hochgeladen werden. Bitte lade die Musik als mp3 hoch.`,
-        );
-      }
-      if (status === 403) {
-        return this.showError(
-          "Der Musik-Meldeschluss ist vorbei. Musikänderungen sind nicht mehr möglich.",
-        );
-      }
-      unwrap(resp);
+      await unwrap(
+        client.saveActSong({
+          query: { act_id: act.id } as never,
+          body: data as never,
+        }),
+      );
     } catch (error) {
+      switch (error instanceof ApiError ? error.status : undefined) {
+        case 413:
+          return this.showError(
+            `„${file.name}“ ist zu groß. Die Musik darf höchstens 10 MB groß sein.`,
+          );
+        case 400:
+          return this.showError(
+            `„${file.name}“ konnte nicht hochgeladen werden. Bitte lade die Musik als mp3 hoch.`,
+          );
+        case 403:
+          return this.showError(
+            "Der Musik-Meldeschluss ist vorbei. Musikänderungen sind nicht mehr möglich.",
+          );
+      }
       return this.showError(
         `Fehler beim Hochladen der Musik: ${errorMessage(error)}`,
       );

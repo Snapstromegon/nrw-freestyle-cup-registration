@@ -1,13 +1,11 @@
-// Helpers around the openapi-fetch client. openapi-fetch never throws on HTTP
-// errors, it returns `{ data, error, response }` instead; `unwrap` turns an
-// error into an exception with a German message.
+// Helpers around the generated API client (apiClient.ts). Its calls throw a
+// `ResponseError` with the parsed error body on HTTP errors; `unwrap` turns it
+// into an `ApiError` with a German message.
 //
 // This module only has type imports, so the unit tests can import it without
 // a DOM.
 import type { ReactiveController, ReactiveControllerHost } from "lit";
-import type { components } from "./bindings";
-
-type ClientError = components["schemas"]["ClientError"];
+import type { ClientError } from "./gen/types";
 
 const statusMessages: Record<number, string> = {
   400: "Ungültige Anfrage – bitte neu laden",
@@ -63,8 +61,8 @@ const isClientError = (error: unknown): error is ClientError =>
 
 /**
  * A German message for anything an API call or a command can fail with: the
- * `error` of an openapi-fetch response (`ClientError`, or the plain text some
- * auth failures return), a thrown `Error`, a network failure or a timeout.
+ * error body of a response (`ClientError`, or the plain text some auth
+ * failures return), a thrown `Error`, a network failure or a timeout.
  * `status` is the HTTP status, if known, and only used for errors without a
  * message.
  */
@@ -123,21 +121,35 @@ export class ApiError extends Error {
   }
 }
 
+/** The `ResponseError` the generated client throws on an HTTP error. */
+interface ResponseError extends Error {
+  name: "ResponseError";
+  /** The parsed error body. */
+  data: unknown;
+  status: number;
+}
+
 /**
- * Returns the data of an openapi-fetch response, or throws an `ApiError`
- * with a German message:
- * `const acts = unwrap(await client.GET("/api/query/list_acts"));`
+ * Matches on `name` like Kubb's `ResponseError.is`, so this module doesn't
+ * import the generated client.
  */
-export function unwrap<T>(resp: {
-  data?: T;
-  error?: unknown;
-  response?: Response;
-}): T {
-  const status = resp.response?.status;
-  if (resp.error !== undefined || (resp.response && !resp.response.ok)) {
-    throw new ApiError(errorMessage(resp.error, status), status);
+const isResponseError = (error: unknown): error is ResponseError =>
+  error instanceof Error && error.name === "ResponseError";
+
+/**
+ * Returns the data of a generated API call, or throws an `ApiError` with a
+ * German message on an HTTP error:
+ * `const acts = await unwrap(client.listActs());`
+ */
+export async function unwrap<T>(call: Promise<{ data: T }>): Promise<T> {
+  try {
+    return (await call).data;
+  } catch (error) {
+    if (isResponseError(error)) {
+      throw new ApiError(errorMessage(error.data, error.status), error.status);
+    }
+    throw error;
   }
-  return resp.data as T;
 }
 
 /**
@@ -152,7 +164,7 @@ export function unwrap<T>(resp: {
  * the signal on to the requests, so they are cancelled as well:
  *
  * `poll = new PollController(this, 2000, (signal) => this.load(signal));`
- * `… await client.GET("/api/query/predict_timeplan", { signal }) …`
+ * `… await unwrap(client.predictTimeplan({ signal })) …`
  */
 export class PollController implements ReactiveController {
   private timer?: ReturnType<typeof setInterval>;

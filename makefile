@@ -11,13 +11,11 @@ install-frontend:
 openapi: migrate-db install-frontend
 	cargo run --bin gen_openapi
 
-frontend-api: openapi
-	cd frontend && npm run build:api
-
-frontend: frontend-api
+# The builds generate the API client from openapi.json (see frontend/kubb.config.js).
+frontend: openapi
 	cd frontend && npm run build
 
-frontend-release: frontend-api
+frontend-release: openapi
 	cd frontend && npm run build:release
 
 run: all
@@ -61,9 +59,10 @@ test: migrate-db
 	cargo test --features player-client
 	cd frontend && npm test
 
-lint:
+# After the frontend build: the type check needs the generated API client.
+lint: frontend
 	cargo clippy
-	cd frontend && npm run check && npm run lint && npm run typecheck
+	cd frontend && npm run check
 
 clean-frontend:
 	rm -rf static

@@ -1,6 +1,7 @@
 import { provide } from "@lit/context";
 import { html, LitElement } from "lit";
 import { customElement } from "lit/decorators.js";
+import { unwrap } from "../../api";
 import { client } from "../../apiClient.js";
 import {
   type SystemStatus,
@@ -16,12 +17,8 @@ export default class CupContextSystemStatus extends LitElement {
 
   SystemStatusTask = new Task(this, {
     task: async () => {
-      const resp = await client.GET(`/api/query/get_system_status`);
-      if (!resp.data) {
-        throw new Error("Status nicht gefunden!");
-      }
-      this.systemStatus = resp.data;
-      return resp.data;
+      this.systemStatus = await unwrap(client.getSystemStatus());
+      return this.systemStatus;
     },
     args: () => [],
   });

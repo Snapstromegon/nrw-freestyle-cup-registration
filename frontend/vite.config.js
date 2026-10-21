@@ -1,34 +1,31 @@
-import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath, URL } from "node:url";
-import openapiTS, { astToString, COMMENT_HEADER } from "openapi-typescript";
+import { createKubb } from "@kubb/core";
+import { applyDefaults } from "unplugin-kubb";
 import { defineConfig } from "vite-plus";
+import kubbConfig from "./kubb.config.js";
 import consts from "./rollup-lib/consts.js";
 import getGitStatus from "./rollup-lib/getGitStatus.js";
 
-const openapiUrl = new URL("../openapi.json", import.meta.url);
-const openapiPath = fileURLToPath(openapiUrl);
-const bindingsPath = fileURLToPath(
-  new URL("src/ts/bindings.d.ts", import.meta.url),
-);
+const openapiPath = fileURLToPath(new URL("../openapi.json", import.meta.url));
 /** The backend for the dev server's proxy. */
 const backend = "http://localhost:3000";
 
 /**
- * Generates the TypeScript API bindings from openapi.json once at the start of
- * each build, with the same options and output as `npm run build:api`. In watch mode and
- * on the dev server they are regenerated when openapi.json changes.
+ * Generates the API types and fetch functions (src/ts/gen) from openapi.json
+ * with Kubb once at the start of each build (also `vp test` and `vp dev`). In
+ * watch mode and on the dev server they are regenerated when openapi.json
+ * changes. Unchanged files aren't rewritten, so watch mode doesn't loop.
  */
-const openapiBindings = () => {
+const apiClient = () => {
   const generate = async () => {
-    const ast = await openapiTS(openapiUrl, { emptyObjectsUnknown: true });
-    const code = `${COMMENT_HEADER}${astToString(ast)}`;
-    const current = await readFile(bindingsPath, "utf8").catch(() => "");
-    if (code !== current) {
-      await writeFile(bindingsPath, code);
+    const result = await createKubb(applyDefaults(kubbConfig)).generate();
+    if (!result.success) {
+      const error = result.diagnostics.find((d) => d.severity === "error");
+      throw new Error(`Kubb: ${error?.message ?? "generation failed"}`);
     }
   };
   return {
-    name: "openapi-bindings",
+    name: "api-client",
     async buildStart() {
       this.addWatchFile(openapiPath);
       await generate();
@@ -49,7 +46,7 @@ export default defineConfig(({ mode }) => ({
     printWidth: 80,
     // Leaves the HTML and CSS inside Lit templates as written.
     embeddedLanguageFormatting: "off",
-    ignorePatterns: ["src/ts/bindings.d.ts"],
+    ignorePatterns: ["src/ts/gen/**"],
   },
   lint: {
     plugins: ["oxc", "typescript", "unicorn"],
@@ -67,7 +64,7 @@ export default defineConfig(({ mode }) => ({
     env: {
       builtin: true,
     },
-    ignorePatterns: ["src/ts/bindings.d.ts"],
+    ignorePatterns: ["src/ts/gen/**"],
     rules: {
       "constructor-super": "error",
       "for-direction": "error",
@@ -238,7 +235,7 @@ export default defineConfig(({ mode }) => ({
   },
   // Copied unchanged, e.g. src/public/assets/… is served as /assets/….
   publicDir: "public",
-  plugins: [consts({ git: getGitStatus }), openapiBindings()],
+  plugins: [consts({ git: getGitStatus }), apiClient()],
   build: {
     outDir: "../../static",
     emptyOutDir: true,

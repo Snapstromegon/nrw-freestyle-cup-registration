@@ -5,7 +5,7 @@ import { classMap } from "lit/directives/class-map.js";
 import { live } from "lit/directives/live.js";
 import { repeat } from "lit/directives/repeat.js";
 import { errorMessage, PollController, unwrap } from "../../api";
-import { client, type components } from "../../apiClient";
+import { client, type schemas } from "../../apiClient";
 import {
   type SystemStatus,
   systemStatusContext,
@@ -30,11 +30,11 @@ import {
   participantName,
 } from "../../utils";
 
-type Starter = components["schemas"]["Starter"];
-type Act = components["schemas"]["Act"];
-type ClubOverview = components["schemas"]["ClubOverview"];
-type Timeplan = components["schemas"]["Timeplan"];
-type TimeplanItemStatus = components["schemas"]["TimeplanItemStatus"];
+type Starter = schemas.Starter;
+type Act = schemas.Act;
+type ClubOverview = schemas.ClubOverview;
+type Timeplan = schemas.Timeplan;
+type TimeplanItemStatus = schemas.TimeplanItemStatus;
 
 /** Not checked in and starting within this many minutes: "startet bald". */
 const SOON_MINUTES = 60;
@@ -1466,7 +1466,7 @@ export default class CupViewAdminCheckIn extends LitElement {
     this.loadingStarters = true;
     const epoch = this.epoch;
     try {
-      const starters = unwrap(await client.GET("/api/query/list_starters"));
+      const starters = await unwrap(client.listStarters());
       if (epoch === this.epoch) {
         this.mergeCheckIns(
           new Map(starters.map((s) => [s.id, s.checked_in_at ?? null])),
@@ -1483,7 +1483,7 @@ export default class CupViewAdminCheckIn extends LitElement {
 
   private async loadActs() {
     try {
-      this.acts = unwrap(await client.GET("/api/query/list_acts"));
+      this.acts = await unwrap(client.listActs());
       this.actsError = null;
     } catch (error) {
       this.actsError = errorMessage(error);
@@ -1492,7 +1492,7 @@ export default class CupViewAdminCheckIn extends LitElement {
 
   private async loadTimeplan() {
     try {
-      this.timeplan = unwrap(await client.GET("/api/query/predict_timeplan"));
+      this.timeplan = await unwrap(client.predictTimeplan());
       this.timeplanError = null;
     } catch (error) {
       // Keep the last timeplan: one failed reload must not hide who starts
@@ -1503,7 +1503,7 @@ export default class CupViewAdminCheckIn extends LitElement {
 
   private async loadClubInfos() {
     try {
-      this.clubInfos = unwrap(await client.GET("/api/query/list_clubs"));
+      this.clubInfos = await unwrap(client.listClubs());
       this.clubInfosError = null;
     } catch (error) {
       this.clubInfosError = errorMessage(error);
@@ -1523,11 +1523,9 @@ export default class CupViewAdminCheckIn extends LitElement {
       return;
     }
     const epoch = this.epoch;
-    let checkIns: components["schemas"]["CheckIn"][];
+    let checkIns: schemas.CheckIn[];
     try {
-      checkIns = unwrap(
-        await client.GET("/api/query/list_check_ins", { signal }),
-      );
+      checkIns = await unwrap(client.listCheckIns({ signal }));
       this.syncError = null;
     } catch (error) {
       this.syncError = errorMessage(error);
@@ -1578,8 +1576,8 @@ export default class CupViewAdminCheckIn extends LitElement {
     this.pending = new Set([...this.pending, ...ids]);
     this.epoch++;
     try {
-      const result = unwrap(
-        await client.POST("/api/command/set_checked_in", {
+      const result = await unwrap(
+        client.setCheckedIn({
           body: { starter_ids: ids, checked_in: checkedIn },
         }),
       );

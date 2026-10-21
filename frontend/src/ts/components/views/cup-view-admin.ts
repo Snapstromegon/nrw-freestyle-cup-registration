@@ -5,7 +5,7 @@ import { customElement, query, state } from "lit/decorators.js";
 import { ifDefined } from "lit/directives/if-defined.js";
 import { repeat } from "lit/directives/repeat.js";
 import { errorMessage, PollController, unwrap } from "../../api";
-import { client, type components } from "../../apiClient";
+import { client, type schemas } from "../../apiClient";
 import {
   type SystemStatus,
   systemStatusContext,
@@ -35,10 +35,10 @@ import {
   participantName,
 } from "../../utils";
 
-type Act = components["schemas"]["Act"];
-type ClubOverview = components["schemas"]["ClubOverview"];
-type Starter = components["schemas"]["Starter"];
-type User = components["schemas"]["User"];
+type Act = schemas.Act;
+type ClubOverview = schemas.ClubOverview;
+type Starter = schemas.Starter;
+type User = schemas.User;
 
 interface DashboardData {
   clubs: ClubOverview[];
@@ -550,11 +550,11 @@ export default class CupViewAdmin extends LitElement {
   data = new Task(this, {
     task: async () => {
       const [clubs, users, starters, acts, checkIns] = await Promise.all([
-        client.GET("/api/query/list_clubs").then(unwrap),
-        client.GET("/api/query/list_users").then(unwrap),
-        client.GET("/api/query/list_starters").then(unwrap),
-        client.GET("/api/query/list_acts").then(unwrap),
-        client.GET("/api/query/list_check_ins").then(unwrap),
+        unwrap(client.listClubs()),
+        unwrap(client.listUsers()),
+        unwrap(client.listStarters()),
+        unwrap(client.listActs()),
+        unwrap(client.listCheckIns()),
       ]);
       this.checkIns = checkInMap(checkIns);
       return { clubs, users, starters, acts } satisfies DashboardData;
@@ -591,9 +591,7 @@ export default class CupViewAdmin extends LitElement {
     if (!(this.data.value ?? this.lastData)) {
       return;
     }
-    this.checkIns = checkInMap(
-      unwrap(await client.GET("/api/query/list_check_ins", { signal })),
-    );
+    this.checkIns = checkInMap(await unwrap(client.listCheckIns({ signal })));
   }
 
   override render() {
@@ -1263,8 +1261,8 @@ export default class CupViewAdmin extends LitElement {
 
     this.updatingUserRoles = new Set(this.updatingUserRoles).add(userId);
     try {
-      unwrap(
-        await client.POST("/api/command/set_user_admin", {
+      await unwrap(
+        client.setUserAdmin({
           body: { user_id: userId, is_admin: !user.is_admin },
         }),
       );

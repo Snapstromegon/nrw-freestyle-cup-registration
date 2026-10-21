@@ -141,10 +141,12 @@ export default class CupViewCreateClub extends LitElement {
       clubName: string;
     };
 
-    const resp = await client.POST("/api/command/create_club", {
+    const resp = await client.createClub({
       body: {
         name: data.clubName,
       },
+      // Errors are shown below, not thrown.
+      throwOnError: false,
     });
 
     if (resp.response.status === 404) {

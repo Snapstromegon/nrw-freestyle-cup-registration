@@ -191,7 +191,7 @@ export default class CupViewHome extends LitElement {
   clubs = new Task(this, {
     task: async ([isAdmin]) =>
       isAdmin
-        ? unwrap(await client.GET("/api/query/list_clubs")).sort((a, b) =>
+        ? (await unwrap(client.listClubs())).sort((a, b) =>
             a.name.localeCompare(b.name, "de"),
           )
         : [],
@@ -420,7 +420,7 @@ export default class CupViewHome extends LitElement {
     }
     this.creating = true;
     try {
-      unwrap(await client.POST("/api/command/create_club", { body: { name } }));
+      await unwrap(client.createClub({ body: { name } }));
       // The user's club comes with the user, which is loaded once.
       window.location.href = "/#fahrer";
       window.location.reload();
@@ -432,16 +432,14 @@ export default class CupViewHome extends LitElement {
   }
 
   async logout() {
-    await client.POST("/api/command/logout");
+    await client.logout({ throwOnError: false });
     window.location.href = "/";
     this.dispatchEvent(new Event("logout", { bubbles: true, composed: true }));
   }
 
   async reverifyMail() {
     try {
-      unwrap(
-        await client.POST("/api/command/resend_mail_validation", { body: {} }),
-      );
+      await unwrap(client.resendMailValidation({ body: {} }));
       this.mailSent = true;
       this.error = null;
     } catch (error) {

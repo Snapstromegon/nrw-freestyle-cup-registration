@@ -494,21 +494,16 @@ export default class CupClubPortal extends LitElement {
       if (!clubId) {
         throw new Error("Vereins-ID fehlt.");
       }
-      const query = { params: { query: { club_id: clubId } } };
+      const query = { query: { club_id: clubId } };
       const [club, starters, acts, groups, allGroups, allStarters] =
         await Promise.all([
-          client.GET("/api/query/get_club", query).then(unwrap),
-          client.GET("/api/query/list_club_starters", query).then(unwrap),
-          client.GET("/api/query/list_club_acts", query).then(unwrap),
-          client.GET("/api/query/list_club_groups", query).then(unwrap),
-          client
-            .GET("/api/query/list_groups")
-            .then(unwrap)
-            .catch(() => []),
+          unwrap(client.getClub(query)),
+          unwrap(client.listClubStarters(query)),
+          unwrap(client.listClubActs(query)),
+          unwrap(client.listClubGroups(query)),
+          unwrap(client.listGroups()).catch(() => []),
           // Admins pick riders of any club.
-          admin
-            ? client.GET("/api/query/list_starters").then(unwrap)
-            : Promise.resolve(undefined),
+          admin ? unwrap(client.listStarters()) : Promise.resolve(undefined),
         ]);
       return {
         club,

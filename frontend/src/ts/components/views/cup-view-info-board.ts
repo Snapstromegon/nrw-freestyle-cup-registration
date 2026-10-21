@@ -3,7 +3,7 @@ import { css, html, LitElement, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 import { PollController, unwrap } from "../../api";
-import { client, type components } from "../../apiClient";
+import { client, type schemas } from "../../apiClient";
 import "../elements/cup-timeplan.js";
 import "../elements/cup-clock.js";
 import "../elements/cup-countdown.js";
@@ -34,8 +34,8 @@ import {
   timeplanStatus,
 } from "../../utils";
 
-type Act = components["schemas"]["Act"];
-type Timeplan = components["schemas"]["Timeplan"];
+type Act = schemas.Act;
+type Timeplan = schemas.Timeplan;
 
 @customElement("cup-view-info-board")
 export default class CupViewInfoBoard extends LitElement {
@@ -351,15 +351,11 @@ export default class CupViewInfoBoard extends LitElement {
    * which also picks up late changes (e.g. to a group's members).
    */
   async refresh(signal?: AbortSignal) {
-    const timeplan = unwrap(
-      await client.GET("/api/query/predict_timeplan", { signal }),
-    );
+    const timeplan = await unwrap(client.predictTimeplan({ signal }));
     const shownActs = `${startActId(currentTimeplanAct(timeplan))}/${startActId(lastTimeplanAct(timeplan))}`;
     if (shownActs !== this.actsLoadedFor) {
       try {
-        const acts = unwrap(
-          await client.GET("/api/query/list_acts", { signal }),
-        );
+        const acts = await unwrap(client.listActs({ signal }));
         this.acts = new Map(acts.map((act) => [act.id, act]));
         this.actsLoadedFor = shownActs;
       } catch (error) {
