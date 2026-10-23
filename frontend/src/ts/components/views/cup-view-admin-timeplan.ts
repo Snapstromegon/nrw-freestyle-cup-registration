@@ -60,6 +60,8 @@ interface EntryDraft {
   duration: string;
   /** Start blocks only: own Einfahrzeit as "m:ss"; "" for the category's. */
   einfahrzeit: string;
+  /** Custom entries only: photos next to the clock on the info board. */
+  showPhotos: boolean;
 }
 
 interface Editing {
@@ -224,6 +226,7 @@ const applyCarryOver = async (carry: ReturnType<typeof carryOver>) => {
         duration_seconds: entry.duration_seconds ?? null,
         kind: entry.kind,
         einfahrzeit_seconds: entry.einfahrzeit_seconds ?? null,
+        show_photos: entry.show_photos,
       },
     }),
   );
@@ -246,6 +249,13 @@ export default class CupViewAdminTimeplan extends LitElement {
 
       input.label {
         width: 14em;
+      }
+
+      label.photos {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25em;
+        white-space: nowrap;
       }
 
       .entry-edit {
@@ -874,7 +884,14 @@ export default class CupViewAdminTimeplan extends LitElement {
 
   private renderEntry(data: Data, entry: Entry) {
     if (entry.kind === "custom") {
-      return entry.label ?? "";
+      return entry.show_photos
+        ? (entry.label ?? "")
+        : html`${entry.label ?? ""}
+            <span
+              class="chip"
+              title="Das Info-Board zeigt währenddessen nur die Uhr, ohne Fotos"
+              >nur Uhr</span
+            >`;
     }
     const block = blockOf(data.predictions.get(entry.id));
     const open = this.expanded.has(entry.id);
@@ -1603,6 +1620,21 @@ export default class CupViewAdminTimeplan extends LitElement {
             .value=${draft.label}
             @input=${this.onDraftInput}
           />
+          ${
+            custom
+              ? html`<label
+                  class="photos"
+                  title="Das Info-Board zeigt währenddessen neben der Uhr Fotos"
+                >
+                  <input
+                    type="checkbox"
+                    .checked=${draft.showPhotos}
+                    @change=${this.onShowPhotosChange}
+                  />
+                  Fotos
+                </label>`
+              : nothing
+          }
         </div>
       </td>
       <td class="num">
@@ -1727,6 +1759,7 @@ export default class CupViewAdminTimeplan extends LitElement {
         label: "",
         duration: "",
         einfahrzeit: "",
+        showPhotos: true,
       },
       earliestChanged: true,
     };
@@ -1769,6 +1802,7 @@ export default class CupViewAdminTimeplan extends LitElement {
           entry.einfahrzeit_seconds === undefined
             ? ""
             : formatDuration(entry.einfahrzeit_seconds),
+        showPhotos: entry.show_photos,
       },
       earliestChanged: false,
     };
@@ -1790,6 +1824,17 @@ export default class CupViewAdminTimeplan extends LitElement {
       ...this.editing,
       draft: { ...this.editing.draft, [field]: target.value },
       earliestChanged: this.editing.earliestChanged || field === "earliest",
+    };
+  }
+
+  private onShowPhotosChange(e: Event) {
+    if (!this.editing) {
+      return;
+    }
+    const showPhotos = (e.currentTarget as HTMLInputElement).checked;
+    this.editing = {
+      ...this.editing,
+      draft: { ...this.editing.draft, showPhotos },
     };
   }
 
@@ -1851,6 +1896,7 @@ export default class CupViewAdminTimeplan extends LitElement {
         !custom && draft.einfahrzeit.trim()
           ? parseDuration(draft.einfahrzeit)
           : null,
+      show_photos: !custom || draft.showPhotos,
     };
     this.busy = true;
     this.error = "";

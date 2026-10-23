@@ -592,8 +592,10 @@ categories = ["PU17", "PU19", "PU21", "PU23", "PU25", "PU30", "PU50", "PU70", "P
 
 # Timeplan in order. An entry runs a category (its duration comes from the
 # category and its acts), a final (from the final and its slots), or is a
-# custom entry with a label and duration. earliest_start is optional. Example
-# times: replace them with the real ones.
+# custom entry with a label and duration. earliest_start is optional. While a
+# custom entry runs, the info board shows its label, the clock and photos;
+# show_photos = false leaves out the photos. Example times: replace them with
+# the real ones.
 
 [[timeplan]]
 category = "EMU11"

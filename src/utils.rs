@@ -4,6 +4,11 @@ use uuid::Uuid;
 
 use crate::act_type::ActType;
 
+/// For `#[serde(default = "crate::utils::default_true")]`.
+pub fn default_true() -> bool {
+    true
+}
+
 /// Letters and digits that can't be confused with each other (no 0/O, 1/I).
 const CLUB_CODE_ALPHABET: &[u8; 32] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 

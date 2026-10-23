@@ -67,6 +67,8 @@ pub struct EntryFields {
     pub label: Option<String>,
     pub duration_seconds: Option<i64>,
     pub einfahrzeit_seconds: Option<i64>,
+    /// Custom entries: photos next to the clock on the info board.
+    pub show_photos: bool,
 }
 
 impl EntryFields {
@@ -107,6 +109,7 @@ impl EntryFields {
                     label,
                     duration_seconds: None,
                     einfahrzeit_seconds,
+                    show_photos: true,
                 })
             }
             EntryKind::Custom => {
@@ -123,8 +126,19 @@ impl EntryFields {
                     label,
                     duration_seconds,
                     einfahrzeit_seconds: None,
+                    show_photos: true,
                 })
             }
+        }
+    }
+
+    /// Custom entries: with or without photos next to the clock. Start
+    /// blocks always keep them.
+    #[must_use]
+    pub fn with_photos(self, show_photos: bool) -> Self {
+        Self {
+            show_photos: show_photos || self.kind == EntryKind::Acts,
+            ..self
         }
     }
 }
@@ -307,6 +321,8 @@ pub struct Entry {
     pub final_name: Option<String>,
     /// Start blocks: overrides the home category's Einfahrzeit.
     pub einfahrzeit_override: Option<i64>,
+    /// Custom entries: photos next to the clock on the info board.
+    pub show_photos: bool,
     pub started_at: Option<OffsetDateTime>,
     pub ended_at: Option<OffsetDateTime>,
     /// Start blocks: what runs in them, in order (see the module docs).
@@ -568,6 +584,7 @@ pub async fn load(db: &mut SqliteConnection) -> sqlx::Result<Timeplan> {
             category,
             final_name,
             einfahrzeit_seconds,
+            show_photos,
             started_at as "started_at: OffsetDateTime",
             ended_at as "ended_at: OffsetDateTime"
         FROM timeplan
@@ -673,6 +690,7 @@ pub async fn load(db: &mut SqliteConnection) -> sqlx::Result<Timeplan> {
             category: row.category.clone(),
             final_name: row.final_name.clone(),
             einfahrzeit_override: row.einfahrzeit_seconds,
+            show_photos: row.show_photos,
             started_at: row.started_at,
             ended_at: row.ended_at,
             slots,
@@ -1023,8 +1041,13 @@ mod tests {
                 label: None,
                 duration_seconds: None,
                 einfahrzeit_seconds: Some(300),
+                show_photos: true,
             })
         );
+        // Start blocks always keep their photos, custom entries can drop them.
+        assert!(block.unwrap().with_photos(false).show_photos);
+        let pause = EntryFields::new(None, None, None, Some("Pause".into()), Some(60), None);
+        assert!(!pause.unwrap().with_photos(false).show_photos);
         let late = EntryFields::new(
             Some(EntryKind::Acts),
             None,

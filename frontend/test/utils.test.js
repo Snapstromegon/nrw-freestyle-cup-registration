@@ -37,6 +37,7 @@ import {
   isUnderAge,
   judgingAfterBlockEnd,
   lastTimeplanAct,
+  customOf,
   isEmptyBlock,
   lastTimeplanEntry,
   MAX_SMALL_GROUP_SIZE,
@@ -169,6 +170,24 @@ describe("timeplan entries", () => {
     assert.equal(currentTimeplanEntry(undefined), undefined);
     assert.equal(nextTimeplanEntry(undefined), undefined);
     assert.equal(lastTimeplanEntry(undefined), undefined);
+  });
+});
+
+describe("customOf", () => {
+  test("gives a custom entry's label and photo choice, nothing for blocks", () => {
+    const custom = {
+      timeplan_entry: {
+        Custom: {
+          label: "Begrüßung",
+          duration_seconds: 300,
+          show_photos: false,
+        },
+      },
+    };
+    assert.equal(customOf(custom)?.label, "Begrüßung");
+    assert.equal(customOf(custom)?.show_photos, false);
+    assert.equal(customOf({ timeplan_entry: { Acts: {} } }), undefined);
+    assert.equal(customOf(undefined), undefined);
   });
 });
 

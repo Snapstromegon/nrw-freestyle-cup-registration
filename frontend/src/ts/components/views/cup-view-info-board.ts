@@ -18,6 +18,7 @@ import {
   actParticipantsLabel,
   blockOf,
   breakEnd,
+  customOf,
   competitionName,
   currentTimeplanAct,
   currentTimeplanBreak,
@@ -184,14 +185,9 @@ export default class CupViewInfoBoard extends LitElement {
       position: relative;
       width: 100%;
       height: 100%;
-      img#fallback {
-        width: 50vh;
-      }
-
       .break,
       .warmup,
       .block-break,
-      .award,
       .act {
         display: flex;
         flex-direction: column;
@@ -488,15 +484,23 @@ export default class CupViewInfoBoard extends LitElement {
             <cup-clock></cup-clock>
           </section>
         </div>`;
-      case TimeplanStatus.Award:
-        return html`<div class="award">
-          <img
-            id="fallback"
-            src="/assets/images/logo_with_blobs.svg"
-            alt=${competitionName(this.systemStatus?.competition)}
-          />
-          <h1>Siegerehrung</h1>
+      case TimeplanStatus.Award: {
+        // A custom entry: its name and the clock, with photos unless it
+        // asks for the clock alone.
+        const custom = customOf(currentEntry);
+        return html`<div class="break">
+          ${
+            custom?.show_photos === false
+              ? nothing
+              : html`<cup-fotobox
+                  src="/api/photos/random"
+                  auto-reload
+                ></cup-fotobox>`
+          }
+          <h1>${custom?.label ?? "Siegerehrung"}</h1>
+          <cup-clock></cup-clock>
         </div>`;
+      }
     }
     return nothing;
   }

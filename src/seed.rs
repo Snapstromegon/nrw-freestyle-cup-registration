@@ -580,9 +580,10 @@ pub async fn seed(
             sqlx::query!(
                 r#"
                 INSERT INTO timeplan (
-                    earliest_start_time, duration_seconds, label, category, final_name, kind, position
+                    earliest_start_time, duration_seconds, label, category, final_name, kind,
+                    show_photos, position
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 "#,
                 entry.earliest_start,
                 duration_seconds,
@@ -590,6 +591,7 @@ pub async fn seed(
                 entry.category,
                 entry.final_name,
                 kind,
+                entry.show_photos,
                 position,
             )
             .execute(&mut *tx)

@@ -143,6 +143,8 @@ pub enum TimeplanEntry {
     Custom {
         label: String,
         duration_seconds: i64,
+        /// Photos next to the clock on the info board.
+        show_photos: bool,
     },
 }
 
@@ -492,6 +494,7 @@ pub fn predict_from(
                     TimeplanEntry::Custom {
                         label,
                         duration_seconds: duration,
+                        show_photos: entry.show_photos,
                     }
                 }
                 _ => {

@@ -32,6 +32,12 @@ export type ActsEntry = Extract<
 export const blockOf = (item: TimeplanItem | undefined) =>
   item && "Acts" in item.timeplan_entry ? item.timeplan_entry.Acts : undefined;
 
+/** The custom entry (a break, an award ceremony, …) of a timeplan item. */
+export const customOf = (item: TimeplanItem | undefined) =>
+  item && "Custom" in item.timeplan_entry
+    ? item.timeplan_entry.Custom
+    : undefined;
+
 /** The act, break or finalist of a slot. */
 export const slotItem = (
   slot: TimeplanSlot,

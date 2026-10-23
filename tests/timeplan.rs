@@ -1696,3 +1696,53 @@ async fn a_block_without_category_warms_up_only_with_its_own_time(db: SqlitePool
     assert_eq!(slot_names(&items[2]), [c1.to_string()]);
     assert_eq!(items[2]["timeplan_entry"]["Acts"]["warmup_seconds"], 600);
 }
+
+/// The custom entry labelled `label` in the prediction and in the list.
+async fn custom_by_label(app: &TestApp, label: &str) -> (Value, Value) {
+    let prediction = app.get("/api/query/predict_timeplan", None).await.body;
+    let predicted = prediction["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|i| i["timeplan_entry"]["Custom"]["label"] == label)
+        .unwrap()["timeplan_entry"]["Custom"]
+        .clone();
+    let list = app.get("/api/query/list_timeplan", None).await.body;
+    let listed = list
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| e["label"] == label)
+        .unwrap()
+        .clone();
+    (predicted, listed)
+}
+
+#[sqlx::test]
+async fn custom_entries_show_photos_unless_turned_off(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let admin = app.create_admin().await;
+
+    let added = app
+        .post(
+            "/api/command/add_timeplan_entry",
+            custom_entry("Begrüßung", 300),
+            Some(&admin),
+        )
+        .await;
+    assert_eq!(added.status, StatusCode::OK, "{:?}", added.body);
+    let (predicted, listed) = custom_by_label(&app, "Begrüßung").await;
+    assert_eq!(predicted["show_photos"], true);
+    assert_eq!(listed["show_photos"], true);
+
+    let mut clock_only = custom_entry("Begrüßung", 300);
+    clock_only["id"] = added.body["id"].clone();
+    clock_only["show_photos"] = json!(false);
+    let edited = app
+        .post("/api/command/edit_timeplan_entry", clock_only, Some(&admin))
+        .await;
+    assert_eq!(edited.status, StatusCode::OK, "{:?}", edited.body);
+    let (predicted, listed) = custom_by_label(&app, "Begrüßung").await;
+    assert_eq!(predicted["show_photos"], false);
+    assert_eq!(listed["show_photos"], false);
+}

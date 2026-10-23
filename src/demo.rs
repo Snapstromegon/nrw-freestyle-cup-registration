@@ -61,6 +61,8 @@ pub struct DemoTimeplanEntry {
     pub final_name: Option<String>,
     pub label: Option<String>,
     pub duration_minutes: Option<f64>,
+    #[serde(default = "crate::utils::default_true")]
+    pub show_photos: bool,
     #[serde(default, deserialize_with = "toml_datetime_option")]
     pub earliest_start: Option<OffsetDateTime>,
     #[serde(default, deserialize_with = "toml_datetime_option")]
@@ -77,16 +79,12 @@ pub struct DemoUser {
     pub password: String,
     #[serde(default)]
     pub roles: Vec<crate::roles::Role>,
-    #[serde(default = "default_true")]
+    #[serde(default = "crate::utils::default_true")]
     pub email_verified: bool,
     /// Pending email verification, usable at `/verify_email?token=…`.
     pub verification_token: Option<Uuid>,
     /// Pending password reset, usable at `/reset_password?token=…`.
     pub password_reset_token: Option<Uuid>,
-}
-
-fn default_true() -> bool {
-    true
 }
 
 #[derive(Debug, Deserialize)]
@@ -111,7 +109,7 @@ pub struct DemoJudge {
     pub lastname: String,
     #[serde(deserialize_with = "toml_date")]
     pub birthdate: Date,
-    #[serde(default = "default_true")]
+    #[serde(default = "crate::utils::default_true")]
     pub trained: bool,
     pub max_deployments: Option<i64>,
     pub note: Option<String>,
@@ -274,6 +272,7 @@ impl DemoData {
                 final_name: entry.final_name.clone(),
                 label: entry.label.clone(),
                 duration_minutes: entry.duration_minutes,
+                show_photos: entry.show_photos,
                 earliest_start: entry.earliest_start,
             })
             .collect();

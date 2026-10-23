@@ -1163,6 +1163,8 @@ category = "GG15+"
 [[timeplan]]
 label = "Siegerehrung"
 duration_minutes = 45
+# The info board shows only the label and the clock.
+show_photos = false
 
 # What the demo judges register for (jury registration): heats count 2
 # Einsätze, finals 1; finals and groups run on the second day.

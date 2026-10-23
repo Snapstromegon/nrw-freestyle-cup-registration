@@ -21,6 +21,8 @@ pub struct TimeplanListEntry {
     /// Start blocks only: overrides the home category's (or final's)
     /// Einfahrzeit.
     einfahrzeit_seconds: Option<i64>,
+    /// Custom entries: photos next to the clock on the info board.
+    show_photos: bool,
     /// Start blocks only: the order was edited by hand (`set_block_order`),
     /// so the category's start order no longer applies to it.
     manually_ordered: bool,
@@ -59,6 +61,7 @@ pub async fn list_timeplan(
             category,
             final_name,
             einfahrzeit_seconds,
+            show_photos,
             EXISTS (
                 SELECT 1 FROM timeplan_slots WHERE timeplan_slots.timeplan_id = timeplan.id
             ) as "manually_ordered!: bool",

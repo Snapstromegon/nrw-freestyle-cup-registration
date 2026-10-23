@@ -432,6 +432,9 @@ pub struct TimeplanEntryConfig {
     pub label: Option<String>,
     /// Duration of a custom entry.
     pub duration_minutes: Option<f64>,
+    /// Custom entries: photos next to the clock on the info board.
+    #[serde(default = "crate::utils::default_true")]
+    pub show_photos: bool,
     #[serde(default, deserialize_with = "toml_datetime_option")]
     pub earliest_start: Option<OffsetDateTime>,
 }

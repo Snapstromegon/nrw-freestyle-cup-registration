@@ -35,6 +35,9 @@ pub struct AddTimeplanEntryBody {
     /// Einfahrzeit.
     #[serde(default)]
     einfahrzeit_seconds: Option<i64>,
+    /// Custom entries only: photos next to the clock on the info board.
+    #[serde(default = "crate::utils::default_true")]
+    show_photos: bool,
     /// Insert after this entry; without one at the end.
     #[serde(default)]
     after_id: Option<i64>,
@@ -70,7 +73,8 @@ pub async fn add_timeplan_entry(
         body.duration_seconds,
         body.einfahrzeit_seconds,
     )
-    .map_err(|e| HttpError::ErrorMessages(e.to_string()))?;
+    .map_err(|e| HttpError::ErrorMessages(e.to_string()))?
+    .with_photos(body.show_photos);
     let db = db.get().await.clone();
     let mut tx = begin_write(&db).await?;
     if let Some(final_name) = &fields.final_name {
@@ -89,9 +93,10 @@ pub async fn add_timeplan_entry(
             final_name,
             kind,
             einfahrzeit_seconds,
+            show_photos,
             position
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, (SELECT COALESCE(MAX(position), 0) + 1 FROM timeplan))
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, (SELECT COALESCE(MAX(position), 0) + 1 FROM timeplan))
         RETURNING id as "id!"
         "#,
         body.earliest_start_time,
@@ -101,6 +106,7 @@ pub async fn add_timeplan_entry(
         fields.final_name,
         fields.kind,
         fields.einfahrzeit_seconds,
+        fields.show_photos,
     )
     .fetch_one(&mut *tx)
     .await?;
