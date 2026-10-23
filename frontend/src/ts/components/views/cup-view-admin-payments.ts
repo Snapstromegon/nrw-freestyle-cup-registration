@@ -5,6 +5,7 @@ import { customElement, query, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 import { errorMessage, unwrap } from "../../api";
 import { client, type schemas } from "../../apiClient";
+import { renderContact } from "../elements/club-contact";
 import {
   type SystemStatus,
   systemStatusContext,
@@ -74,7 +75,7 @@ const sortValue = (row: PaymentRow, key: SortKey): number | string => {
     case "name":
       return row.club.name;
     case "contact":
-      return row.club.owner_name ?? "";
+      return row.club.contacts?.owner_name ?? "";
     default:
       return row[key];
   }
@@ -353,8 +354,8 @@ export default class CupViewAdminPayments extends LitElement {
           [
             row.club.name,
             row.club.code,
-            row.club.owner_name,
-            row.club.owner_email,
+            row.club.contacts?.owner_name,
+            row.club.contacts?.owner_email,
           ].some((text) => text?.toLowerCase().includes(needle))),
     );
     const { key, desc } = this.sort;
@@ -583,20 +584,7 @@ export default class CupViewAdminPayments extends LitElement {
       <td class="trunc" title="${club.name} · Code im Verwendungszweck: ${club.code}">
         ${club.name} <span class="muted small">${club.code}</span>
       </td>
-      <td class="contact">
-        ${club.owner_name}
-        <a
-          class="email"
-          href="mailto:${club.owner_email}"
-          title=${club.owner_email}
-          >${club.owner_email}</a
-        >
-        ${
-          club.owner_email_verified
-            ? nothing
-            : html`<span class="chip warn">unverifiziert</span>`
-        }
-      </td>
+      <td class="contact">${renderContact(club.contacts)}</td>
       <td class="num">
         ${row.starters || html`<span class="zero">0</span>`}
       </td>

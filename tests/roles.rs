@@ -368,13 +368,12 @@ async fn check_in_sees_club_balances_but_not_contacts(db: SqlitePool) {
     assert_eq!(club["name"], "SSV");
     assert_eq!(club["payment"], 5.0);
     assert!(club["amount_due"]["total"].as_f64().unwrap() > 0.0);
-    assert_eq!(club["owner_email"], Value::Null);
-    assert_eq!(club["responsible_email"], Value::Null);
+    assert_eq!(club["contacts"], Value::Null);
 
     let jury_lead = member(&app, "Jury", &["jury_lead"]).await;
     let clubs = app.get("/api/query/list_clubs", Some(&jury_lead)).await;
     let club = &clubs.body[0];
-    assert_eq!(club["owner_email"], email_for("Clara"));
+    assert_eq!(club["contacts"]["owner_email"], email_for("Clara"));
     assert_eq!(club["payment"], Value::Null);
     assert_eq!(club["amount_due"], Value::Null);
 

@@ -10,6 +10,7 @@ use nrw_freestyle_cup_registration::{
     photos::Photos,
     player::PlayerHub,
     reloadable_sqlite::{self, ReloadableSqlite},
+    roles::Role,
     seed, utils,
 };
 use password_auth::generate_hash;
@@ -132,8 +133,9 @@ async fn main() -> eyre::Result<()> {
 async fn admin_user_exists(db: &sqlx::SqlitePool) -> sqlx::Result<bool> {
     let result = sqlx::query!(
         r#"
-        SELECT COUNT(*) as count FROM user_roles WHERE role = 'admin'
+        SELECT COUNT(*) as count FROM user_roles WHERE role = ?
         "#,
+        Role::Admin,
     )
     .fetch_one(db)
     .await?;
@@ -164,8 +166,9 @@ async fn insert_admin_user(
     .execute(db)
     .await?;
     sqlx::query!(
-        "INSERT INTO user_roles (user_id, role) VALUES (?, 'admin')",
-        id
+        "INSERT INTO user_roles (user_id, role) VALUES (?, ?)",
+        id,
+        Role::Admin,
     )
     .execute(db)
     .await?;

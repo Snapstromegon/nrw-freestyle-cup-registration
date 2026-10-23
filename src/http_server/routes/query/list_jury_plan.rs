@@ -5,10 +5,13 @@ use uuid::Uuid;
 
 use crate::{
     groups::ensure_club_access,
-    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    http_server::{
+        ClientError, HttpError,
+        extractor::auth::{Auth, Granted},
+    },
     jury::{JudgeTask, JuryAssignment, JuryEnabled},
     reloadable_sqlite::ReloadableSqlite,
-    roles::Permission,
+    roles::permit,
 };
 
 #[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
@@ -45,13 +48,14 @@ pub async fn list_jury_plan(
     _jury: JuryEnabled,
     Extension(db): Extension<ReloadableSqlite>,
     auth: Auth,
+    jury_lead: Option<Granted<permit::ManageJury>>,
     Query(query): Query<ListJuryPlanQuery>,
 ) -> Result<Json<JuryPlan>, HttpError> {
     let db = db.get().await.clone();
     let mut conn = db.acquire().await?;
     match query.club_id {
         Some(club_id) => ensure_club_access(&mut conn, &auth, club_id).await?,
-        None if auth.can(Permission::ManageJury) => {}
+        None if jury_lead.is_some() => {}
         None => return Err(HttpError::StatusCode(StatusCode::FORBIDDEN)),
     }
     let published_at = sqlx::query_scalar!(
@@ -60,7 +64,7 @@ pub async fn list_jury_plan(
     .fetch_optional(&mut *conn)
     .await?
     .flatten();
-    if published_at.is_none() && !auth.can(Permission::ManageJury) {
+    if published_at.is_none() && jury_lead.is_none() {
         return Ok(Json(JuryPlan {
             published_at,
             assignments: vec![],

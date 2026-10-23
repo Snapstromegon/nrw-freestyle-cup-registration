@@ -306,11 +306,13 @@ async fn list_clubs_shows_clubs_with_owners_to_admins(db: SqlitePool) {
             "name": "RSV",
             "payment": 42.5,
             "owner_id": owner_id,
-            "owner_name": "Owner",
-            "owner_email": "owner@cup.test",
-            "owner_email_verified": true,
-            "responsible_name": "Owner",
-            "responsible_email": "owner@cup.test",
+            "contacts": {
+                "owner_name": "Owner",
+                "owner_email": "owner@cup.test",
+                "owner_email_verified": true,
+                "responsible_name": "Owner",
+                "responsible_email": "owner@cup.test",
+            },
             "code": nrw_freestyle_cup_registration::utils::club_code(&club_id),
             "amount_due": { "start_fees": 0.0, "jury_fee": 0.0, "total": 0.0 },
             "jury": {

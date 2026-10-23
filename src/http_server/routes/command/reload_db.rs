@@ -6,9 +6,12 @@ use tracing::instrument;
 use utoipa::ToSchema;
 
 use crate::{
-    http_server::{ClientError, HttpError, HttpServerOptions, extractor::auth::Auth},
+    http_server::{
+        ClientError, HttpError, HttpServerOptions,
+        extractor::auth::{Auth, Granted},
+    },
     reloadable_sqlite::ReloadableSqlite,
-    roles::Permission,
+    roles::permit,
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -22,9 +25,9 @@ pub struct ReloadDBQuery {
 #[derive(ToSchema, Debug)]
 pub struct Upload {}
 
-/// EditClubAct a new user.
+/// Reload the database from disk, e.g. after `seed_demo` replaced it.
 ///
-/// This endpoint is used to create a new user.
+/// Needs a login and the permission to manage users or the reload token.
 #[utoipa::path(
     post,
     tags=["command", "club"],
@@ -40,13 +43,13 @@ pub struct Upload {}
 #[axum::debug_handler]
 pub async fn reload_db(
     Extension(db): Extension<ReloadableSqlite>,
-    auth: Auth,
+    // A login is needed even with the token.
+    _: Auth,
+    users: Option<Granted<permit::ManageUsers>>,
     Query(query): Query<ReloadDBQuery>,
     Extension(http_options): Extension<Arc<HttpServerOptions>>,
 ) -> Result<Json<ReloadDBResponse>, HttpError> {
-    if !auth.can(Permission::ManageUsers)
-        && query.token != Some(http_options.reload_db_token.clone())
-    {
+    if users.is_none() && query.token != Some(http_options.reload_db_token.clone()) {
         return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
     }
 

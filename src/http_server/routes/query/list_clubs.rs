@@ -21,14 +21,8 @@ pub struct ClubOverview {
     /// The amount the club has paid so far; only with club balances.
     payment: Option<f64>,
     owner_id: Uuid,
-    /// The club contact; only with club contacts.
-    owner_name: Option<String>,
-    owner_email: Option<String>,
-    owner_email_verified: Option<bool>,
-    /// The Vereinsverantwortliche/r; the owner unless the club named someone
-    /// else. Only with club contacts.
-    responsible_name: Option<String>,
-    responsible_email: Option<String>,
+    /// Only with the permission to see club contacts.
+    contacts: Option<ClubContacts>,
     /// Short code for the transfer reference, e.g. "EV-K7Q3"; stays the
     /// same when the club is renamed.
     code: String,
@@ -37,6 +31,19 @@ pub struct ClubOverview {
     /// The club's jury obligation, while the jury registration is on; only
     /// with club balances or for the jury lead.
     jury: Option<JuryObligation>,
+}
+
+/// The people to reach a club through.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct ClubContacts {
+    /// The club contact.
+    owner_name: String,
+    owner_email: String,
+    owner_email_verified: bool,
+    /// The Vereinsverantwortliche/r; the owner unless the club named someone
+    /// else.
+    responsible_name: String,
+    responsible_email: String,
 }
 
 /// List all clubs; their balances and contacts only with the permission to
@@ -97,11 +104,13 @@ pub async fn list_clubs(
                 name: row.name,
                 payment: row.payment.filter(|_| balances),
                 owner_id: row.owner_id,
-                owner_name: Some(row.owner_name).filter(|_| contacts),
-                owner_email: Some(row.owner_email).filter(|_| contacts),
-                owner_email_verified: Some(row.owner_email_verified).filter(|_| contacts),
-                responsible_name: Some(row.responsible_name).filter(|_| contacts),
-                responsible_email: Some(row.responsible_email).filter(|_| contacts),
+                contacts: contacts.then(|| ClubContacts {
+                    owner_name: row.owner_name,
+                    owner_email: row.owner_email,
+                    owner_email_verified: row.owner_email_verified,
+                    responsible_name: row.responsible_name,
+                    responsible_email: row.responsible_email,
+                }),
             }
         })
         .collect();

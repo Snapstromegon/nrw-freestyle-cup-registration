@@ -6,6 +6,7 @@ import { ifDefined } from "lit/directives/if-defined.js";
 import { repeat } from "lit/directives/repeat.js";
 import { errorMessage, PollController, unwrap } from "../../api";
 import { client, type schemas } from "../../apiClient";
+import { renderContact } from "../elements/club-contact";
 import { responsibleIsContact } from "../../club-data";
 import {
   type SystemStatus,
@@ -101,7 +102,7 @@ const sortValue = (row: ClubRow, key: SortKey): number | string => {
     case "name":
       return row.club.name;
     case "contact":
-      return row.club.owner_name ?? "";
+      return row.club.contacts?.owner_name ?? "";
     case "starters":
       return row.starters.length;
     case "acts":
@@ -1073,10 +1074,10 @@ export default class CupViewAdmin extends LitElement {
       ? allRows.filter((row) =>
           [
             row.club.name,
-            row.club.owner_name,
-            row.club.owner_email,
-            row.club.responsible_name,
-            row.club.responsible_email,
+            row.club.contacts?.owner_name,
+            row.club.contacts?.owner_email,
+            row.club.contacts?.responsible_name,
+            row.club.contacts?.responsible_email,
           ].some((text) => text?.toLowerCase().includes(needle)),
         )
       : [...allRows];
@@ -1198,28 +1199,26 @@ export default class CupViewAdmin extends LitElement {
         <td class="trunc name" title=${club.name}>
           <a href=${href}>${club.name}</a>
         </td>
-        <td class="contact" title=${`${club.owner_name} <${club.owner_email}>`}>
-          ${club.owner_name}
-          <a
-            class="email"
-            href="mailto:${club.owner_email}"
-            title=${club.owner_email}
-            >${club.owner_email}</a
-          >
-          ${
-            club.owner_email_verified
-              ? nothing
-              : html`<span class="chip warn">unverifiziert</span>`
+        <td
+          class="contact"
+          title=${
+            club.contacts
+              ? `${club.contacts.owner_name} <${club.contacts.owner_email}>`
+              : nothing
           }
+        >
+          ${renderContact(club.contacts)}
           ${
-            responsibleIsContact(club)
+            !club.contacts || responsibleIsContact(club.contacts)
               ? nothing
               : html`<br /><small
                     class="muted"
-                    title=${`Vereinsverantwortliche/r: ${club.responsible_name} <${club.responsible_email}>`}
-                    >Verantwortlich: ${club.responsible_name}
-                    <a class="email" href="mailto:${club.responsible_email}"
-                      >${club.responsible_email}</a
+                    title=${`Vereinsverantwortliche/r: ${club.contacts.responsible_name} <${club.contacts.responsible_email}>`}
+                    >Verantwortlich: ${club.contacts.responsible_name}
+                    <a
+                      class="email"
+                      href="mailto:${club.contacts.responsible_email}"
+                      >${club.contacts.responsible_email}</a
                     ></small
                   >`
           }
