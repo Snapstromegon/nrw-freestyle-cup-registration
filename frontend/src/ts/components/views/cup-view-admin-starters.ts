@@ -21,6 +21,7 @@ import {
   isGroupActType,
   MIN_GROUP_SIZE,
   participantName,
+  countRiders,
 } from "../../utils";
 
 type Act = schemas.Act;
@@ -534,7 +535,7 @@ export default class CupViewAdminStarters extends LitElement {
     const emptyLine =
       emptyNames && !this.isFiltering
         ? html`<p class="empty-categories small muted">
-          Kategorien ohne Starter: ${emptyNames}
+          Kategorien ohne FahrerInnen: ${emptyNames}
         </p>`
         : nothing;
     if (visible.length === 0) {
@@ -602,8 +603,8 @@ export default class CupViewAdminStarters extends LitElement {
               : acts === 1
                 ? "Paar"
                 : "Paare"
-          } · ${all.length} FahrerInnen`
-        : `${all.length} FahrerInnen`;
+          } · ${countRiders(all.length)}`
+        : countRiders(all.length);
     return html`<tr class="group-head">
       <th colspan="8">
         ${

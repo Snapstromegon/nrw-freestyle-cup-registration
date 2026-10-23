@@ -447,6 +447,10 @@ export const actSizeWarning = (act: {
     act.participants.filter((p) => !p.is_replacement).length,
   );
 
+/** "1 FahrerIn", "7 FahrerInnen". */
+export const countRiders = (count: number) =>
+  `${count} ${count === 1 ? "FahrerIn" : "FahrerInnen"}`;
+
 /**
  * One-line summary of a group, e.g. "KG Junior Expert · 7 FahrerInnen + 1 Ersatz".
  * `isU15` is `null` when the age group is unknown (it is then left out).
@@ -462,7 +466,7 @@ export const describeGroup = (
   }
   const age = isU15 === null ? "" : isU15 ? " Junior Expert" : " Expert";
   const extra = replacements > 0 ? ` + ${replacements} Ersatz` : "";
-  return `${actTypeShort[type]}${age} · ${regular} FahrerInnen${extra}`;
+  return `${actTypeShort[type]}${age} · ${countRiders(regular)}${extra}`;
 };
 
 /** A run of a final's reserved slots, e.g. 5 slots "U11–U15". */

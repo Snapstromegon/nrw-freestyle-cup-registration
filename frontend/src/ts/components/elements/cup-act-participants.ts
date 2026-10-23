@@ -12,6 +12,7 @@ import {
   MIN_GROUP_SIZE,
   type ParticipantLike,
   participantName,
+  countRiders,
 } from "../../utils";
 
 /**
@@ -219,7 +220,7 @@ export default class CupActParticipants extends LitElement {
     return html`<div class="head">
         <span class="gname">${act.group_name || "Gruppe"}</span>
         <span class="meta"
-          >${regular} FahrerInnen${
+          >${countRiders(regular)}${
             replacements > 0 ? ` (+${replacements} Ersatz)` : nothing
           }</span
         >

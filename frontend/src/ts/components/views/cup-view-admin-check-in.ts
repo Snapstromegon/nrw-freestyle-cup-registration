@@ -29,6 +29,7 @@ import {
   isGroupActType,
   MIN_GROUP_SIZE,
   participantName,
+  countRiders,
 } from "../../utils";
 
 type Starter = schemas.Starter;
@@ -628,7 +629,7 @@ export default class CupViewAdminCheckIn extends LitElement {
       <button
         class="chip"
         aria-pressed=${this.soonOnly ? "true" : "false"}
-        title=${`Nur Starter, die noch nicht eingecheckt sind und laut Zeitplan in weniger als ${SOON_MINUTES} Minuten starten (ohne Starts als Ersatz)${
+        title=${`Nur FahrerInnen, die noch nicht eingecheckt sind und laut Zeitplan in weniger als ${SOON_MINUTES} Minuten starten (ohne Starts als Ersatz)${
           this.timesKnown() ? "" : " – Startzeiten derzeit unbekannt"
         }`}
         @click=${this.onSoonToggle}
@@ -871,7 +872,7 @@ export default class CupViewAdminCheckIn extends LitElement {
       ${
         visible.length === 0
           ? html`<p class="empty">
-            Keine Starter für diese Suche bzw. diese Filter.
+            Keine FahrerInnen für diese Suche bzw. diese Filter.
           </p>`
           : nothing
       }
@@ -1163,7 +1164,7 @@ export default class CupViewAdminCheckIn extends LitElement {
               : " – ohne passende Kategorie"
       }`;
       lines.push(
-        `${regular.length} FahrerInnen${replacements ? ` + ${replacements} Ersatz` : ""} · ${actClubNames(act).join(", ")}`,
+        `${countRiders(regular.length)}${replacements ? ` + ${replacements} Ersatz` : ""} · ${actClubNames(act).join(", ")}`,
       );
       if (start.replacement) {
         lines.push(`${row.starter.firstname} ist Ersatzfahrer:in`);
@@ -1714,7 +1715,7 @@ export default class CupViewAdminCheckIn extends LitElement {
     const changed = rows
       .filter((row) => this.isIn(row) !== checkedIn)
       .map((row) => row.starter.id);
-    const label = `${club.name} (${ids.length} FahrerInnen)`;
+    const label = `${club.name} (${countRiders(ids.length)})`;
     this.changeWithNotice(ids, checkedIn, label, {
       text: `${checkedIn ? "✓" : "○"} ${changed.length} ${
         visibleOnly ? "angezeigte " : ""
@@ -1724,7 +1725,7 @@ export default class CupViewAdminCheckIn extends LitElement {
         ? {
             ids: changed,
             checkedIn: !checkedIn,
-            label: `${club.name} (${changed.length} FahrerInnen)`,
+            label: `${club.name} (${countRiders(changed.length)})`,
           }
         : undefined,
       createdAt: Date.now(),

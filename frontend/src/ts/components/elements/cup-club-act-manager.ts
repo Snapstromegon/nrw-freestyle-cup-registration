@@ -21,6 +21,7 @@ import {
   isGroupActType,
   MIN_GROUP_SIZE,
   normalizationLabel,
+  countRiders,
 } from "../../utils";
 
 type Act = schemas.ClubAct;
@@ -472,7 +473,7 @@ export default class CupClubActManager extends LitElement {
     const replacements = act.participants.length - regular;
     return html`<details>
       <summary>
-        ${regular} FahrerInnen${replacements ? ` + ${replacements} Ersatz` : ""}
+        ${countRiders(regular)}${replacements ? ` + ${replacements} Ersatz` : ""}
       </summary>
       ${list}
     </details>`;

@@ -37,6 +37,7 @@ import {
   isUnderAge,
   judgingAfterBlockEnd,
   lastTimeplanAct,
+  countRiders,
   customOf,
   isEmptyBlock,
   lastTimeplanEntry,
@@ -170,6 +171,14 @@ describe("timeplan entries", () => {
     assert.equal(currentTimeplanEntry(undefined), undefined);
     assert.equal(nextTimeplanEntry(undefined), undefined);
     assert.equal(lastTimeplanEntry(undefined), undefined);
+  });
+});
+
+describe("countRiders", () => {
+  test("says FahrerIn for one and FahrerInnen otherwise", () => {
+    assert.equal(countRiders(1), "1 FahrerIn");
+    assert.equal(countRiders(0), "0 FahrerInnen");
+    assert.equal(countRiders(7), "7 FahrerInnen");
   });
 });
 

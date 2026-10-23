@@ -31,6 +31,7 @@ import {
   MAX_SMALL_GROUP_SIZE,
   MIN_GROUP_SIZE,
   normalizationLabel,
+  countRiders,
 } from "../../../utils";
 import {
   checkSong,
@@ -1143,7 +1144,7 @@ export default class CupClubStepActs extends LitElement {
                     >„${action.group.group_name}“ gibt es schon:
                     ${actTypeLabels[action.group.act_type]} von
                     ${action.group.owner_club_name ?? "einem anderen Verein"}
-                    (${action.group.regular_count} FahrerInnen${
+                    (${countRiders(action.group.regular_count)}${
                       action.group.replacement_count
                         ? ` + ${action.group.replacement_count} Ersatz`
                         : ""
@@ -1409,7 +1410,7 @@ export default class CupClubStepActs extends LitElement {
         <span class="riders"
           >${
             isGroup
-              ? `${regular} FahrerInnen${replacements ? ` + ${replacements} Ersatz` : ""}${
+              ? `${countRiders(regular)}${replacements ? ` + ${replacements} Ersatz` : ""}${
                   group?.category ? ` · ${group.category}` : ""
                 } – ${this.riderNames(act) || "noch keine FahrerInnen"}`
               : `${act.act_type === "single" ? `${this.singleLabel(act)}: ` : ""}${this.riderNames(act)}`
@@ -1660,7 +1661,7 @@ export default class CupClubStepActs extends LitElement {
       </div>`;
     });
     return html`<p class="hint">
-        ${members.size} ausgewählt (${regular} FahrerInnen${
+        ${members.size} ausgewählt (${countRiders(regular)}${
           members.size - regular ? `, ${members.size - regular} Ersatz` : ""
         })
       </p>

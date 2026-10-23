@@ -396,7 +396,7 @@ export default class CupClubStepClub extends LitElement {
           und zusätzlich auf einem USB-Stick mitbringen.
         </li>
         <li>
-          Der anmeldende Trainer ist dafür verantwortlich, dass alle Starter den
+          Der anmeldende Trainer ist dafür verantwortlich, dass alle FahrerInnen den
           Bedingungen aus der
           ${
             competition.announcement_url
