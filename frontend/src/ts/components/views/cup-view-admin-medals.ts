@@ -3,93 +3,18 @@ import { css, html, LitElement, nothing } from "lit";
 import { customElement } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 import { errorMessage, unwrap } from "../../api";
-import { client, type schemas } from "../../apiClient";
+import { client } from "../../apiClient";
+import {
+  type FinalTrophies,
+  finalTrophies,
+  type MedalCategory,
+  PODIUM,
+  STICKERS_PER_SHEET,
+  sheetsOf,
+  summarizeMedals,
+} from "../../medals";
 import { adminStyles } from "../../styles/admin";
 import { iconStyles, resetStyles } from "../../styles/base";
-
-/** Stickers on one A4 sheet: 5 columns × 13 rows. */
-const STICKERS_PER_SHEET = 65;
-/** Medals are printed for the first three places of each category. */
-const PODIUM = 3;
-
-interface MedalCategory {
-  name: string;
-  /** Text on the stickers: the description, or the name without one. */
-  label: string;
-  starts: number;
-  /** Fewest and most regular riders of one start. */
-  minPerStart: number;
-  maxPerStart: number;
-  /** Stickers to print: the riders of the three largest starts. */
-  medals: number;
-  /** Replacement riders in the category; they get no sticker. */
-  replacements: number;
-  /** Sheets (1-based) the category's stickers are printed on. */
-  firstSheet: number;
-  lastSheet: number;
-}
-
-const summarize = (
-  categories: schemas.Category[],
-  acts: schemas.StartlistAct[],
-) => {
-  const actsByCategory = new Map<string, typeof acts>();
-  for (const act of acts) {
-    if (act.category) {
-      actsByCategory.set(act.category, [
-        ...(actsByCategory.get(act.category) ?? []),
-        act,
-      ]);
-    }
-  }
-  // Categories in their order; unknown ones (shouldn't happen) at the end.
-  const names = [
-    ...categories.map((c) => c.name),
-    ...[...actsByCategory.keys()].filter(
-      (name) => !categories.some((c) => c.name === name),
-    ),
-  ];
-  const labels = new Map(categories.map((c) => [c.name, c.description]));
-
-  let printed = 0;
-  return names.map((name): MedalCategory => {
-    const categoryActs = actsByCategory.get(name) ?? [];
-    // Only regular riders get a medal; replacements are listed separately.
-    const regular = categoryActs
-      .map((act) => act.participants.filter((p) => !p.is_replacement).length)
-      .sort((a, b) => b - a);
-    const medals = regular.slice(0, PODIUM).reduce((sum, n) => sum + n, 0);
-    const first = printed;
-    printed += medals;
-    return {
-      name,
-      label: labels.get(name) || name,
-      starts: categoryActs.length,
-      minPerStart: regular.at(-1) ?? 0,
-      maxPerStart: regular[0] ?? 0,
-      medals,
-      replacements: categoryActs.reduce(
-        (sum, act) =>
-          sum + act.participants.filter((p) => p.is_replacement).length,
-        0,
-      ),
-      firstSheet: Math.floor(first / STICKERS_PER_SHEET) + 1,
-      lastSheet: Math.floor((printed - 1) / STICKERS_PER_SHEET) + 1,
-    };
-  });
-};
-
-/** All stickers in print order, split into sheets of 65. */
-const sheetsOf = (categories: MedalCategory[]) => {
-  const stickers = categories.flatMap((c) =>
-    Array.from({ length: c.medals }, () => c.label),
-  );
-  const sheets: string[][] = [];
-  for (let i = 0; i < stickers.length; i += STICKERS_PER_SHEET) {
-    sheets.push(stickers.slice(i, i + STICKERS_PER_SHEET));
-  }
-  return sheets;
-};
 
 @customElement("cup-view-admin-medals")
 export default class CupViewAdminMedals extends LitElement {
@@ -171,12 +96,17 @@ export default class CupViewAdminMedals extends LitElement {
   private data = new Task(this, {
     args: () => [],
     task: async () => {
-      const [categories, startlist] = await Promise.all([
+      const [categories, startlist, finals] = await Promise.all([
         unwrap(client.listCategories()),
         unwrap(client.startlist()),
+        unwrap(client.listFinals()),
       ]);
-      const summary = summarize(categories, startlist);
-      return { summary, sheets: sheetsOf(summary) };
+      const summary = summarizeMedals(categories, startlist);
+      return {
+        summary,
+        sheets: sheetsOf(summary),
+        trophies: finalTrophies(finals),
+      };
     },
   });
 
@@ -195,8 +125,8 @@ export default class CupViewAdminMedals extends LitElement {
             </button>
           </div>
         </div>`,
-      complete: ({ summary, sheets }) =>
-        html`${this.renderSummary(summary, sheets.length)}
+      complete: ({ summary, sheets, trophies }) =>
+        html`${this.renderSummary(summary, sheets.length, trophies)}
           <div class="sheets">
             ${repeat(
               sheets,
@@ -216,15 +146,27 @@ export default class CupViewAdminMedals extends LitElement {
     });
   }
 
-  private renderSummary(summary: MedalCategory[], sheetCount: number) {
+  private renderSummary(
+    summary: MedalCategory[],
+    sheetCount: number,
+    trophies: FinalTrophies[],
+  ) {
     const total = (key: "starts" | "medals" | "replacements") =>
       summary.reduce((sum, c) => sum + c[key], 0);
     const medals = total("medals");
+    const trophyCount = trophies.reduce((sum, f) => sum + f.trophies, 0);
     return html`<div class="page-pad no-print">
       <div class="toolbar">
         <h1>Medaillen</h1>
         <div class="kpis">
           <span class="kpi"><b>${medals}</b> Medaillen</span>
+          ${
+            trophies.length
+              ? html`<span class="kpi" title="Für die Plätze 1–${PODIUM} der Finals"
+                  ><b>${trophyCount}</b> Pokale</span
+                >`
+              : nothing
+          }
           <span class="kpi"
             ><b>${sheetCount}</b> ${sheetCount === 1 ? "Bogen" : "Bögen"} à
             ${STICKERS_PER_SHEET}</span
@@ -322,7 +264,46 @@ export default class CupViewAdminMedals extends LitElement {
           ? html`<p class="empty">Noch keine Starts mit Kategorie.</p>`
           : nothing
       }
+      ${trophies.length ? this.renderTrophies(trophies, trophyCount) : nothing}
     </div>`;
+  }
+
+  private renderTrophies(trophies: FinalTrophies[], trophyCount: number) {
+    return html`<h2>Pokale</h2>
+      <p class="muted small">
+        Finals bekommen statt Medaillen Pokale: einen für jede Fahrerin und
+        jeden Fahrer der Plätze 1–${PODIUM}, im Paarfinale also zwei je Platz;
+        eine Gruppe bekommt einen Pokal.
+      </p>
+      <table class="dense fit">
+        <thead>
+          <tr>
+            <th>Finale</th>
+            <th>Aufschrift</th>
+            <th class="num">Plätze</th>
+            <th class="num">Pokale</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${repeat(
+            trophies,
+            (f) => f.name,
+            (f) =>
+              html`<tr>
+                <td><b>${f.name}</b></td>
+                <td>${f.label === f.name ? "" : f.label}</td>
+                <td class="num">${f.places}</td>
+                <td class="num">${f.trophies}</td>
+              </tr>`,
+          )}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3">Summe</td>
+            <td class="num">${trophyCount}</td>
+          </tr>
+        </tfoot>
+      </table>`;
   }
 
   private print() {
