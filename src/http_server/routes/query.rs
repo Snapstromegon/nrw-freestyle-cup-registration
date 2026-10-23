@@ -11,10 +11,12 @@ mod list_categories;
 mod list_check_ins;
 mod list_club_acts;
 mod list_club_groups;
+mod list_club_judges;
 mod list_club_starters;
 mod list_clubs;
 mod list_finals;
 mod list_groups;
+mod list_judges;
 mod list_jury_categories;
 mod list_starters;
 mod list_timeplan;
@@ -47,4 +49,6 @@ pub fn get_query_router() -> OpenApiRouter {
         .routes(routes!(list_groups::list_groups))
         .routes(routes!(list_club_groups::list_club_groups))
         .routes(routes!(list_check_ins::list_check_ins))
+        .routes(routes!(list_club_judges::list_club_judges))
+        .routes(routes!(list_judges::list_judges))
 }

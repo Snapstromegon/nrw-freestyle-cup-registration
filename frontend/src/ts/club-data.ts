@@ -15,6 +15,8 @@ export type ClubAct = schemas.ClubAct;
 export type ClubGroup = schemas.ClubGroup;
 export type GroupSummary = schemas.GroupSummary;
 export type Club = schemas.Club;
+export type ClubJudge = schemas.ClubJudge;
+export type JuryCategory = schemas.JuryCategory;
 /** A starter of any club, as admins list them. */
 export type AnyStarter = schemas.Starter;
 
@@ -29,6 +31,9 @@ export interface ClubData {
   allGroups: GroupSummary[];
   /** For admins: the starters of all clubs, to pick riders of any club. */
   allStarters?: AnyStarter[];
+  /** With the jury registration: the club's judges and what they can pick. */
+  judges?: ClubJudge[];
+  juryCategories?: JuryCategory[];
 }
 
 /** The steps of the registration, in order. */
@@ -36,8 +41,13 @@ export const STEPS = [
   { id: "verein", label: "Verein", icon: "groups" },
   { id: "fahrer", label: "Fahrer", icon: "person_add" },
   { id: "kueren", label: "Küren", icon: "library_music" },
+  { id: "jury", label: "Jury", icon: "gavel" },
   { id: "startgeld", label: "Startgeld", icon: "payments" },
 ] as const;
+
+/** The steps a club sees: the jury step only with the jury registration. */
+export const visibleSteps = (juryRegistration: boolean) =>
+  STEPS.filter((step) => juryRegistration || step.id !== "jury");
 
 export type StepId = (typeof STEPS)[number]["id"];
 
@@ -282,6 +292,12 @@ export const stepSummaries = (
         ).length;
         return `${count(acts, "Kür", "Küren")}${n ? ` · ${n} offen` : ""}`;
       })(),
+    },
+    jury: {
+      state: data.judges?.length ? "done" : "todo",
+      summary: data.judges?.length
+        ? count(data.judges.length, "JurorIn", "JurorInnen")
+        : "keine JurorInnen",
     },
     startgeld: {
       state: amount === 0 ? "todo" : open >= 0.01 ? "open" : "done",

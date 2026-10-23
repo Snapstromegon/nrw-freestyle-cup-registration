@@ -37,6 +37,9 @@ music_upload_end = 2027-03-15T23:59:59+01:00
 fee_per_start = 15
 max_fee_per_starter = 45
 
+# The Jury-Konzept's rules.
+[competition.jury]
+
 [competition.payment]
 deadline = 2027-05-15
 account_holder = "Demo Kassenwart"
@@ -185,6 +188,39 @@ birthdate = 1952-01-20
 single = "male"
 checked_in_at = 2027-06-05T09:31:00+02:00
 
+# Judges: enough Einsätze for the club's Küren.
+[[clubs.judges]]
+firstname = "Petra"
+lastname = "Wagner"
+birthdate = 1975-03-14
+registrations = [
+  { category = "Einzel – Junior Expert Vorlauf", role = "technical" },
+  { category = "Einzel – Expert Vorlauf", role = "technical" },
+  { category = "Paar – Vorlauf", role = "performance" },
+  { category = "Finale Einzel", role = "technical" },
+]
+
+[[clubs.judges]]
+firstname = "Klaus"
+lastname = "Fischer"
+birthdate = 1969-11-02
+note = "Nur am Samstag"
+registrations = [
+  { category = "Einzel – Junior Expert Vorlauf", role = "performance" },
+  { category = "Einzel – Expert Vorlauf", role = "performance" },
+  { category = "Gruppen", role = "technical" },
+]
+
+[[clubs.judges]]
+firstname = "Mia"
+lastname = "Wagner"
+birthdate = 2011-04-20
+max_deployments = 2
+registrations = [
+  { category = "Einzel – Junior Expert Vorlauf", role = "dismounts" },
+  { category = "Paar – Vorlauf", role = "dismounts" },
+]
+
 # 20 starts, 300 € due: paid partially. Half of the starters checked in.
 [[clubs]]
 name = "RSC Köln"
@@ -269,6 +305,25 @@ firstname = "Nina"
 lastname = "Wolf"
 birthdate = 2011-05-25
 pair = true
+
+# Judges: too few Einsätze, so the club pays the jury fee.
+[[clubs.judges]]
+firstname = "Jan"
+lastname = "Hoffmann"
+birthdate = 1988-08-08
+max_deployments = 2
+registrations = [
+  { category = "Einzel – Expert Vorlauf", role = "technical" },
+]
+
+[[clubs.judges]]
+firstname = "Lukas"
+lastname = "Hoffmann"
+birthdate = 2013-01-15
+trained = false
+registrations = [
+  { category = "Einzel – Junior Expert Vorlauf", role = "dismounts" },
+]
 
 # 13 starts, 195 € due: nothing paid. Nobody checked in yet.
 [[clubs]]
@@ -1066,3 +1121,22 @@ category = "GG15+"
 [[timeplan]]
 label = "Siegerehrung"
 duration_minutes = 45
+
+# What the demo judges register for (jury registration).
+[[jury_categories]]
+name = "Einzel – Junior Expert Vorlauf"
+
+[[jury_categories]]
+name = "Einzel – Expert Vorlauf"
+
+[[jury_categories]]
+name = "Paar – Vorlauf"
+
+[[jury_categories]]
+name = "Finale Einzel"
+deployments = 1
+day = 2027-04-02
+
+[[jury_categories]]
+name = "Gruppen"
+day = 2027-04-02

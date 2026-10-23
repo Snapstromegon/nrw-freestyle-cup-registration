@@ -57,6 +57,9 @@ const COMMANDS: &[&str] = &[
     "delete_jury_category",
     "edit_jury_category",
     "set_jury_category_order",
+    "add_club_judge",
+    "delete_club_judge",
+    "edit_club_judge",
 ];
 
 const QUERIES: &[&str] = &[
@@ -82,6 +85,8 @@ const QUERIES: &[&str] = &[
     "startlist",
     "whoami",
     "list_jury_categories",
+    "list_club_judges",
+    "list_judges",
 ];
 
 #[test]

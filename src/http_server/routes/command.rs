@@ -2,6 +2,7 @@ use axum::extract::DefaultBodyLimit;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 mod add_category;
+mod add_club_judge;
 mod add_club_starter;
 mod add_final;
 mod add_jury_category;
@@ -10,12 +11,14 @@ mod create_club;
 mod create_club_group;
 mod delete_category;
 mod delete_club_group;
+mod delete_club_judge;
 mod delete_club_starter;
 mod delete_final;
 mod delete_jury_category;
 mod delete_timeplan_entry;
 mod edit_category;
 mod edit_club_act;
+mod edit_club_judge;
 mod edit_club_starter;
 mod edit_final;
 mod edit_jury_category;
@@ -110,5 +113,8 @@ pub fn get_command_router() -> OpenApiRouter {
         .routes(routes!(set_block_order::set_block_order))
         .routes(routes!(reset_block_order::reset_block_order))
         .routes(routes!(reload_db::reload_db))
+        .routes(routes!(add_club_judge::add_club_judge))
+        .routes(routes!(delete_club_judge::delete_club_judge))
+        .routes(routes!(edit_club_judge::edit_club_judge))
         .layer(DefaultBodyLimit::max(save_act_song::MAX_REQUEST_SIZE))
 }

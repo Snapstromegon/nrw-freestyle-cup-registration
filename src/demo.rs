@@ -99,6 +99,32 @@ pub struct DemoClub {
     pub payment: Option<f64>,
     #[serde(default)]
     pub starters: Vec<DemoStarter>,
+    #[serde(default)]
+    pub judges: Vec<DemoJudge>,
+}
+
+/// A judge of a demo club (jury registration).
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DemoJudge {
+    pub firstname: String,
+    pub lastname: String,
+    #[serde(deserialize_with = "toml_date")]
+    pub birthdate: Date,
+    #[serde(default = "default_true")]
+    pub trained: bool,
+    pub max_deployments: Option<i64>,
+    pub note: Option<String>,
+    /// Jury categories (by name) and roles.
+    #[serde(default)]
+    pub registrations: Vec<DemoJudgeRegistration>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DemoJudgeRegistration {
+    pub category: String,
+    pub role: crate::jury::JudgeRole,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -283,6 +309,7 @@ impl DemoData {
         let users = self.insert_users(db).await?;
         let starters = self.insert_clubs(db, &users).await?;
         self.link_partners(db, &starters).await?;
+        self.insert_judges(db).await?;
 
         utils::initialize_acts(db).await?;
         let group_ids = self.insert_groups(db, &starters).await?;
@@ -439,6 +466,65 @@ impl DemoData {
             }
         }
         Ok(starters)
+    }
+
+    /// Registers the clubs' judges with the same rules as the API.
+    async fn insert_judges(&self, db: &sqlx::SqlitePool) -> Result<(), String> {
+        let competition = crate::competition::Competition::current(db)
+            .await
+            .map_err(|e| e.to_string())?;
+        let mut conn = db.acquire().await.map_err(|e| e.to_string())?;
+        let categories: HashMap<String, Uuid> = crate::jury::list_categories(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .map(|c| (c.name, c.id))
+            .collect();
+        for club in &self.clubs {
+            if club.judges.is_empty() {
+                continue;
+            }
+            let club_id = sqlx::query_scalar!(
+                r#"SELECT id as "id!: Uuid" FROM clubs WHERE name = ?"#,
+                club.name
+            )
+            .fetch_one(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?;
+            for judge in &club.judges {
+                let name = format!("{} {}", judge.firstname, judge.lastname);
+                let registrations = judge
+                    .registrations
+                    .iter()
+                    .map(|r| {
+                        categories
+                            .get(&r.category)
+                            .map(|id| crate::jury::JudgeRegistration {
+                                jury_category_id: *id,
+                                role: r.role,
+                            })
+                            .ok_or_else(|| {
+                                format!("Judge {name}: unknown jury category {:?}", r.category)
+                            })
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                let fields = crate::jury::JudgeFields {
+                    firstname: judge.firstname.clone(),
+                    lastname: judge.lastname.clone(),
+                    birthdate: judge.birthdate.midnight().assume_utc(),
+                    is_trained: judge.trained,
+                    max_deployments: judge.max_deployments,
+                    note: judge.note.clone(),
+                    registrations,
+                }
+                .normalize(competition.as_ref())
+                .map_err(|e| format!("Judge {name}: {e}"))?;
+                crate::jury::save_judge(&mut conn, Uuid::now_v7(), club_id, &fields)
+                    .await
+                    .map_err(|e| format!("Judge {name}: {e:?}"))?;
+            }
+        }
+        Ok(())
     }
 
     async fn link_partners(

@@ -5,13 +5,17 @@
 
 use std::sync::Arc;
 
-use axum::{extract::FromRequestParts, http::request::Parts};
-use time::Date;
+use axum::{
+    extract::FromRequestParts,
+    http::{StatusCode, request::Parts},
+};
+use time::{Date, OffsetDateTime};
 use uuid::Uuid;
 
 use crate::{
     competition::Competition,
-    http_server::{HttpError, HttpServerOptions},
+    groups::ensure_club_access,
+    http_server::{HttpError, HttpServerOptions, extractor::auth::Auth},
 };
 
 time::serde::format_description!(iso_date, Date, "[year]-[month]-[day]");
@@ -180,4 +184,302 @@ pub(crate) fn is_unique_violation(error: &sqlx::Error) -> bool {
 
 pub(crate) fn duplicate_name(name: &str) -> HttpError {
     HttpError::ErrorMessages(format!("Die Jury-Kategorie „{name}“ gibt es schon."))
+}
+
+/// What a judge does in a jury category.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+    sqlx::Type,
+    utoipa::ToSchema,
+)]
+#[serde(rename_all = "snake_case")]
+#[sqlx(type_name = "TEXT", rename_all = "snake_case")]
+pub enum JudgeRole {
+    /// Technik.
+    Technical,
+    /// Performance (Präsentation).
+    Performance,
+    /// Abstiege: counting dismounts, also open to untrained people.
+    Dismounts,
+}
+
+/// A judge's role in a jury category.
+#[derive(
+    Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, utoipa::ToSchema,
+)]
+pub struct JudgeRegistration {
+    pub jury_category_id: Uuid,
+    pub role: JudgeRole,
+}
+
+/// A club's judge with what they registered for.
+#[derive(Debug, Clone, serde::Serialize, utoipa::ToSchema)]
+pub struct ClubJudge {
+    pub id: Uuid,
+    pub club_id: Uuid,
+    pub club_name: String,
+    pub firstname: String,
+    pub lastname: String,
+    #[serde(with = "time::serde::iso8601")]
+    pub birthdate: OffsetDateTime,
+    pub is_trained: bool,
+    pub max_deployments: Option<i64>,
+    pub note: Option<String>,
+    pub registrations: Vec<JudgeRegistration>,
+}
+
+/// What clubs set for a judge.
+#[derive(Debug, Clone, serde::Deserialize, utoipa::ToSchema)]
+pub struct JudgeFields {
+    pub firstname: String,
+    pub lastname: String,
+    #[serde(with = "time::serde::iso8601")]
+    pub birthdate: OffsetDateTime,
+    pub is_trained: bool,
+    #[serde(default)]
+    pub max_deployments: Option<i64>,
+    #[serde(default)]
+    pub note: Option<String>,
+    #[serde(default)]
+    pub registrations: Vec<JudgeRegistration>,
+}
+
+/// Age in whole years on `day`.
+///
+/// ```
+/// use nrw_freestyle_cup_registration::jury::age_on;
+/// use time::macros::date;
+///
+/// assert_eq!(age_on(date!(2012 - 06 - 05), date!(2027 - 06 - 05)), 15);
+/// assert_eq!(age_on(date!(2012 - 06 - 06), date!(2027 - 06 - 05)), 14);
+/// assert_eq!(age_on(date!(2008 - 02 - 29), date!(2027 - 02 - 28)), 18);
+/// ```
+pub fn age_on(birthday: Date, day: Date) -> i64 {
+    let mut age = i64::from(day.year() - birthday.year());
+    if (day.month() as u8, day.day()) < (birthday.month() as u8, birthday.day()) {
+        age -= 1;
+    }
+    age
+}
+
+/// Names end up in CSV exports, so they must not start like a formula.
+fn is_safe_name(name: &str) -> bool {
+    !name.is_empty() && !name.starts_with(['=', '+', '-', '@'])
+}
+
+impl JudgeFields {
+    /// Trims the texts, removes duplicate registrations and checks the rules
+    /// of the Jury-Konzept: trained judges are at least `min_age` on the first
+    /// competition day; untrained people only count dismounts. The message is
+    /// German.
+    pub fn normalize(mut self, competition: Option<&Competition>) -> Result<Self, String> {
+        self.firstname = self.firstname.trim().to_string();
+        self.lastname = self.lastname.trim().to_string();
+        if !is_safe_name(&self.firstname) || !is_safe_name(&self.lastname) {
+            return Err(
+                "Bitte Vor- und Nachnamen angeben (nicht mit =, +, - oder @ beginnend)."
+                    .to_string(),
+            );
+        }
+        self.note = self
+            .note
+            .map(|note| note.trim().to_string())
+            .filter(|note| !note.is_empty());
+        if self.max_deployments.is_some_and(|max| max < 1) {
+            return Err("Die maximalen Einsätze müssen mindestens 1 sein.".to_string());
+        }
+        let mut seen = std::collections::HashSet::new();
+        self.registrations.retain(|r| seen.insert(r.clone()));
+        if !self.is_trained
+            && self
+                .registrations
+                .iter()
+                .any(|r| r.role != JudgeRole::Dismounts)
+        {
+            return Err(
+                "Nicht geschulte Personen können nur als AbstiegszählerIn gemeldet werden."
+                    .to_string(),
+            );
+        }
+        if self.is_trained
+            && let Some(competition) = competition
+            && let Some(rules) = &competition.jury
+        {
+            let age = age_on(self.birthdate.date(), competition.start_date);
+            if age < rules.min_age {
+                return Err(format!(
+                    "Geschulte JurorInnen müssen am ersten Wettkampftag mindestens {} Jahre alt sein.",
+                    rules.min_age
+                ));
+            }
+        }
+        Ok(self)
+    }
+}
+
+/// Loads the club of a judge and checks that the user may manage it (see
+/// [`ensure_club_access`]). Fails with 404 for an unknown judge.
+pub async fn ensure_judge_access(
+    conn: &mut sqlx::SqliteConnection,
+    auth: &Auth,
+    judge_id: Uuid,
+) -> Result<Uuid, HttpError> {
+    let club_id = sqlx::query_scalar!(
+        r#"SELECT club_id as "club_id!: Uuid" FROM judge WHERE id = ?"#,
+        judge_id
+    )
+    .fetch_optional(&mut *conn)
+    .await?
+    .ok_or(HttpError::StatusCode(StatusCode::NOT_FOUND))?;
+    ensure_club_access(conn, auth, club_id).await?;
+    Ok(club_id)
+}
+
+/// Writes a judge's fields and replaces their registrations. Unknown jury
+/// categories and duplicate names are refused with a German message.
+pub async fn save_judge(
+    conn: &mut sqlx::SqliteConnection,
+    judge_id: Uuid,
+    club_id: Uuid,
+    fields: &JudgeFields,
+) -> Result<(), HttpError> {
+    let result = sqlx::query!(
+        r#"
+        INSERT INTO judge (
+            id, club_id, firstname, lastname, birthdate, is_trained, max_deployments, note
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (id) DO UPDATE SET
+            firstname = excluded.firstname,
+            lastname = excluded.lastname,
+            birthdate = excluded.birthdate,
+            is_trained = excluded.is_trained,
+            max_deployments = excluded.max_deployments,
+            note = excluded.note
+        "#,
+        judge_id,
+        club_id,
+        fields.firstname,
+        fields.lastname,
+        fields.birthdate,
+        fields.is_trained,
+        fields.max_deployments,
+        fields.note,
+    )
+    .execute(&mut *conn)
+    .await;
+    match result {
+        Ok(_) => {}
+        Err(e) if is_unique_violation(&e) => {
+            return Err(HttpError::ErrorMessages(format!(
+                "{} {} ist schon als JurorIn gemeldet.",
+                fields.firstname, fields.lastname
+            )));
+        }
+        Err(e) => return Err(e.into()),
+    }
+    sqlx::query!(
+        "DELETE FROM judge_registration WHERE judge_id = ?",
+        judge_id
+    )
+    .execute(&mut *conn)
+    .await?;
+    for registration in &fields.registrations {
+        let known = sqlx::query_scalar!(
+            r#"SELECT COUNT(*) as "count!: i64" FROM jury_categories WHERE id = ?"#,
+            registration.jury_category_id
+        )
+        .fetch_one(&mut *conn)
+        .await?;
+        if known == 0 {
+            return Err(HttpError::ErrorMessages(
+                "Eine gewählte Jury-Kategorie gibt es nicht mehr. Bitte neu laden.".to_string(),
+            ));
+        }
+        sqlx::query!(
+            "INSERT INTO judge_registration (judge_id, jury_category_id, role) VALUES (?, ?, ?)",
+            judge_id,
+            registration.jury_category_id,
+            registration.role,
+        )
+        .execute(&mut *conn)
+        .await?;
+    }
+    Ok(())
+}
+
+/// Loads judges with their registrations: of one club, or of all clubs.
+pub async fn list_judges(
+    conn: &mut sqlx::SqliteConnection,
+    club_id: Option<Uuid>,
+) -> sqlx::Result<Vec<ClubJudge>> {
+    let mut registrations: std::collections::HashMap<Uuid, Vec<JudgeRegistration>> =
+        std::collections::HashMap::new();
+    for row in sqlx::query!(
+        r#"
+        SELECT
+            judge_registration.judge_id as "judge_id!: Uuid",
+            judge_registration.jury_category_id as "jury_category_id!: Uuid",
+            judge_registration.role as "role!: JudgeRole"
+        FROM judge_registration
+        JOIN judge ON judge.id = judge_registration.judge_id
+        JOIN jury_categories ON jury_categories.id = judge_registration.jury_category_id
+        WHERE ?1 IS NULL OR judge.club_id = ?1
+        ORDER BY jury_categories.sort_order, judge_registration.role
+        "#,
+        club_id
+    )
+    .fetch_all(&mut *conn)
+    .await?
+    {
+        registrations
+            .entry(row.judge_id)
+            .or_default()
+            .push(JudgeRegistration {
+                jury_category_id: row.jury_category_id,
+                role: row.role,
+            });
+    }
+    let judges = sqlx::query!(
+        r#"
+        SELECT
+            judge.id as "id!: Uuid",
+            judge.club_id as "club_id!: Uuid",
+            clubs.name as club_name,
+            judge.firstname,
+            judge.lastname,
+            judge.birthdate as "birthdate: OffsetDateTime",
+            judge.is_trained,
+            judge.max_deployments,
+            judge.note
+        FROM judge
+        JOIN clubs ON clubs.id = judge.club_id
+        WHERE ?1 IS NULL OR judge.club_id = ?1
+        ORDER BY clubs.name, judge.lastname, judge.firstname
+        "#,
+        club_id
+    )
+    .fetch_all(&mut *conn)
+    .await?;
+    Ok(judges
+        .into_iter()
+        .map(|row| ClubJudge {
+            registrations: registrations.remove(&row.id).unwrap_or_default(),
+            id: row.id,
+            club_id: row.club_id,
+            club_name: row.club_name,
+            firstname: row.firstname,
+            lastname: row.lastname,
+            birthdate: row.birthdate,
+            is_trained: row.is_trained,
+            max_deployments: row.max_deployments,
+            note: row.note,
+        })
+        .collect())
 }

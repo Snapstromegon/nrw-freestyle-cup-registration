@@ -18,7 +18,8 @@ pub struct DeleteJuryCategoryBody {
     id: Uuid,
 }
 
-/// Delete a jury category. Admin only.
+/// Delete a jury category. Refused while judges are registered for it.
+/// Admin only.
 #[utoipa::path(
     post,
     tags=["command", "jury"],
@@ -44,6 +45,18 @@ pub async fn delete_jury_category(
     }
     let db = db.get().await.clone();
     let mut transaction = begin_write(&db).await?;
+    let registrations = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) as "count!: i64" FROM judge_registration WHERE jury_category_id = ?"#,
+        body.id
+    )
+    .fetch_one(&mut *transaction)
+    .await?;
+    if registrations > 0 {
+        return Err(HttpError::ErrorMessages(
+            "Für diese Jury-Kategorie sind JurorInnen gemeldet. Erst die Anmeldungen ändern, dann löschen."
+                .to_string(),
+        ));
+    }
     info!("Deleting jury category {}", body.id);
     let result = sqlx::query!("DELETE FROM jury_categories WHERE id = ?", body.id)
         .execute(&mut *transaction)

@@ -10,6 +10,7 @@ import {
   isStepId,
   paymentState,
   responsibleIsContact,
+  visibleSteps,
   stepSummaries,
 } from "../src/ts/club-data.ts";
 
@@ -97,6 +98,28 @@ const data = (fields = {}) => ({
 });
 
 describe("club data", () => {
+  test("the jury step is only there with the jury registration", () => {
+    assert.deepEqual(
+      visibleSteps(false).map((step) => step.id),
+      ["verein", "fahrer", "kueren", "startgeld"],
+    );
+    assert.deepEqual(
+      visibleSteps(true).map((step) => step.id),
+      ["verein", "fahrer", "kueren", "jury", "startgeld"],
+    );
+  });
+
+  test("stepSummaries counts the judges", () => {
+    const judge = (is_trained) => ({ is_trained, registrations: [] });
+    const none = stepSummaries(data({ judges: [] }), []);
+    assert.deepEqual(none.jury, { state: "todo", summary: "keine JurorInnen" });
+    const two = stepSummaries(
+      data({ judges: [judge(true), judge(false)] }),
+      [],
+    );
+    assert.deepEqual(two.jury, { state: "done", summary: "2 JurorInnen" });
+  });
+
   test("isStepId accepts the four steps only", () => {
     assert.ok(isStepId("fahrer"));
     assert.ok(!isStepId("zuordnung"));

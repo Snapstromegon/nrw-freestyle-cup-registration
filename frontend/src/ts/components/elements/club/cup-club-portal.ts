@@ -13,7 +13,7 @@ import {
   type Issue,
   isStepId,
   paymentState,
-  STEPS,
+  visibleSteps,
   type StepId,
   type StepState,
   sortStarters,
@@ -32,6 +32,7 @@ import "./cup-club-step-club.js";
 import "./cup-club-step-riders.js";
 import "./cup-club-step-acts.js";
 import "./cup-club-step-payment.js";
+import "./cup-club-step-jury.js";
 
 const ISSUE_ICONS = { error: "error", warn: "warning", info: "info" };
 
@@ -490,21 +491,33 @@ export default class CupClubPortal extends LitElement {
   @state() refresh = 0;
 
   data = new Task(this, {
-    task: async ([clubId, , admin]): Promise<ClubData> => {
+    task: async ([clubId, , admin, jury]): Promise<ClubData> => {
       if (!clubId) {
         throw new Error("Vereins-ID fehlt.");
       }
       const query = { query: { club_id: clubId } };
-      const [club, starters, acts, groups, allGroups, allStarters] =
-        await Promise.all([
-          unwrap(client.getClub(query)),
-          unwrap(client.listClubStarters(query)),
-          unwrap(client.listClubActs(query)),
-          unwrap(client.listClubGroups(query)),
-          unwrap(client.listGroups()).catch(() => []),
-          // Admins pick riders of any club.
-          admin ? unwrap(client.listStarters()) : Promise.resolve(undefined),
-        ]);
+      const [
+        club,
+        starters,
+        acts,
+        groups,
+        allGroups,
+        allStarters,
+        judges,
+        juryCategories,
+      ] = await Promise.all([
+        unwrap(client.getClub(query)),
+        unwrap(client.listClubStarters(query)),
+        unwrap(client.listClubActs(query)),
+        unwrap(client.listClubGroups(query)),
+        unwrap(client.listGroups()).catch(() => []),
+        // Admins pick riders of any club.
+        admin ? unwrap(client.listStarters()) : Promise.resolve(undefined),
+        jury
+          ? unwrap(client.listClubJudges(query))
+          : Promise.resolve(undefined),
+        jury ? unwrap(client.listJuryCategories()) : Promise.resolve(undefined),
+      ]);
       return {
         club,
         starters: sortStarters(starters),
@@ -512,9 +525,17 @@ export default class CupClubPortal extends LitElement {
         groups,
         allGroups,
         allStarters,
+        judges,
+        juryCategories,
       };
     },
-    args: () => [this.clubId, this.refresh, this.admin] as const,
+    args: () =>
+      [
+        this.clubId,
+        this.refresh,
+        this.admin,
+        !!this.systemStatus?.jury_registration,
+      ] as const,
   });
 
   /** The last loaded data, shown while reloading so the page doesn't jump. */
@@ -539,7 +560,7 @@ export default class CupClubPortal extends LitElement {
     const [hashStep, target] = location.hash.slice(1).split("/");
     // Riders used to be assigned in a step of their own.
     const step = hashStep === "zuordnung" ? "kueren" : hashStep;
-    if (isStepId(step)) {
+    if (isStepId(step) && (step !== "jury" || this.juryRegistration)) {
       this.step = step;
       this.target = target || undefined;
       this.stepChosen = true;
@@ -596,8 +617,9 @@ export default class CupClubPortal extends LitElement {
       if (!this.stepChosen) {
         const summaries = stepSummaries(data, clubIssues(data));
         this.step =
-          STEPS.find((step) => summaries[step.id].state !== "done")?.id ??
-          "kueren";
+          visibleSteps(this.juryRegistration).find(
+            (step) => summaries[step.id].state !== "done",
+          )?.id ?? "kueren";
         this.stepChosen = true;
       }
     }
@@ -674,7 +696,7 @@ export default class CupClubPortal extends LitElement {
       locked?: boolean;
     },
   ) {
-    const stepItems = STEPS.map((step, i) => {
+    const stepItems = visibleSteps(this.juryRegistration).map((step, i) => {
       const { state, summary, locked } = summaryOf(step.id);
       const current = locked
         ? false
@@ -839,6 +861,11 @@ export default class CupClubPortal extends LitElement {
     </details>`;
   }
 
+  /** Whether the jury registration is on, so the jury step is shown. */
+  get juryRegistration() {
+    return !!this.systemStatus?.jury_registration;
+  }
+
   renderStep(data: ClubData) {
     const common = {
       data,
@@ -869,8 +896,17 @@ export default class CupClubPortal extends LitElement {
           .canUpload=${common.canUpload}
           .target=${this.target}
         ></cup-club-step-acts>`;
+      case "jury":
+        return this.juryRegistration
+          ? html`<cup-club-step-jury
+              .data=${common.data}
+              .competition=${common.competition}
+              .canRegister=${!!this.systemStatus?.can_register_judge}
+            ></cup-club-step-jury>`
+          : nothing;
       case "startgeld":
         return html`<cup-club-step-payment
+          number=${this.juryRegistration ? 5 : 4}
           .data=${common.data}
           .competition=${common.competition}
         ></cup-club-step-payment>`;

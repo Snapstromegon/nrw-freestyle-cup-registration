@@ -29,3 +29,42 @@ export const isJudgeRegistrationOpen = (
     now <= Date.parse(end)
   );
 };
+
+/**
+ * Age in whole years on the first competition day, which decides whether a
+ * trained judge is old enough (`jury.min_age`). Null without a competition.
+ */
+export const ageOnStart = (
+  birthdate: string,
+  competition: Pick<Competition, "start_date"> | null | undefined,
+) => {
+  if (!competition) {
+    return null;
+  }
+  const day = new Date(competition.start_date);
+  const birth = new Date(birthdate);
+  let age = day.getUTCFullYear() - birth.getUTCFullYear();
+  if (
+    day.getUTCMonth() < birth.getUTCMonth() ||
+    (day.getUTCMonth() === birth.getUTCMonth() &&
+      day.getUTCDate() < birth.getUTCDate())
+  ) {
+    age -= 1;
+  }
+  return age;
+};
+
+/** Short labels of the judge roles: Technik, Performance, Abstiege. */
+export const roleLabels = {
+  technical: "T",
+  performance: "P",
+  dismounts: "A",
+} as const;
+
+export const roleNames = {
+  technical: "Technik",
+  performance: "Performance",
+  dismounts: "Abstiege",
+} as const;
+
+export const ROLES = ["technical", "performance", "dismounts"] as const;

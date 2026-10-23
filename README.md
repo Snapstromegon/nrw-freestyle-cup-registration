@@ -30,6 +30,9 @@ Event settings only come from the config file:
 - `[competition.jury]`: the clubs' jury obligation (minimum age of judges,
   Einsätze per two Küren, fee per missing Einsatz, optional judge deadline).
   The defaults are the Jury-Konzept Einrad Freestyle's rules.
+- `[[jury_categories]]`: what judges register for and get assigned to (e.g.
+  one heat block, 2 Einsätze, or a final, 1 Einsatz). Only written into an
+  empty table, like `[[categories]]`.
 
 Features that are still being refined are behind flags in `[features]`. They
 are on in debug builds and off in release builds unless set:

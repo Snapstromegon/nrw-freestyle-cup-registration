@@ -171,6 +171,8 @@ export default class CupClubStepPayment extends LitElement {
 
   @property({ attribute: false }) data!: ClubData;
   @property({ attribute: false }) competition: Competition | null = null;
+  /** Position in the steps: 5 with the jury step before it. */
+  @property({ type: Number }) number = 4;
 
   @state() copied: string | null = null;
   @state() detailsOpen = loadPref("payment.detailsOpen", false);
@@ -180,7 +182,7 @@ export default class CupClubStepPayment extends LitElement {
     const { startFees, juryFee, amount, paid, open } = paymentState(this.data);
     const contact = competition?.contact_email;
     return html`<div class="step-intro">
-        <h2>4. Startgeld</h2>
+        <h2>${this.number}. Startgeld</h2>
         <p>
           Das Startgeld ergibt sich aus den Starts eurer Fahrer. Überweist den
           offenen Betrag am einfachsten per QR-Code mit eurer Banking-App.
