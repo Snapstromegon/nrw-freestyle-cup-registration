@@ -1005,7 +1005,8 @@ async fn responsible_person_is_fixed_after_the_registration_for_clubs(db: Sqlite
 
 #[sqlx::test]
 async fn amount_due_lists_start_fees_jury_fee_and_total(db: SqlitePool) {
-    let app = TestApp::new(db).await;
+    // Only the start fees; the jury fee is tested in tests/jury.rs.
+    let app = TestApp::without_jury_registration(db).await;
     let (cookie, club_id) = app.create_club_owner("Owner", "RSV Test").await;
     let (other, other_club) = app.create_club_owner("Other", "RSV Andere").await;
 

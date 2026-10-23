@@ -252,7 +252,11 @@ impl Metrics {
     }
 
     /// Reads the database counts into the gauges.
-    async fn refresh(&self, db: &sqlx::SqlitePool) -> Result<(), sqlx::Error> {
+    async fn refresh(
+        &self,
+        db: &sqlx::SqlitePool,
+        jury_registration: bool,
+    ) -> Result<(), sqlx::Error> {
         let set = |family: &GaugeFamily, rows: Vec<(Labels, i64)>| {
             family.clear();
             for (label_set, value) in rows {
@@ -434,10 +438,10 @@ impl Metrics {
                 .await?;
         self.payments_received.set(paid);
         self.fees_due.set(
-            fees::amount_due_by_club(db, competition.as_ref())
+            fees::fees_by_club(db, competition.as_ref(), jury_registration)
                 .await?
                 .values()
-                .map(|amount| amount.total)
+                .map(|fees| fees.amount_due.total)
                 .sum(),
         );
 
@@ -513,7 +517,7 @@ pub async fn metrics_handler(
     }
 
     let db = db.get().await.clone();
-    if let Err(e) = metrics().refresh(&db).await {
+    if let Err(e) = metrics().refresh(&db, options.jury_registration).await {
         error!("Couldn't read the metrics from the database: {e}");
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }

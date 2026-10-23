@@ -39,7 +39,8 @@ async fn metrics_need_the_token(db: SqlitePool) {
 
 #[sqlx::test]
 async fn metrics_count_registrations_acts_and_money(db: SqlitePool) {
-    let app = TestApp::new(db).await;
+    // Start fees only; with the jury registration the jury fee adds to it.
+    let app = TestApp::without_jury_registration(db).await;
     let (cookie, club_id) = app.create_club_owner("Owner", "RSV").await;
     app.add_single_act(&cookie, club_id, "Anna").await;
     let berta = app

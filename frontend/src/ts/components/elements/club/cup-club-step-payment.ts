@@ -27,56 +27,6 @@ export default class CupClubStepPayment extends LitElement {
     iconStyles,
     clubPortalStyles,
     css`
-      .tiles {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-        gap: 0.75rem;
-        margin-bottom: 1rem;
-      }
-
-      .tile {
-        display: flex;
-        flex-direction: column;
-        gap: 0.25rem;
-        padding: 1rem;
-        border-radius: 0.75rem;
-        border: 1px solid var(--cup-border);
-        background: var(--cup-surface);
-      }
-
-      .tile span {
-        color: var(--cup-muted);
-        font-size: 0.875rem;
-      }
-
-      .tile strong {
-        font-size: 1.5rem;
-        color: var(--cup-blue);
-      }
-
-      .tile.open {
-        background: var(--cup-blue);
-        border-color: var(--cup-blue);
-      }
-
-      .tile.open span {
-        color: var(--cup-blue-2);
-      }
-
-      .tile.open strong {
-        color: #fff;
-      }
-
-      .tile.done {
-        background: var(--cup-green);
-        border-color: var(--cup-green);
-      }
-
-      .tile.done span,
-      .tile.done strong {
-        color: #fff;
-      }
-
       .transfer {
         display: flex;
         flex-wrap: wrap;

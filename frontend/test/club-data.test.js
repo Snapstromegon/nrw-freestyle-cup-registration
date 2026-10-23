@@ -120,6 +120,32 @@ describe("club data", () => {
     assert.deepEqual(two.jury, { state: "done", summary: "2 JurorInnen" });
   });
 
+  test("stepSummaries shows missing jury Einsätze", () => {
+    const jury = (missing) => ({
+      acts: 3,
+      required: 8,
+      registered: 8 - missing,
+      credited_override: null,
+      credited: 8 - missing,
+      missing,
+      fee: missing * 7,
+    });
+    const club = (missing) => ({ ...data().club, jury: jury(missing) });
+    const judges = [{ is_trained: true, registrations: [] }];
+    assert.deepEqual(stepSummaries(data({ club: club(3), judges }), []).jury, {
+      state: "open",
+      summary: "1 JurorIn · 3 Einsätze fehlen",
+    });
+    assert.deepEqual(
+      stepSummaries(data({ club: club(1), judges: [] }), []).jury,
+      { state: "open", summary: "1 Einsatz fehlt" },
+    );
+    assert.deepEqual(stepSummaries(data({ club: club(0), judges }), []).jury, {
+      state: "done",
+      summary: "1 JurorIn",
+    });
+  });
+
   test("isStepId accepts the four steps only", () => {
     assert.ok(isStepId("fahrer"));
     assert.ok(!isStepId("zuordnung"));

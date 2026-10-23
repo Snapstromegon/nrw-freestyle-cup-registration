@@ -60,6 +60,7 @@ const COMMANDS: &[&str] = &[
     "add_club_judge",
     "delete_club_judge",
     "edit_club_judge",
+    "set_jury_deployments_override",
 ];
 
 const QUERIES: &[&str] = &[

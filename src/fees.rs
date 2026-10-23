@@ -1,62 +1,94 @@
-//! What clubs owe: start fees now, the jury fee later (#229).
+//! What clubs owe: start fees and the fee for missing jury deployments.
 //!
-//! The one place the fee rule lives in the backend; the club queries, the
+//! The one place the fee rules live in the backend; the club queries, the
 //! payment QR code (through them) and `/metrics` all use it.
 
 use std::collections::HashMap;
 
 use uuid::Uuid;
 
-use crate::competition::Competition;
+use crate::{
+    competition::Competition,
+    jury::{self, JuryObligation},
+};
 
 /// What a club owes, split into its parts.
 #[derive(Debug, Clone, Copy, Default, PartialEq, serde::Serialize, utoipa::ToSchema)]
 pub struct AmountDue {
     /// `fee_per_start` per start, at most `max_fee_per_starter` per starter.
     pub start_fees: f64,
-    /// For missing jury deployments; 0 until the jury registration exists.
+    /// For missing jury deployments; 0 without the jury registration.
     pub jury_fee: f64,
     pub total: f64,
 }
 
-/// The amount due of every club that has starters. Clubs without starters
-/// owe nothing and are missing from the map.
-pub async fn amount_due_by_club(
-    db: &sqlx::SqlitePool,
-    competition: Option<&Competition>,
-) -> sqlx::Result<HashMap<Uuid, AmountDue>> {
-    amount_due(db, competition, None).await
+/// What a club owes and, with the jury registration, its jury obligation.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct ClubFees {
+    pub amount_due: AmountDue,
+    pub jury: Option<JuryObligation>,
 }
 
-/// The amount due of one club.
-pub async fn amount_due_of_club(
+/// The fees of every club. Clubs without starters and jury obligation owe
+/// nothing and may be missing from the map.
+pub async fn fees_by_club(
     db: &sqlx::SqlitePool,
     competition: Option<&Competition>,
+    jury_registration: bool,
+) -> sqlx::Result<HashMap<Uuid, ClubFees>> {
+    fees(db, competition, jury_registration, None).await
+}
+
+/// The fees of one club.
+pub async fn fees_of_club(
+    db: &sqlx::SqlitePool,
+    competition: Option<&Competition>,
+    jury_registration: bool,
     club_id: Uuid,
-) -> sqlx::Result<AmountDue> {
-    Ok(amount_due(db, competition, Some(club_id))
+) -> sqlx::Result<ClubFees> {
+    Ok(fees(db, competition, jury_registration, Some(club_id))
         .await?
         .remove(&club_id)
         .unwrap_or_default())
 }
 
-/// The amount due per club, of all clubs or only of `club_id`.
-async fn amount_due(
+/// The fees per club, of all clubs or only of `club_id`. The jury fee only
+/// applies while the jury registration is on and the competition has jury
+/// rules.
+async fn fees(
     db: &sqlx::SqlitePool,
     competition: Option<&Competition>,
+    jury_registration: bool,
     club_id: Option<Uuid>,
-) -> sqlx::Result<HashMap<Uuid, AmountDue>> {
-    Ok(start_fees_by_club(db, competition, club_id)
-        .await?
+) -> sqlx::Result<HashMap<Uuid, ClubFees>> {
+    let start_fees = start_fees_by_club(db, competition, club_id).await?;
+    let obligations = match competition.and_then(|c| c.jury.as_ref()) {
+        Some(rules) if jury_registration => {
+            let mut conn = db.acquire().await?;
+            jury::obligations(&mut conn, rules, club_id).await?
+        }
+        _ => HashMap::new(),
+    };
+    let clubs: std::collections::HashSet<Uuid> = start_fees
+        .keys()
+        .chain(obligations.keys())
+        .copied()
+        .collect();
+    Ok(clubs
         .into_iter()
-        .map(|(club_id, start_fees)| {
-            let jury_fee = 0.0;
-            let amount = AmountDue {
-                start_fees,
-                jury_fee,
-                total: start_fees + jury_fee,
+        .map(|id| {
+            let start_fees = start_fees.get(&id).copied().unwrap_or(0.0);
+            let jury = obligations.get(&id).copied();
+            let jury_fee = jury.map_or(0.0, |jury| jury.fee);
+            let fees = ClubFees {
+                amount_due: AmountDue {
+                    start_fees,
+                    jury_fee,
+                    total: start_fees + jury_fee,
+                },
+                jury,
             };
-            (club_id, amount)
+            (id, fees)
         })
         .collect())
 }

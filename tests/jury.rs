@@ -522,3 +522,188 @@ async fn judge_endpoints_dont_exist_without_the_flag(db: SqlitePool) {
         .await;
     assert_eq!(list.status, StatusCode::NOT_FOUND);
 }
+
+// ---------- Obligation and fee (#229) ----------
+
+async fn club(app: &TestApp, cookie: &str) -> Value {
+    let response = app.get("/api/query/get_club", Some(cookie)).await;
+    assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+    response.body
+}
+
+/// A club with `singles` single starters, so as many Küren.
+async fn club_with_singles(app: &TestApp, singles: usize) -> (String, Uuid) {
+    let (owner, club_id) = app.create_club_owner("Owner", "RSV").await;
+    for i in 0..singles {
+        app.add_starter(
+            &owner,
+            common::starter_body(club_id, &format!("Fahrerin{i}"), true, false),
+        )
+        .await;
+    }
+    (owner, club_id)
+}
+
+#[sqlx::test]
+async fn clubs_owe_a_fee_for_missing_einsaetze(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    // 3 Küren: 2 started pairs of Küren, so 8 Einsätze.
+    let (owner, club_id) = club_with_singles(&app, 3).await;
+    let ids = category_ids(&app, &owner).await;
+
+    let body = club(&app, &owner).await;
+    assert_eq!(
+        body["jury"],
+        json!({
+            "acts": 3,
+            "required": 8,
+            "registered": 0,
+            "credited_override": null,
+            "credited": 0,
+            "missing": 8,
+            "fee": 56.0,
+        })
+    );
+    assert_eq!(
+        body["amount_due"],
+        json!({ "start_fees": 45.0, "jury_fee": 56.0, "total": 101.0 })
+    );
+
+    // A heat (2) and a final (1); several roles in one category count once.
+    let anna = judge_body(
+        club_id,
+        "Anna",
+        ADULT,
+        true,
+        &[
+            (&ids[0], "technical"),
+            (&ids[0], "performance"),
+            (&ids[1], "technical"),
+        ],
+    );
+    assert_eq!(add_judge(&app, &owner, anna).await.status, StatusCode::OK);
+    // Capped at 2.
+    let mut berta = judge_body(
+        club_id,
+        "Berta",
+        ADULT,
+        true,
+        &[(&ids[0], "technical"), (&ids[2], "performance")],
+    );
+    berta["max_deployments"] = json!(2);
+    assert_eq!(add_judge(&app, &owner, berta).await.status, StatusCode::OK);
+    // Untrained dismount counters don't count.
+    let carla = judge_body(club_id, "Carla", ADULT, false, &[(&ids[2], "dismounts")]);
+    assert_eq!(add_judge(&app, &owner, carla).await.status, StatusCode::OK);
+
+    let jury = club(&app, &owner).await["jury"].clone();
+    assert_eq!(jury["registered"], 5);
+    assert_eq!(jury["missing"], 3);
+    assert_eq!(jury["fee"], 21.0);
+}
+
+#[sqlx::test]
+async fn admins_correct_the_credited_einsaetze(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let (owner, club_id) = club_with_singles(&app, 1).await;
+    let admin = app.create_admin().await;
+    let set = |deployments: Value| json!({ "club_id": club_id, "deployments": deployments });
+
+    let forbidden = app
+        .post(
+            "/api/command/set_jury_deployments_override",
+            set(json!(4)),
+            Some(&owner),
+        )
+        .await;
+    assert_eq!(forbidden.status, StatusCode::FORBIDDEN);
+    let response = app
+        .post(
+            "/api/command/set_jury_deployments_override",
+            set(json!(4)),
+            Some(&admin),
+        )
+        .await;
+    assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+    let jury = club(&app, &owner).await["jury"].clone();
+    assert_eq!(jury["credited_override"], 4);
+    assert_eq!(jury["credited"], 4);
+    assert_eq!(jury["fee"], 0.0);
+
+    app.post(
+        "/api/command/set_jury_deployments_override",
+        set(Value::Null),
+        Some(&admin),
+    )
+    .await;
+    assert_eq!(club(&app, &owner).await["jury"]["fee"], 28.0);
+}
+
+#[sqlx::test]
+async fn kueren_count_like_the_start_fee(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let (owner, club_id) = club_with_singles(&app, 2).await;
+    let admin = app.create_admin().await;
+    // An incomplete group (2 regular riders) has no category and doesn't count.
+    let riders = app.add_riders(&owner, club_id, "Gruppe", 2).await;
+    let group = app.create_group(&owner, club_id, "Klein").await;
+    app.set_group_members(&owner, club_id, group, &riders, &[])
+        .await;
+    assert_eq!(club(&app, &owner).await["jury"]["acts"], 2);
+
+    // A withdrawn act counts unless its fee is waived.
+    let single: Value = sqlx::query_scalar::<_, Uuid>(
+        "SELECT act_id FROM act_participants JOIN acts ON acts.id = act_id WHERE act_type = 'single' LIMIT 1",
+    )
+    .fetch_one(&app.db)
+    .await
+    .unwrap()
+    .to_string()
+    .into();
+    for (fee_waived, acts) in [(false, 2), (true, 1)] {
+        let response = app
+            .post(
+                "/api/command/set_act_withdrawn",
+                json!({ "act_id": single, "withdrawn": true, "fee_waived": fee_waived }),
+                Some(&admin),
+            )
+            .await;
+        assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+        assert_eq!(club(&app, &owner).await["jury"]["acts"], acts);
+    }
+}
+
+#[sqlx::test]
+async fn changing_a_categorys_einsaetze_changes_every_club(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let (owner, club_id) = club_with_singles(&app, 1).await;
+    let admin = app.create_admin().await;
+    let categories = jury_categories(&app, &admin).await;
+    let anna = judge_body(
+        club_id,
+        "Anna",
+        ADULT,
+        true,
+        &[(&categories[0]["id"], "technical")],
+    );
+    assert_eq!(add_judge(&app, &owner, anna).await.status, StatusCode::OK);
+    assert_eq!(club(&app, &owner).await["jury"]["registered"], 2);
+
+    let mut edit = category_body("Einzel W – Junior Expert Vorlauf", 4, None);
+    edit["id"] = categories[0]["id"].clone();
+    app.post("/api/command/edit_jury_category", edit, Some(&admin))
+        .await;
+    let jury = club(&app, &owner).await["jury"].clone();
+    assert_eq!(jury["registered"], 4);
+    assert_eq!(jury["fee"], 0.0);
+}
+
+#[sqlx::test]
+async fn there_is_no_jury_fee_without_the_flag(db: SqlitePool) {
+    let app = TestApp::without_jury_registration(db).await;
+    let (owner, _) = club_with_singles(&app, 3).await;
+    let body = club(&app, &owner).await;
+    assert_eq!(body["jury"], Value::Null);
+    assert_eq!(body["amount_due"]["jury_fee"], 0.0);
+    assert_eq!(body["amount_due"]["total"], 45.0);
+}

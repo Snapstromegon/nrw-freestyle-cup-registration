@@ -1,11 +1,14 @@
+use std::sync::Arc;
+
 use axum::{Extension, Json, extract::Query};
 use tracing::instrument;
 use uuid::Uuid;
 
 use crate::{
     competition::Competition,
-    fees::{AmountDue, amount_due_of_club},
-    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    fees::{AmountDue, fees_of_club},
+    http_server::{ClientError, HttpError, HttpServerOptions, extractor::auth::Auth},
+    jury::JuryObligation,
     reloadable_sqlite::ReloadableSqlite,
     utils::club_code,
 };
@@ -29,6 +32,9 @@ pub struct Club {
     responsible_email: Option<String>,
     /// What the club owes. Only for the club itself and admins.
     amount_due: Option<AmountDue>,
+    /// The club's jury obligation, while the jury registration is on. Only
+    /// for the club itself and admins.
+    jury: Option<JuryObligation>,
 }
 
 #[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
@@ -49,9 +55,10 @@ pub struct GetClubQuery {
         (status=500, content_type="application/json", body=ClientError),
     ),
 )]
-#[instrument(skip(db))]
+#[instrument(skip(db, http_options))]
 pub async fn get_club(
     Extension(db): Extension<ReloadableSqlite>,
+    Extension(http_options): Extension<Arc<HttpServerOptions>>,
     Query(query): Query<GetClubQuery>,
     auth: Option<Auth>,
 ) -> Result<Json<Club>, HttpError> {
@@ -95,10 +102,19 @@ pub async fn get_club(
             responsible_name: row.responsible_name,
             responsible_email: row.responsible_email,
             amount_due: None,
+            jury: None,
         };
         if may_see_owner {
             let competition = Competition::current(&db).await?;
-            club.amount_due = Some(amount_due_of_club(&db, competition.as_ref(), club.id).await?);
+            let fees = fees_of_club(
+                &db,
+                competition.as_ref(),
+                http_options.jury_registration,
+                club.id,
+            )
+            .await?;
+            club.amount_due = Some(fees.amount_due);
+            club.jury = fees.jury;
         } else {
             club.owner_name = None;
             club.owner_email = None;

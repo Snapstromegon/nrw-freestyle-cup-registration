@@ -12,7 +12,7 @@ import {
 import { ageOnStart, ROLES, roleLabels, roleNames } from "../../../jury";
 import { iconStyles, resetStyles } from "../../../styles/base";
 import { clubPortalStyles } from "../../../styles/club-portal";
-import { type Competition, formatDate } from "../../../utils";
+import { type Competition, formatDate, formatMoney } from "../../../utils";
 import { dataChanged } from "./events";
 
 type JudgeRole = schemas.JudgeRole;
@@ -151,6 +151,7 @@ export default class CupClubStepJury extends LitElement {
           entstehen, einverstanden sind.</span
         >
       </p>
+      ${this.renderObligation()}
       ${
         this.error
           ? html`<p class="banner error" role="alert">${this.error}</p>`
@@ -208,6 +209,53 @@ export default class CupClubStepJury extends LitElement {
               </table>`
         }
       </section>`;
+  }
+
+  /** Küren, required and credited Einsätze, and the fee for missing ones. */
+  private renderObligation() {
+    const jury = this.data.club.jury;
+    const rules = this.competition?.jury;
+    if (!jury || !rules) {
+      return nothing;
+    }
+    return html`<div class="tiles">
+        <div class="tile">
+          <span>Küren</span><strong>${jury.acts}</strong>
+        </div>
+        <div class="tile">
+          <span>Pflicht-Juryeinsätze</span><strong>${jury.required}</strong>
+        </div>
+        <div
+          class="tile"
+          title=${
+            jury.credited_override === null ||
+            jury.credited_override === undefined
+              ? "Von euren geschulten JurorInnen gemeldet"
+              : `Vom Veranstalter angerechnet (gemeldet: ${jury.registered})`
+          }
+        >
+          <span>Gemeldete Einsätze</span><strong>${jury.credited}</strong>
+        </div>
+        <div class="tile ${jury.missing ? "open" : jury.required ? "done" : ""}">
+          <span
+            >${
+              jury.missing
+                ? `${jury.missing} fehlen · Jurygebühr`
+                : "Pflicht erfüllt"
+            }</span
+          >
+          <strong
+            >${jury.missing ? formatMoney(jury.fee) : "✓"}</strong
+          >
+        </div>
+      </div>
+      <p class="muted small">
+        Pro angefangene 2 Küren sind ${rules.deployments_per_two_acts}
+        Juryeinsätze zu melden; jeder fehlende kostet
+        ${formatMoney(rules.missing_deployment_fee)} und wird mit dem Startgeld
+        bezahlt. Gezählt werden die Einsätze der Jury-Kategorien, für die eure
+        geschulten JurorInnen gemeldet sind, höchstens ihre max. Einsätze.
+      </p>`;
   }
 
   private renderJudge(judge: ClubJudge) {

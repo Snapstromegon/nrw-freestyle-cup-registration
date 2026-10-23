@@ -1,11 +1,14 @@
+use std::sync::Arc;
+
 use axum::{Extension, Json};
 use tracing::instrument;
 use uuid::Uuid;
 
 use crate::{
     competition::Competition,
-    fees::{AmountDue, amount_due_by_club},
-    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    fees::{AmountDue, fees_by_club},
+    http_server::{ClientError, HttpError, HttpServerOptions, extractor::auth::Auth},
+    jury::JuryObligation,
     reloadable_sqlite::ReloadableSqlite,
     utils::club_code,
 };
@@ -29,6 +32,8 @@ pub struct ClubOverview {
     code: String,
     /// What the club owes.
     amount_due: AmountDue,
+    /// The club's jury obligation, while the jury registration is on.
+    jury: Option<JuryObligation>,
 }
 
 /// List all clubs with their owners. Admin only.
@@ -42,9 +47,10 @@ pub struct ClubOverview {
         (status=500, content_type="application/json", body=ClientError),
     ),
 )]
-#[instrument(skip(db))]
+#[instrument(skip(db, http_options))]
 pub async fn list_clubs(
     Extension(db): Extension<ReloadableSqlite>,
+    Extension(http_options): Extension<Arc<HttpServerOptions>>,
     auth: Auth,
 ) -> Result<Json<Vec<ClubOverview>>, HttpError> {
     if !auth.is_admin() {
@@ -71,21 +77,25 @@ pub async fn list_clubs(
     .fetch_all(&db)
     .await?;
     let competition = Competition::current(&db).await?;
-    let mut amounts = amount_due_by_club(&db, competition.as_ref()).await?;
+    let mut fees = fees_by_club(&db, competition.as_ref(), http_options.jury_registration).await?;
     let clubs = rows
         .into_iter()
-        .map(|row| ClubOverview {
-            code: club_code(&row.id),
-            amount_due: amounts.remove(&row.id).unwrap_or_default(),
-            id: row.id,
-            name: row.name,
-            payment: row.payment,
-            owner_id: row.owner_id,
-            owner_name: row.owner_name,
-            owner_email: row.owner_email,
-            owner_email_verified: row.owner_email_verified,
-            responsible_name: row.responsible_name,
-            responsible_email: row.responsible_email,
+        .map(|row| {
+            let club_fees = fees.remove(&row.id).unwrap_or_default();
+            ClubOverview {
+                code: club_code(&row.id),
+                amount_due: club_fees.amount_due,
+                jury: club_fees.jury,
+                id: row.id,
+                name: row.name,
+                payment: row.payment,
+                owner_id: row.owner_id,
+                owner_name: row.owner_name,
+                owner_email: row.owner_email,
+                owner_email_verified: row.owner_email_verified,
+                responsible_name: row.responsible_name,
+                responsible_email: row.responsible_email,
+            }
         })
         .collect();
     Ok(Json(clubs))

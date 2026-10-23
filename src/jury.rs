@@ -13,7 +13,7 @@ use time::{Date, OffsetDateTime};
 use uuid::Uuid;
 
 use crate::{
-    competition::Competition,
+    competition::{Competition, JuryRules},
     groups::ensure_club_access,
     http_server::{HttpError, HttpServerOptions, extractor::auth::Auth},
 };
@@ -480,6 +480,124 @@ pub async fn list_judges(
             is_trained: row.is_trained,
             max_deployments: row.max_deployments,
             note: row.note,
+        })
+        .collect())
+}
+
+/// Jury deployments (Einsätze) a club must provide: `per_two_acts` for every
+/// started two Küren (Jury-Konzept, Tabelle 1).
+///
+/// ```
+/// use nrw_freestyle_cup_registration::jury::required_deployments;
+///
+/// assert_eq!(required_deployments(0, 4), 0);
+/// assert_eq!(required_deployments(1, 4), 4);
+/// assert_eq!(required_deployments(2, 4), 4);
+/// assert_eq!(required_deployments(3, 4), 8);
+/// assert_eq!(required_deployments(32, 4), 64);
+/// ```
+pub fn required_deployments(acts: i64, per_two_acts: i64) -> i64 {
+    (acts + 1) / 2 * per_two_acts
+}
+
+/// A club's jury obligation.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, utoipa::ToSchema)]
+pub struct JuryObligation {
+    /// Küren that count: those charged a start fee, for the owner club.
+    pub acts: i64,
+    pub required: i64,
+    /// What the club's trained judges registered for.
+    pub registered: i64,
+    /// What an admin credits instead, e.g. after a late cancellation.
+    pub credited_override: Option<i64>,
+    /// `credited_override`, or `registered` without one.
+    pub credited: i64,
+    pub missing: i64,
+    /// For the missing deployments, in €.
+    pub fee: f64,
+}
+
+/// The jury obligation of every club, or only of `club_id`.
+///
+/// An act counts when it's charged a start fee: it has a category, or it was
+/// withdrawn without the fee being waived. It counts for its owner club: the
+/// group's creator, or the club of a single's or pair's riders. A trained
+/// judge counts the deployments of every jury category they registered for
+/// (once per category, whatever the roles), at most `max_deployments`.
+pub async fn obligations(
+    conn: &mut sqlx::SqliteConnection,
+    rules: &JuryRules,
+    club_id: Option<Uuid>,
+) -> sqlx::Result<std::collections::HashMap<Uuid, JuryObligation>> {
+    let clubs = sqlx::query!(
+        r#"
+        SELECT
+            clubs.id as "id!: Uuid",
+            clubs.jury_deployments_override,
+            (
+                SELECT COUNT(*) FROM view_act AS a
+                WHERE (a.category IS NOT NULL OR (a.withdrawn_at IS NOT NULL AND NOT a.fee_waived))
+                    AND COALESCE(
+                        a.owner_club_id,
+                        (
+                            -- A pair across clubs (only admins link those)
+                            -- counts for one of them.
+                            SELECT MIN(s.club_id) FROM act_participants p
+                            JOIN starter s ON s.id = p.starter_id
+                            WHERE p.act_id = a.id AND NOT p.is_replacement
+                        )
+                    ) = clubs.id
+            ) as "acts!: i64"
+        FROM clubs
+        WHERE ?1 IS NULL OR clubs.id = ?1
+        "#,
+        club_id
+    )
+    .fetch_all(&mut *conn)
+    .await?;
+    let judges = sqlx::query!(
+        r#"
+        SELECT
+            judge.club_id as "club_id!: Uuid",
+            judge.max_deployments,
+            (
+                SELECT COALESCE(SUM(c.deployments), 0) FROM jury_categories c
+                WHERE c.id IN (
+                    SELECT jury_category_id FROM judge_registration
+                    WHERE judge_id = judge.id
+                )
+            ) as "deployments!: i64"
+        FROM judge
+        WHERE judge.is_trained AND (?1 IS NULL OR judge.club_id = ?1)
+        "#,
+        club_id
+    )
+    .fetch_all(&mut *conn)
+    .await?;
+    let mut registered: std::collections::HashMap<Uuid, i64> = std::collections::HashMap::new();
+    for judge in judges {
+        let deployments = judge
+            .max_deployments
+            .map_or(judge.deployments, |max| judge.deployments.min(max));
+        *registered.entry(judge.club_id).or_default() += deployments;
+    }
+    Ok(clubs
+        .into_iter()
+        .map(|club| {
+            let required = required_deployments(club.acts, rules.deployments_per_two_acts);
+            let registered = registered.get(&club.id).copied().unwrap_or(0);
+            let credited = club.jury_deployments_override.unwrap_or(registered);
+            let missing = (required - credited).max(0);
+            let obligation = JuryObligation {
+                acts: club.acts,
+                required,
+                registered,
+                credited_override: club.jury_deployments_override,
+                credited,
+                missing,
+                fee: missing as f64 * rules.missing_deployment_fee,
+            };
+            (club.id, obligation)
         })
         .collect())
 }

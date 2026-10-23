@@ -50,6 +50,7 @@ mod set_club_responsible;
 mod set_final_placement;
 mod set_final_published;
 mod set_jury_category_order;
+mod set_jury_deployments_override;
 mod set_payment;
 mod set_photo_hidden;
 mod set_song_checked;
@@ -116,5 +117,8 @@ pub fn get_command_router() -> OpenApiRouter {
         .routes(routes!(add_club_judge::add_club_judge))
         .routes(routes!(delete_club_judge::delete_club_judge))
         .routes(routes!(edit_club_judge::edit_club_judge))
+        .routes(routes!(
+            set_jury_deployments_override::set_jury_deployments_override
+        ))
         .layer(DefaultBodyLimit::max(save_act_song::MAX_REQUEST_SIZE))
 }

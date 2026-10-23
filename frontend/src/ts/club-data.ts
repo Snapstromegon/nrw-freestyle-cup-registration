@@ -293,12 +293,22 @@ export const stepSummaries = (
         return `${count(acts, "Kür", "Küren")}${n ? ` · ${n} offen` : ""}`;
       })(),
     },
-    jury: {
-      state: data.judges?.length ? "done" : "todo",
-      summary: data.judges?.length
-        ? count(data.judges.length, "JurorIn", "JurorInnen")
-        : "keine JurorInnen",
-    },
+    jury: (() => {
+      const judges = data.judges?.length ?? 0;
+      const missing = data.club.jury?.missing ?? 0;
+      const parts = [
+        judges ? count(judges, "JurorIn", "JurorInnen") : "",
+        missing
+          ? missing === 1
+            ? "1 Einsatz fehlt"
+            : `${missing} Einsätze fehlen`
+          : "",
+      ].filter(Boolean);
+      return {
+        state: missing ? "open" : judges ? "done" : "todo",
+        summary: parts.join(" · ") || "keine JurorInnen",
+      };
+    })(),
     startgeld: {
       state: amount === 0 ? "todo" : open >= 0.01 ? "open" : "done",
       summary:
