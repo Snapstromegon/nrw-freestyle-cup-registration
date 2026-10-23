@@ -163,6 +163,7 @@ export const clubPortalStyles = css`
 
   input[type="text"],
   input[type="date"],
+  input[type="number"],
   input[type="search"],
   input:not([type]),
   select,

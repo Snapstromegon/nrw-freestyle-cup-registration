@@ -91,14 +91,85 @@ export default class CupClubStepJury extends LitElement {
         flex: 1 1 12rem;
       }
 
-      table.grid th,
-      table.grid td {
+      .add-judge {
+        margin-bottom: 1rem;
+      }
+
+      /* Jury categories × roles in the judge form. */
+      .grid-wrap {
+        flex: 1 1 100%;
+        overflow-x: auto;
+        border: 1px solid var(--cup-border);
+        border-radius: 0.5rem;
+      }
+
+      table.grid {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      table.grid th {
+        padding: 0.5rem 0.75rem;
+        background: var(--cup-surface-2);
+        color: var(--cup-muted);
+        font-size: 0.8rem;
+        font-weight: 600;
+        text-align: left;
+      }
+
+      table.grid th.role {
+        width: 5.5rem;
         text-align: center;
       }
 
-      table.grid th:first-child,
-      table.grid td:first-child {
-        text-align: left;
+      table.grid th.role abbr {
+        display: block;
+        color: var(--cup-blue);
+        font-size: 1rem;
+        text-decoration: none;
+      }
+
+      table.grid td {
+        padding: 0;
+        border-top: 1px solid var(--cup-border);
+      }
+
+      table.grid tbody tr:nth-child(even) {
+        background: color-mix(in srgb, var(--cup-surface-2) 50%, transparent);
+      }
+
+      table.grid tbody tr:hover {
+        background: color-mix(in srgb, var(--cup-blue-2) 20%, transparent);
+      }
+
+      table.grid td.category {
+        padding: 0.5rem 0.75rem;
+      }
+
+      table.grid td.category small {
+        display: block;
+        color: var(--cup-muted);
+      }
+
+      /* The whole cell toggles the role. */
+      table.grid td.role label {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 2.75rem;
+        cursor: pointer;
+      }
+
+      table.grid td.role input {
+        width: 1.15rem;
+        height: 1.15rem;
+        accent-color: var(--cup-blue);
+        cursor: inherit;
+      }
+
+      table.grid td.role.off label {
+        cursor: not-allowed;
+        opacity: 0.35;
       }
 
       .registrations {
@@ -159,7 +230,7 @@ export default class CupClubStepJury extends LitElement {
       }
       ${
         this.canRegister && this.editing === null
-          ? html`<div class="next-step">
+          ? html`<div class="next-step add-judge">
               <button class="btn primary" @click=${this.startAdd}>
                 <i class="material-icon">person_add</i> JurorIn hinzufügen
               </button>
@@ -490,47 +561,54 @@ export default class CupClubStepJury extends LitElement {
       return html`<p class="muted">Noch keine Jury-Kategorien angelegt.</p>`;
     }
     const headers = ROLES.map(
-      (role) => html`<th title=${roleNames[role]}>${roleLabels[role]}</th>`,
+      (role) =>
+        html`<th class="role" scope="col">
+          <abbr title=${roleNames[role]}>${roleLabels[role]}</abbr>
+          ${roleNames[role]}
+        </th>`,
     );
-    return html`<table class="grid">
-      <thead>
-        <tr>
-          <th>Jury-Kategorie</th>
-          ${headers}
-        </tr>
-      </thead>
-      <tbody>
-        ${repeat(
-          this.categories,
-          (category) => category.id,
-          (category) => this.renderGridRow(category),
-        )}
-      </tbody>
-    </table>`;
+    return html`<div class="grid-wrap">
+      <table class="grid">
+        <thead>
+          <tr>
+            <th scope="col">Wofür kann die JurorIn werten?</th>
+            ${headers}
+          </tr>
+        </thead>
+        <tbody>
+          ${repeat(
+            this.categories,
+            (category) => category.id,
+            (category) => this.renderGridRow(category),
+          )}
+        </tbody>
+      </table>
+    </div>`;
   }
 
   private renderGridRow(category: JuryCategory) {
-    const cells = ROLES.map(
-      (role) =>
-        html`<td>
-            <input
-              type="checkbox"
-              aria-label="${category.name}: ${roleNames[role]}"
-              data-key=${key(category.id, role)}
-              .checked=${this.draft.registrations.has(key(category.id, role))}
-              ?disabled=${!this.draft.is_trained && role !== "dismounts"}
-              @change=${this.onRegistrationChange}
-            />
-          </td>`,
-    );
+    const cells = ROLES.map((role) => {
+      const off = !this.draft.is_trained && role !== "dismounts";
+      return html`<td
+        class="role ${off ? "off" : ""}"
+        title=${off ? "Nur für geschulte JurorInnen" : roleNames[role]}
+      >
+        <label>
+          <input
+            type="checkbox"
+            aria-label="${category.name}: ${roleNames[role]}"
+            data-key=${key(category.id, role)}
+            .checked=${this.draft.registrations.has(key(category.id, role))}
+            ?disabled=${off}
+            @change=${this.onRegistrationChange}
+          />
+        </label>
+      </td>`;
+    });
     return html`<tr>
-      <td>
+      <td class="category">
         ${category.name}
-        ${
-          category.day
-            ? html`<span class="muted">(${formatDate(category.day)})</span>`
-            : nothing
-        }
+        ${category.day ? html`<small>${formatDate(category.day)}</small>` : nothing}
       </td>
       ${cells}
     </tr>`;
