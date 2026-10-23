@@ -231,7 +231,7 @@ async fn jury_endpoints_dont_exist_without_the_flag(db: SqlitePool) {
 // ---------- Judges (#228) ----------
 
 /// Body for `add_club_judge`; `registrations` are (jury category index in
-/// the seeded order, role).
+/// the seeded order, task).
 fn judge_body(
     club_id: Uuid,
     firstname: &str,
@@ -249,7 +249,7 @@ fn judge_body(
         "note": null,
         "registrations": registrations
             .iter()
-            .map(|(category, role)| json!({ "jury_category_id": category, "role": role }))
+            .map(|(category, task)| json!({ "jury_category_id": category, "task": task }))
             .collect::<Vec<_>>(),
     })
 }
@@ -327,7 +327,7 @@ async fn clubs_add_edit_and_delete_judges(db: SqlitePool) {
     assert_eq!(anna["note"], Value::Null);
     assert_eq!(
         anna["registrations"],
-        json!([{ "jury_category_id": ids[2], "role": "dismounts" }])
+        json!([{ "jury_category_id": ids[2], "task": "dismounts" }])
     );
 
     let deleted = app
@@ -569,7 +569,7 @@ async fn clubs_owe_a_fee_for_missing_einsaetze(db: SqlitePool) {
         json!({ "start_fees": 45.0, "jury_fee": 56.0, "total": 101.0 })
     );
 
-    // A heat (2) and a final (1); several roles in one category count once.
+    // A heat (2) and a final (1); several tasks in one category count once.
     let anna = judge_body(
         club_id,
         "Anna",
@@ -742,8 +742,8 @@ async fn plan(app: &TestApp, cookie: &str, club_id: Option<Uuid>) -> TestRespons
     app.get(&uri, Some(cookie)).await
 }
 
-fn assignment(judge: &Value, category: &Value, role: &str) -> Value {
-    json!({ "judge_id": judge, "jury_category_id": category, "role": role })
+fn assignment(judge: &Value, category: &Value, task: &str) -> Value {
+    json!({ "judge_id": judge, "jury_category_id": category, "task": task })
 }
 
 #[sqlx::test]
@@ -890,7 +890,7 @@ async fn assignments_follow_the_jury_rules(db: SqlitePool) {
         .await;
     assert_eq!(counter.status, StatusCode::OK, "{:?}", counter.body);
 
-    // One role per judge and category.
+    // One task per judge and category.
     app.post(
         "/api/command/assign_judge",
         assignment(&anna, &ids[0], "technical"),

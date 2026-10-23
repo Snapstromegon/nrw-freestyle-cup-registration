@@ -36,7 +36,7 @@ const START: &str = "2026-04-19T09:00:00Z";
 struct Ws(WebSocketStream<MaybeTlsStream<TcpStream>>);
 
 impl Ws {
-    /// Opens the websocket with `query`, e.g. `role=controller`. Returns the
+    /// Opens the websocket with `query`, e.g. `mode=controller`. Returns the
     /// status code if the upgrade is refused.
     async fn try_connect(
         address: SocketAddr,
@@ -167,7 +167,7 @@ impl Ws {
 
 /// Connects a controller and checks its first message, the state.
 async fn controller(address: SocketAddr, admin: &str) -> (Ws, Value) {
-    let mut controller = Ws::connect(address, "role=controller", admin).await;
+    let mut controller = Ws::connect(address, "mode=controller", admin).await;
     let state = controller.next().await;
     assert_eq!(state["type"], "state", "{state}");
     (controller, state)
@@ -199,7 +199,7 @@ async fn player_as(
     player_query(address, admin, controller, &query, name).await
 }
 
-/// Connects a new player with `query` after `role=player&`, shown as
+/// Connects a new player with `query` after `mode=player&`, shown as
 /// `name`.
 async fn player_query(
     address: SocketAddr,
@@ -208,7 +208,7 @@ async fn player_query(
     query: &str,
     name: &str,
 ) -> (Ws, Value) {
-    let query = format!("role=player&{query}");
+    let query = format!("mode=player&{query}");
     let mut player = Ws::connect(address, &query, admin).await;
     // Every player starts inactive, with the songs coming up.
     assert_eq!(
@@ -448,7 +448,7 @@ async fn upgrade_requires_an_admin(db: SqlitePool) {
     let user = app.cookie_for(app.create_user("Alex", false).await);
     let address = app.serve().await;
 
-    for query in ["role=controller", "role=player&name=Tonpult"] {
+    for query in ["mode=controller", "mode=player&name=Tonpult"] {
         let anonymous = Ws::try_connect(address, query, None).await;
         assert_eq!(anonymous.err(), Some(StatusCode::UNAUTHORIZED), "{query}");
         let not_admin = Ws::try_connect(address, query, Some(&user)).await;
@@ -456,8 +456,8 @@ async fn upgrade_requires_an_admin(db: SqlitePool) {
         let socket = Ws::try_connect(address, query, Some(&admin)).await;
         assert!(socket.is_ok(), "{query}");
     }
-    let unknown_role = Ws::try_connect(address, "role=dj", Some(&admin)).await;
-    assert_eq!(unknown_role.err(), Some(StatusCode::BAD_REQUEST));
+    let unknown_mode = Ws::try_connect(address, "mode=dj", Some(&admin)).await;
+    assert_eq!(unknown_mode.err(), Some(StatusCode::BAD_REQUEST));
 }
 
 #[sqlx::test]
@@ -1250,7 +1250,7 @@ async fn the_active_player_reconnects_with_its_id(db: SqlitePool) {
 
     // Back with its id: still a known player, but no longer active.
     let id = tonpult_id.as_str().unwrap();
-    let query = format!("role=player&name=Tonpult&id={id}");
+    let query = format!("mode=player&name=Tonpult&id={id}");
     let mut tonpult = Ws::connect(address, &query, &admin).await;
     assert_eq!(
         tonpult.next().await,
@@ -1354,7 +1354,7 @@ async fn players_keep_their_id(db: SqlitePool) {
 
     // A second connection with the same id takes over, e.g. after a network
     // loss the server didn't notice yet. The first one is closed.
-    let query = format!("role=player&name=Tonpult&id={id}");
+    let query = format!("mode=player&name=Tonpult&id={id}");
     let mut second = Ws::connect(address, &query, &admin).await;
     assert_eq!(
         second.next().await,
@@ -1413,7 +1413,7 @@ async fn a_fresh_server_preloads_the_songs_coming_up(db: SqlitePool) {
 
     // Before any step in the timeplan.
     for name in ["Tonpult", "Laptop"] {
-        let query = format!("role=player&name={name}");
+        let query = format!("mode=player&name={name}");
         let mut player = Ws::connect(address, &query, &admin).await;
         assert_eq!(
             player.next().await,

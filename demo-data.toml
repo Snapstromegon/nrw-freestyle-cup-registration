@@ -199,10 +199,10 @@ firstname = "Petra"
 lastname = "Wagner"
 birthdate = 1975-03-14
 registrations = [
-  { category = "Einzel Vorlauf Junior Expert", role = "technical" },
-  { category = "Einzel Vorlauf Expert", role = "technical" },
-  { category = "Paar Vorlauf Junior Expert", role = "performance" },
-  { category = "Einzel Finale Expert", role = "technical" },
+  { category = "Einzel Vorlauf Junior Expert", task = "technical" },
+  { category = "Einzel Vorlauf Expert", task = "technical" },
+  { category = "Paar Vorlauf Junior Expert", task = "performance" },
+  { category = "Einzel Finale Expert", task = "technical" },
 ]
 
 [[clubs.judges]]
@@ -211,9 +211,9 @@ lastname = "Fischer"
 birthdate = 1969-11-02
 note = "Nur am Samstag"
 registrations = [
-  { category = "Einzel Vorlauf Junior Expert", role = "performance" },
-  { category = "Einzel Vorlauf Expert", role = "performance" },
-  { category = "Kleingruppe Expert", role = "technical" },
+  { category = "Einzel Vorlauf Junior Expert", task = "performance" },
+  { category = "Einzel Vorlauf Expert", task = "performance" },
+  { category = "Kleingruppe Expert", task = "technical" },
 ]
 
 [[clubs.judges]]
@@ -222,8 +222,8 @@ lastname = "Wagner"
 birthdate = 2011-04-20
 max_deployments = 2
 registrations = [
-  { category = "Einzel Vorlauf Junior Expert", role = "dismounts" },
-  { category = "Paar Vorlauf Junior Expert", role = "dismounts" },
+  { category = "Einzel Vorlauf Junior Expert", task = "dismounts" },
+  { category = "Paar Vorlauf Junior Expert", task = "dismounts" },
 ]
 
 # 20 starts, 300 € due: paid partially. Half of the starters checked in.
@@ -318,7 +318,7 @@ lastname = "Hoffmann"
 birthdate = 1988-08-08
 max_deployments = 2
 registrations = [
-  { category = "Einzel Vorlauf Expert", role = "technical" },
+  { category = "Einzel Vorlauf Expert", task = "technical" },
 ]
 
 [[clubs.judges]]
@@ -327,7 +327,7 @@ lastname = "Hoffmann"
 birthdate = 2013-01-15
 trained = false
 registrations = [
-  { category = "Einzel Vorlauf Junior Expert", role = "dismounts" },
+  { category = "Einzel Vorlauf Junior Expert", task = "dismounts" },
 ]
 
 # 13 starts, 195 € due: nothing paid. Nobody checked in yet.

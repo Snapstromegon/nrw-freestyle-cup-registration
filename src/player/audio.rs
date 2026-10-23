@@ -179,7 +179,7 @@ impl Engine {
                 self.volume = volume.clamp(0.0, 1.0) as f32;
                 self.player.set_volume(self.volume);
             }
-            // Loading the songs coming up and the active role are up to the
+            // Loading the songs coming up and the active status are up to the
             // player around the engine.
             ToPlayer::Prefetch { .. } | ToPlayer::Active { .. } => {}
         }

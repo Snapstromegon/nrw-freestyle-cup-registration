@@ -5,15 +5,15 @@ use utoipa::ToSchema;
 
 use crate::{
     http_server::{ClientError, HttpError, extractor::auth::Auth},
-    jury::{self, JudgeRole, JuryAssignment, JuryEnabled},
+    jury::{self, JudgeTask, JuryAssignment, JuryEnabled},
     reloadable_sqlite::{ReloadableSqlite, begin_write},
 };
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct AssignJudgeResponse {}
 
-/// Assign a judge a role in a jury category of the Juryplan. Untrained
-/// people only count dismounts; one role per judge and category. Admin only.
+/// Assign a judge a task in a jury category of the Juryplan. Untrained
+/// people only count dismounts; one task per judge and category. Admin only.
 #[utoipa::path(
     post,
     tags=["command", "jury"],
@@ -44,20 +44,20 @@ pub async fn assign_judge(
             .fetch_optional(&mut *transaction)
             .await?
             .ok_or(HttpError::StatusCode(StatusCode::NOT_FOUND))?;
-    if !is_trained && body.role != JudgeRole::Dismounts {
+    if !is_trained && body.task != JudgeTask::Dismounts {
         return Err(HttpError::ErrorMessages(
             "Nicht geschulte Personen können nur Abstiege zählen.".to_string(),
         ));
     }
     info!(
         "Assigning judge {} to jury category {} ({:?})",
-        body.judge_id, body.jury_category_id, body.role
+        body.judge_id, body.jury_category_id, body.task
     );
     let result = sqlx::query!(
-        "INSERT INTO jury_assignments (judge_id, jury_category_id, role) VALUES (?, ?, ?)",
+        "INSERT INTO jury_assignments (judge_id, jury_category_id, task) VALUES (?, ?, ?)",
         body.judge_id,
         body.jury_category_id,
-        body.role,
+        body.task,
     )
     .execute(&mut *transaction)
     .await;

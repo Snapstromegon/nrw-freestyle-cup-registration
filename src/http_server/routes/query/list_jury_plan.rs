@@ -6,7 +6,7 @@ use uuid::Uuid;
 use crate::{
     groups::ensure_club_access,
     http_server::{ClientError, HttpError, extractor::auth::Auth},
-    jury::{JudgeRole, JuryAssignment, JuryEnabled},
+    jury::{JudgeTask, JuryAssignment, JuryEnabled},
     reloadable_sqlite::ReloadableSqlite,
 };
 
@@ -71,12 +71,12 @@ pub async fn list_jury_plan(
         SELECT
             jury_assignments.judge_id as "judge_id!: Uuid",
             jury_assignments.jury_category_id as "jury_category_id!: Uuid",
-            jury_assignments.role as "role!: JudgeRole"
+            jury_assignments.task as "task!: JudgeTask"
         FROM jury_assignments
         JOIN judge ON judge.id = jury_assignments.judge_id
         JOIN jury_categories ON jury_categories.id = jury_assignments.jury_category_id
         WHERE ?1 IS NULL OR judge.club_id = ?1
-        ORDER BY jury_categories.sort_order, jury_assignments.role, judge.lastname, judge.firstname
+        ORDER BY jury_categories.sort_order, jury_assignments.task, judge.lastname, judge.firstname
         "#,
         query.club_id
     )

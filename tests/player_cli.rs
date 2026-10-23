@@ -126,7 +126,7 @@ struct Controller(WebSocketStream<MaybeTlsStream<TcpStream>>);
 
 impl Controller {
     async fn connect(address: SocketAddr, cookie: &str) -> Self {
-        let mut request = format!("ws://{address}/api/ws/player?role=controller")
+        let mut request = format!("ws://{address}/api/ws/player?mode=controller")
             .into_client_request()
             .unwrap();
         request

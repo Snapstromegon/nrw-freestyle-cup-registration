@@ -91,7 +91,7 @@ export default class CupViewPlayer extends LitElement {
         padding: 0 0.6em;
       }
 
-      .role {
+      .player-status {
         display: flex;
         align-items: center;
         gap: 0.75rem;
@@ -107,36 +107,36 @@ export default class CupViewPlayer extends LitElement {
         line-height: 1.2;
       }
 
-      .role .material-icon {
+      .player-status .material-icon {
         font-size: 1.6em;
       }
 
-      .role small {
+      .player-status small {
         display: block;
         font-size: 0.55em;
         font-weight: 400;
       }
 
-      .role.active {
+      .player-status.active {
         border-color: var(--cup-green);
         background: var(--tone-ok-bg);
         color: var(--tone-ok-fg);
         font-size: 2.2em;
       }
 
-      .role.offline {
+      .player-status.offline {
         border-color: var(--cup-red);
         background: var(--tone-bad-bg);
         color: var(--tone-bad-fg);
       }
 
-      .role.stray {
+      .player-status.stray {
         border-color: var(--cup-amber);
         background: var(--tone-warn-bg);
         color: var(--tone-warn-fg);
       }
 
-      .role .btn {
+      .player-status .btn {
         margin-left: auto;
         font-size: 0.6em;
       }
@@ -578,7 +578,7 @@ export default class CupViewPlayer extends LitElement {
           >Lautstärke ${Math.round((status?.volume ?? 1) * 100)} %</span
         >
       </div>
-      ${this.renderRole(playing)} ${this.renderUnlock()}
+      ${this.renderStatus(playing)} ${this.renderUnlock()}
       ${
         this.error
           ? html`<div class="error-banner" role="alert">${this.error}</div>`
@@ -593,10 +593,10 @@ export default class CupViewPlayer extends LitElement {
     </div>`;
   }
 
-  private renderRole(playing: boolean) {
+  private renderStatus(playing: boolean) {
     const name = this.name || DEFAULT_NAME;
     if (this.socket.state !== "open") {
-      return html`<div class="role offline" role="status">
+      return html`<div class="player-status offline" role="status">
         <span class="material-icon" aria-hidden="true">cloud_off</span>
         <span
           >Keine Verbindung zum Server
@@ -608,7 +608,7 @@ export default class CupViewPlayer extends LitElement {
       </div>`;
     }
     if (this.active) {
-      return html`<div class="role active" role="status">
+      return html`<div class="player-status active" role="status">
         <span class="material-icon" aria-hidden="true">volume_up</span>
         <span
           >AKTIV
@@ -619,7 +619,7 @@ export default class CupViewPlayer extends LitElement {
       </div>`;
     }
     if (playing) {
-      return html`<div class="role stray" role="status">
+      return html`<div class="player-status stray" role="status">
         <span class="material-icon" aria-hidden="true">warning</span>
         <span
           >Spielt, ist aber nicht ausgewählt
@@ -634,7 +634,7 @@ export default class CupViewPlayer extends LitElement {
         </button>
       </div>`;
     }
-    return html`<div class="role" role="status">
+    return html`<div class="player-status" role="status">
       <span class="material-icon" aria-hidden="true">volume_off</span>
       <span
         >Nicht ausgewählt

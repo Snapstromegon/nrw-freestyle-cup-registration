@@ -1,8 +1,8 @@
-//! `GET /api/ws/player?role=controller|player&kind=web|cli&name=…&id=…`: the
-//! websocket of remote playback. Both roles need an admin login; the sound
+//! `GET /api/ws/player?mode=controller|player&kind=web|cli&name=…&id=…`: the
+//! websocket of remote playback. Both modes need an admin login; the sound
 //! desk logs in as an admin, too.
 //!
-//! The server pings both roles every [`PING_EVERY`](super::PING_EVERY) and
+//! The server pings both modes every [`PING_EVERY`](super::PING_EVERY) and
 //! closes a connection that sent nothing for
 //! [`IDLE_TIMEOUT`](super::IDLE_TIMEOUT), so a player whose network is gone
 //! is noticed without a closing handshake. A player connection that a newer
@@ -40,7 +40,7 @@ pub const REPLACED: u16 = 4000;
 
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Role {
+pub enum Mode {
     Controller,
     Player,
 }
@@ -65,7 +65,7 @@ impl From<RemoteKind> for PlayerKind {
 
 #[derive(Debug, Deserialize)]
 pub struct PlayerQuery {
-    role: Role,
+    mode: Mode,
     /// Players: the web player page (default) or `cup-player`.
     #[serde(default)]
     kind: RemoteKind,
@@ -86,9 +86,9 @@ pub async fn player_ws(
         return StatusCode::FORBIDDEN.into_response();
     }
     upgrade.on_upgrade(move |socket| async move {
-        match query.role {
-            Role::Controller => controller(socket, hub).await,
-            Role::Player => {
+        match query.mode {
+            Mode::Controller => controller(socket, hub).await,
+            Mode::Player => {
                 let name = query
                     .name
                     .map(|name| name.trim().chars().take(60).collect::<String>())

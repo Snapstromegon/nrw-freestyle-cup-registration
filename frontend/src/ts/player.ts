@@ -1,5 +1,5 @@
-// Remote music playback: the websocket client of the music control (role
-// `controller`) and of the web player page (role `player`), plus the pure
+// Remote music playback: the websocket client of the music control (mode
+// `controller`) and of the web player page (mode `player`), plus the pure
 // helpers both use. See `src/player/mod.rs` for the protocol.
 //
 // This module only has type imports and touches no DOM API at import time,
@@ -16,17 +16,17 @@ export type PlayerInfo = schemas.PlayerInfo;
 export type PlaybackState = schemas.PlaybackState;
 export type Song = schemas.Song;
 
-export type Role = "controller" | "player";
+export type Mode = "controller" | "player";
 
 /** The websocket of remote playback for this page's host. */
 export const playerSocketUrl = (
   location: Pick<Location, "protocol" | "host">,
-  role: Role,
+  mode: Mode,
   name?: string,
 ) => {
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
   const trimmed = name?.trim();
-  const query = `role=${role}${trimmed ? `&name=${encodeURIComponent(trimmed)}` : ""}`;
+  const query = `mode=${mode}${trimmed ? `&name=${encodeURIComponent(trimmed)}` : ""}`;
   return `${protocol}//${location.host}/api/ws/player?${query}`;
 };
 

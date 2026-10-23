@@ -15,9 +15,9 @@ import {
   countDeployments,
   deploymentNote,
   obligationTone,
-  ROLES,
-  roleLabels,
-  roleNames,
+  TASKS,
+  taskLabels,
+  taskNames,
 } from "../../../jury";
 import { iconStyles, resetStyles } from "../../../styles/base";
 import { clubPortalStyles } from "../../../styles/club-portal";
@@ -29,7 +29,7 @@ import {
 } from "../../../utils";
 import { dataChanged, navigateTo } from "./events";
 
-type JudgeRole = schemas.JudgeRole;
+type JudgeTask = schemas.JudgeTask;
 
 /** The judge form, as the inputs hold it. */
 interface Draft {
@@ -41,7 +41,7 @@ interface Draft {
   /** Empty for no limit. */
   max_deployments: string;
   note: string;
-  /** "categoryId:role" of every ticked box. */
+  /** "categoryId:task" of every ticked box. */
   registrations: Set<string>;
 }
 
@@ -55,7 +55,7 @@ const emptyDraft = (): Draft => ({
   registrations: new Set(),
 });
 
-const key = (categoryId: string, role: JudgeRole) => `${categoryId}:${role}`;
+const key = (categoryId: string, task: JudgeTask) => `${categoryId}:${task}`;
 
 const draftOf = (judge: ClubJudge): Draft => ({
   firstname: judge.firstname,
@@ -65,7 +65,7 @@ const draftOf = (judge: ClubJudge): Draft => ({
   max_deployments: judge.max_deployments?.toString() ?? "",
   note: judge.note ?? "",
   registrations: new Set(
-    judge.registrations.map((r) => key(r.jury_category_id, r.role)),
+    judge.registrations.map((r) => key(r.jury_category_id, r.task)),
   ),
 });
 
@@ -74,7 +74,7 @@ const NEW = "new";
 
 /**
  * Step "Jury": the club's judges (JurorInnen) and the jury categories and
- * roles they can do. Only shown while the jury registration is on.
+ * tasks they can do. Only shown while the jury registration is on.
  */
 @customElement("cup-club-step-jury")
 export default class CupClubStepJury extends LitElement {
@@ -312,7 +312,7 @@ export default class CupClubStepJury extends LitElement {
         white-space: nowrap;
       }
 
-      /* Jury categories × roles in the judge form. */
+      /* Jury categories × tasks in the judge form. */
       .grid-wrap {
         flex: 1 1 100%;
         overflow-x: auto;
@@ -334,12 +334,12 @@ export default class CupClubStepJury extends LitElement {
         text-align: left;
       }
 
-      table.grid th.role {
+      table.grid th.task {
         width: 5.5rem;
         text-align: center;
       }
 
-      table.grid th.role abbr {
+      table.grid th.task abbr {
         display: block;
         color: var(--cup-blue);
         font-size: 1rem;
@@ -391,12 +391,12 @@ export default class CupClubStepJury extends LitElement {
       }
 
       /*
-       * A role is a toggle: an empty circle, or a filled one with a check.
+       * A task is a toggle: an empty circle, or a filled one with a check.
        * The whole cell toggles it; the checkbox stays for keyboard and
        * screen readers. On desktop only the circle shows (the heading names
-       * the role), on phones the role's name too.
+       * the task), on phones the task's name too.
        */
-      table.grid td.role label {
+      table.grid td.task label {
         position: relative;
         display: flex;
         justify-content: center;
@@ -406,7 +406,7 @@ export default class CupClubStepJury extends LitElement {
         cursor: pointer;
       }
 
-      table.grid td.role input {
+      table.grid td.task input {
         position: absolute;
         opacity: 0;
         width: 1px;
@@ -430,25 +430,25 @@ export default class CupClubStepJury extends LitElement {
         color: transparent;
       }
 
-      table.grid td.role input:checked + .chk {
+      table.grid td.task input:checked + .chk {
         background: var(--cup-blue);
         border-color: var(--cup-blue);
       }
 
-      table.grid td.role input:checked + .chk .material-icon {
+      table.grid td.task input:checked + .chk .material-icon {
         color: #fff;
       }
 
-      table.grid td.role input:focus-visible + .chk {
+      table.grid td.task input:focus-visible + .chk {
         outline: 2px solid var(--cup-blue);
         outline-offset: 2px;
       }
 
-      table.grid td.role:not(.off) label:hover .chk {
+      table.grid td.task:not(.off) label:hover .chk {
         border-color: var(--cup-blue);
       }
 
-      table.grid td.role.off label {
+      table.grid td.task.off label {
         cursor: not-allowed;
         opacity: 0.35;
       }
@@ -459,7 +459,7 @@ export default class CupClubStepJury extends LitElement {
         display: none;
       }
 
-      /* Phones: each jury category as a card with three role buttons. */
+      /* Phones: each jury category as a card with three task buttons. */
       @media (max-width: 720px) {
         .grid-wrap {
           border: none;
@@ -530,7 +530,7 @@ export default class CupClubStepJury extends LitElement {
         }
 
 
-        table.grid td.role label {
+        table.grid td.task label {
           padding: 0 0.5rem;
           border: 1.5px solid var(--cup-border);
           border-radius: 0.6rem;
@@ -540,22 +540,22 @@ export default class CupClubStepJury extends LitElement {
           font-weight: 600;
         }
 
-        table.grid td.role:has(input:checked) label {
+        table.grid td.task:has(input:checked) label {
           background: var(--cup-blue);
           border-color: var(--cup-blue);
           color: #fff;
         }
 
-        table.grid td.role input:checked + .chk {
+        table.grid td.task input:checked + .chk {
           background: #fff;
           border-color: #fff;
         }
 
-        table.grid td.role input:checked + .chk .material-icon {
+        table.grid td.task input:checked + .chk .material-icon {
           color: var(--cup-blue);
         }
 
-        table.grid td.role.off label {
+        table.grid td.task.off label {
           border-style: dashed;
         }
 
@@ -758,7 +758,7 @@ export default class CupClubStepJury extends LitElement {
               : nothing
           }
         </td>
-        <td>${roleNames[a.role]}</td>
+        <td>${taskNames[a.task]}</td>
       </tr>`;
     });
     return html`<section class="card">
@@ -773,7 +773,7 @@ export default class CupClubStepJury extends LitElement {
                 <tr>
                   <th>JurorIn</th>
                   <th>Jury-Kategorie</th>
-                  <th>Rolle</th>
+                  <th>Aufgabe</th>
                 </tr>
               </thead>
               <tbody>
@@ -893,11 +893,11 @@ export default class CupClubStepJury extends LitElement {
 
   private renderJudge(judge: ClubJudge) {
     const categories = new Map(this.categories.map((c) => [c.id, c.name]));
-    const byCategory = new Map<string, JudgeRole[]>();
+    const byCategory = new Map<string, JudgeTask[]>();
     for (const r of judge.registrations) {
       byCategory.set(r.jury_category_id, [
         ...(byCategory.get(r.jury_category_id) ?? []),
-        r.role,
+        r.task,
       ]);
     }
     return html`<tr>
@@ -933,10 +933,10 @@ export default class CupClubStepJury extends LitElement {
             byCategory.size === 0
               ? html`<span class="muted">nichts gewählt</span>`
               : [...byCategory].map(
-                  ([id, roles]) =>
+                  ([id, tasks]) =>
                     html`<span class="chip"
                       >${categories.get(id) ?? "?"}:
-                      ${roles.map((r) => roleLabels[r]).join("/")}</span
+                      ${tasks.map((r) => taskLabels[r]).join("/")}</span
                     >`,
                 )
           }
@@ -1059,16 +1059,16 @@ export default class CupClubStepJury extends LitElement {
     </section>`;
   }
 
-  /** Jury categories × roles; untrained people only count dismounts. */
+  /** Jury categories × tasks; untrained people only count dismounts. */
   private renderGrid() {
     if (this.categories.length === 0) {
       return html`<p class="muted">Noch keine Jury-Kategorien angelegt.</p>`;
     }
-    const headers = ROLES.map(
-      (role) =>
-        html`<th class="role" scope="col">
-          <abbr title=${roleNames[role]}>${roleLabels[role]}</abbr>
-          ${roleNames[role]}
+    const headers = TASKS.map(
+      (task) =>
+        html`<th class="task" scope="col">
+          <abbr title=${taskNames[task]}>${taskLabels[task]}</abbr>
+          ${taskNames[task]}
         </th>`,
     );
     return html`<div class="grid-wrap">
@@ -1095,26 +1095,26 @@ export default class CupClubStepJury extends LitElement {
   }
 
   private renderGridRow(category: JuryCategory) {
-    const cells = ROLES.map((role) => {
-      const off = !this.draft.is_trained && role !== "dismounts";
+    const cells = TASKS.map((task) => {
+      const off = !this.draft.is_trained && task !== "dismounts";
       return html`<td
-        class="role ${off ? "off" : ""}"
-        title=${off ? "Nur für geschulte JurorInnen" : roleNames[role]}
+        class="task ${off ? "off" : ""}"
+        title=${off ? "Nur für geschulte JurorInnen" : taskNames[task]}
       >
         <label>
           <input
             type="checkbox"
-            aria-label="${category.name}: ${roleNames[role]}"
-            data-key=${key(category.id, role)}
-            .checked=${this.draft.registrations.has(key(category.id, role))}
+            aria-label="${category.name}: ${taskNames[task]}"
+            data-key=${key(category.id, task)}
+            .checked=${this.draft.registrations.has(key(category.id, task))}
             ?disabled=${off}
             @change=${this.onRegistrationChange}
           />
           <span class="chk" aria-hidden="true"
             ><i class="material-icon">check</i></span
           >
-          <span class="long" aria-hidden="true">${roleNames[role]}</span>
-          <span class="short" aria-hidden="true">${roleLabels[role]}</span>
+          <span class="long" aria-hidden="true">${taskNames[task]}</span>
+          <span class="short" aria-hidden="true">${taskLabels[task]}</span>
         </label>
       </td>`;
     });
@@ -1155,7 +1155,7 @@ export default class CupClubStepJury extends LitElement {
           ${note ? html`<small>${note}</small>` : nothing}
         </td>
         <td class="count"><strong>${counted}</strong></td>
-        <td colspan=${ROLES.length}></td>
+        <td colspan=${TASKS.length}></td>
       </tr>
     </tfoot>`;
   }
@@ -1224,8 +1224,8 @@ export default class CupClubStepJury extends LitElement {
         : null,
       note: draft.note || null,
       registrations: [...draft.registrations].map((k) => {
-        const [jury_category_id, role] = k.split(":");
-        return { jury_category_id, role: role as JudgeRole };
+        const [jury_category_id, task] = k.split(":");
+        return { jury_category_id, task: task as JudgeTask };
       }),
     };
     const id = this.editing;

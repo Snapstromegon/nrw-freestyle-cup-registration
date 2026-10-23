@@ -10,7 +10,7 @@
 //!
 //! A player that loses its connection stays for [`RECONNECT_GRACE`], marked
 //! disconnected, and comes back with the same id (`?id=`): it keeps its
-//! active role and gets the volume and the cue again. Commands sent while it
+//! active status and gets the volume and the cue again. Commands sent while it
 //! is away are lost. A controller can remove it before that.
 //!
 //! For award ceremonies the controllers share a queue of act songs, played on
@@ -51,7 +51,7 @@ pub mod ws;
 const PREFETCH: usize = 3;
 
 /// How long a player that lost its connection keeps its place, and its
-/// active role, for a reconnect.
+/// active status, for a reconnect.
 pub const RECONNECT_GRACE: Duration = Duration::from_secs(20);
 /// How often the server pings a websocket.
 pub const PING_EVERY: Duration = Duration::from_secs(10);
@@ -489,7 +489,7 @@ impl PlayerHub {
 
     /// Adds a player, or connects a known one again: `id` is the player's id
     /// from its last connection. A new player starts inactive. A known one
-    /// keeps its role, and its previous connection ends; as the active
+    /// keeps whether it is active, and its previous connection ends; as the active
     /// player it gets the volume and the cue again. A missing or unknown id,
     /// or one of a player of another kind, gets a fresh id.
     pub async fn register(
@@ -1235,7 +1235,7 @@ mod tests {
     }
 
     #[sqlx::test]
-    async fn a_reconnect_keeps_the_active_role(db: sqlx::SqlitePool) {
+    async fn a_reconnect_keeps_the_active_status(db: sqlx::SqlitePool) {
         let hub = hub(db);
         let first = hub.register(None, "Tonpult".into(), PlayerKind::Web).await;
         let id = first.id;

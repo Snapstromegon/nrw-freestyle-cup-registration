@@ -73,7 +73,7 @@ async fn main() -> eyre::Result<()> {
         unreachable!("clap requires them without --list-devices");
     };
     let name = args.name.unwrap_or_else(computer_name);
-    // The same id for the same name: a restarted player gets its active role
+    // The same id for the same name: a restarted player gets its active status
     // back if it's quick.
     let id = Uuid::new_v5(
         &Uuid::NAMESPACE_URL,

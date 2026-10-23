@@ -398,7 +398,7 @@ pub struct JuryCategoryConfig {
     /// The day it runs; within the event.
     #[serde(default, deserialize_with = "toml_date_option")]
     pub day: Option<Date>,
-    /// Judges it needs per role. 5 allows dropping the highest and lowest
+    /// Judges it needs per task. 5 allows dropping the highest and lowest
     /// score (Konzept Gemeinsame Wettkämpfe 4.1).
     #[serde(default = "default_needed_judges")]
     pub needed_technical: i64,

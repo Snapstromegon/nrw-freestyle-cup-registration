@@ -54,36 +54,36 @@ export const ageOnStart = (
   return age;
 };
 
-/** Short labels of the judge roles: Technik, Performance, Abstiege. */
-export const roleLabels = {
+/** Short labels of the judge tasks: Technik, Performance, Abstiege. */
+export const taskLabels = {
   technical: "T",
   performance: "P",
   dismounts: "A",
 } as const;
 
-export const roleNames = {
+export const taskNames = {
   technical: "Technik",
   performance: "Performance",
   dismounts: "Abstiege",
 } as const;
 
-export const ROLES = ["technical", "performance", "dismounts"] as const;
+export const TASKS = ["technical", "performance", "dismounts"] as const;
 
-type Role = (typeof ROLES)[number];
+type Task = (typeof TASKS)[number];
 
-/** Judges of one role in a jury category, trained or not. */
-export interface RoleCount {
+/** Judges of one task in a jury category, trained or not. */
+export interface TaskCount {
   trained: number;
   untrained: number;
 }
 
-export type CategoryCoverage = Record<Role, RoleCount> & {
+export type CategoryCoverage = Record<Task, TaskCount> & {
   /** Registered judges who are 15 on the first competition day. */
   fifteen: number;
 };
 
 /**
- * Who can judge what: per jury category and role the registered trained and
+ * Who can judge what: per jury category and task the registered trained and
  * untrained judges, and how many of them are 15, since a category should
  * have at most three 15-year-old judges (Jury-Konzept 4).
  */
@@ -92,7 +92,7 @@ export const coverage = (
   judges: {
     birthdate: string;
     is_trained: boolean;
-    registrations: { jury_category_id: string; role: Role }[];
+    registrations: { jury_category_id: string; task: Task }[];
   }[],
   competition: Pick<Competition, "start_date"> | null | undefined,
 ) => {
@@ -106,12 +106,12 @@ export const coverage = (
   for (const judge of judges) {
     const isFifteen = ageOnStart(judge.birthdate, competition) === 15;
     const seen = new Set<string>();
-    for (const { jury_category_id, role } of judge.registrations) {
+    for (const { jury_category_id, task } of judge.registrations) {
       const category = result.get(jury_category_id);
       if (!category) {
         continue;
       }
-      category[role][judge.is_trained ? "trained" : "untrained"] += 1;
+      category[task][judge.is_trained ? "trained" : "untrained"] += 1;
       if (isFifteen && !seen.has(jury_category_id)) {
         seen.add(jury_category_id);
         category.fifteen += 1;
@@ -121,18 +121,18 @@ export const coverage = (
   return result;
 };
 
-/** Judges a jury category needs per role. */
+/** Judges a jury category needs per task. */
 export const neededFor = (
   category: {
     needed_technical: number;
     needed_performance: number;
     needed_dismounts: number;
   },
-  role: Role,
+  task: Task,
 ) =>
-  role === "technical"
+  task === "technical"
     ? category.needed_technical
-    : role === "performance"
+    : task === "performance"
       ? category.needed_performance
       : category.needed_dismounts;
 
@@ -140,23 +140,23 @@ export const neededFor = (
 export const MAX_FIFTEEN = 3;
 
 /**
- * What's wrong with a jury category in the Juryplan: roles with fewer judges
+ * What's wrong with a jury category in the Juryplan: tasks with fewer judges
  * than needed, and more than three 15-year-old judges. More judges than
  * needed are fine.
  */
 export const planWarnings = (
   category: Parameters<typeof neededFor>[0] & { id: string },
-  assignments: { judge_id: string; jury_category_id: string; role: Role }[],
+  assignments: { judge_id: string; jury_category_id: string; task: Task }[],
   judges: { id: string; birthdate: string }[],
   competition: Pick<Competition, "start_date"> | null | undefined,
 ) => {
   const own = assignments.filter((a) => a.jury_category_id === category.id);
   const warnings: string[] = [];
-  for (const role of ROLES) {
-    const assigned = own.filter((a) => a.role === role).length;
-    const needed = neededFor(category, role);
+  for (const task of TASKS) {
+    const assigned = own.filter((a) => a.task === task).length;
+    const needed = neededFor(category, task);
     if (assigned < needed) {
-      warnings.push(`${roleNames[role]}: ${assigned} von ${needed}`);
+      warnings.push(`${taskNames[task]}: ${assigned} von ${needed}`);
     }
   }
   const birthdates = new Map(judges.map((j) => [j.id, j.birthdate]));
@@ -192,7 +192,7 @@ export const deploymentNote = (judge: {
 
 /**
  * What a judge's selection is worth while it's being edited: every ticked
- * jury category once, whatever the roles (`ticked` holds "categoryId:role"),
+ * jury category once, whatever the tasks (`ticked` holds "categoryId:task"),
  * and what of it counts for the club. The same rule as the server's
  * `counted_deployments`, for a live preview.
  */

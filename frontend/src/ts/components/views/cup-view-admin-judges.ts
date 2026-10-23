@@ -16,9 +16,9 @@ import {
   judgeRegistrationEnd,
   neededFor,
   planWarnings,
-  ROLES,
-  roleLabels,
-  roleNames,
+  TASKS,
+  taskLabels,
+  taskNames,
 } from "../../jury";
 import { adminStyles } from "../../styles/admin";
 import { iconStyles, resetStyles } from "../../styles/base";
@@ -29,7 +29,7 @@ type JuryCategoryFields = schemas.JuryCategoryFields;
 type ClubJudge = schemas.ClubJudge;
 type ClubOverview = schemas.ClubOverview;
 type JuryPlan = schemas.JuryPlan;
-type JudgeRole = schemas.JudgeRole;
+type JudgeTask = schemas.JudgeTask;
 type NumberField =
   | "deployments"
   | "needed_technical"
@@ -119,7 +119,7 @@ export default class CupViewAdminJudges extends LitElement {
   @state() private saving = false;
   @state() private error: string | null = null;
   @state() private search = "";
-  /** Offer every judge for a role, not only those who registered for it. */
+  /** Offer every judge for a task, not only those who registered for it. */
   @state() private showAll = false;
   /** While printing only the Juryplan. */
   @state() private printingPlan = false;
@@ -235,7 +235,7 @@ export default class CupViewAdminJudges extends LitElement {
   }
 
   /**
-   * The Juryplan: per jury category and role the assigned judges, a picker to
+   * The Juryplan: per jury category and task the assigned judges, a picker to
    * assign more and the category's warnings; grouped by day for printing.
    */
   private renderPlan(
@@ -251,7 +251,7 @@ export default class CupViewAdminJudges extends LitElement {
     const days = [...byDay].sort(([a], [b]) =>
       a === "" ? 1 : b === "" ? -1 : a.localeCompare(b),
     );
-    const headers = ROLES.map((role) => html`<th>${roleNames[role]}</th>`);
+    const headers = TASKS.map((task) => html`<th>${taskNames[task]}</th>`);
     const groups = days.map(
       ([day, dayCategories]) =>
         html`<h3>${day ? formatDate(day) : "Ohne Tag"}</h3>
@@ -312,7 +312,7 @@ export default class CupViewAdminJudges extends LitElement {
       </div>
       <p class="muted small no-print">
         Vorgeschlagen werden die JurorInnen, die sich für die Jury-Kategorie
-        und Rolle gemeldet haben; mit „alle zeigen“ auch alle anderen.
+        und Aufgabe gemeldet haben; mit „alle zeigen“ auch alle anderen.
         Veröffentlicht sieht jeder Verein die Einteilung seiner JurorInnen; das
         geht erst nach dem Ende der Jury-Anmeldung${
           end ? ` (${formatDate(end)})` : ""
@@ -338,13 +338,13 @@ export default class CupViewAdminJudges extends LitElement {
       competition,
     );
     const byId = new Map(judges.map((j) => [j.id, j]));
-    const cells = ROLES.map((role) => {
+    const cells = TASKS.map((task) => {
       const names = assigned
-        .filter((a) => a.role === role)
+        .filter((a) => a.task === task)
         .map((a) => {
           const judge = byId.get(a.judge_id);
           const registered = judge?.registrations.some(
-            (r) => r.jury_category_id === category.id && r.role === role,
+            (r) => r.jury_category_id === category.id && r.task === task,
           );
           return html`<span
             class="chip ${registered ? "" : "warn"}"
@@ -366,9 +366,9 @@ export default class CupViewAdminJudges extends LitElement {
       return html`<td>
         <div class="chips">${names}</div>
         <small class="muted"
-          >${assigned.filter((a) => a.role === role).length}/${neededFor(category, role)}</small
+          >${assigned.filter((a) => a.task === task).length}/${neededFor(category, task)}</small
         >
-        ${this.renderPicker(category, role, judges, assigned)}
+        ${this.renderPicker(category, task, judges, assigned)}
       </td>`;
     });
     const warningLines = warnings.map(
@@ -383,23 +383,23 @@ export default class CupViewAdminJudges extends LitElement {
     </tr>`;
   }
 
-  /** Judges that can be added to a role; untrained ones only count dismounts. */
+  /** Judges that can be added to a task; untrained ones only count dismounts. */
   private renderPicker(
     category: JuryCategory,
-    role: JudgeRole,
+    task: JudgeTask,
     judges: ClubJudge[],
     assigned: { judge_id: string }[],
   ) {
     const taken = new Set(assigned.map((a) => a.judge_id));
     const registered = (judge: ClubJudge) =>
       judge.registrations.some(
-        (r) => r.jury_category_id === category.id && r.role === role,
+        (r) => r.jury_category_id === category.id && r.task === task,
       );
     const options = judges
       .filter(
         (judge) =>
           !taken.has(judge.id) &&
-          (judge.is_trained || role === "dismounts") &&
+          (judge.is_trained || task === "dismounts") &&
           (this.showAll || registered(judge)),
       )
       .map(
@@ -415,9 +415,9 @@ export default class CupViewAdminJudges extends LitElement {
     }
     return html`<select
       class="no-print"
-      aria-label="${category.name}: ${roleNames[role]} einteilen"
+      aria-label="${category.name}: ${taskNames[task]} einteilen"
       data-category=${category.id}
-      data-role=${role}
+      data-task=${task}
       ?disabled=${this.saving}
       @change=${this.onAssignChange}
     >
@@ -426,27 +426,27 @@ export default class CupViewAdminJudges extends LitElement {
     </select>`;
   }
 
-  /** Jury category × role: trained (and untrained) judges against needed. */
+  /** Jury category × task: trained (and untrained) judges against needed. */
   private renderCoverage(categories: JuryCategory[], judges: ClubJudge[]) {
     const counts = coverage(categories, judges, this.systemStatus?.competition);
     const needed = neededFor;
-    const headers = ROLES.map(
-      (role) =>
-        html`<th class="num" title=${roleNames[role]}>${roleLabels[role]}</th>`,
+    const headers = TASKS.map(
+      (task) =>
+        html`<th class="num" title=${taskNames[task]}>${taskLabels[task]}</th>`,
     );
     const rows = categories.map((category) => {
       const count = counts.get(category.id)!;
-      const cells = ROLES.map((role) => {
-        const { trained, untrained } = count[role];
+      const cells = TASKS.map((task) => {
+        const { trained, untrained } = count[task];
         // Untrained people only count dismounts, so they fill "A" too.
-        const available = role === "dismounts" ? trained + untrained : trained;
+        const available = task === "dismounts" ? trained + untrained : trained;
         const tone =
-          available < needed(category, role) ? "text-bad" : "text-ok";
+          available < needed(category, task) ? "text-bad" : "text-ok";
         return html`<td
           class="num ${tone}"
-          title="${trained} geschult${untrained ? `, ${untrained} nicht geschult` : ""} · benötigt ${needed(category, role)}"
+          title="${trained} geschult${untrained ? `, ${untrained} nicht geschult` : ""} · benötigt ${needed(category, task)}"
         >
-          ${available}/${needed(category, role)}
+          ${available}/${needed(category, task)}
         </td>`;
       });
       return html`<tr>
@@ -460,7 +460,7 @@ export default class CupViewAdminJudges extends LitElement {
     return html`<section>
       <h2>Wer kann was werten?</h2>
       <p class="muted small">
-        Gemeldete JurorInnen je Jury-Kategorie und Rolle gegen die benötigten;
+        Gemeldete JurorInnen je Jury-Kategorie und Aufgabe gegen die benötigten;
         für Abstiege zählen auch nicht geschulte. „15“: davon 15-jährig (höchstens
         drei je Wertungsklasse).
       </p>
@@ -544,14 +544,14 @@ export default class CupViewAdminJudges extends LitElement {
     const names = new Map(categories.map((c) => [c.id, c.name]));
     const needle = this.search.trim().toLocaleLowerCase("de");
     const describe = (judge: ClubJudge) => {
-      const roles = new Map<string, string[]>();
+      const tasks = new Map<string, string[]>();
       for (const r of judge.registrations) {
-        roles.set(r.jury_category_id, [
-          ...(roles.get(r.jury_category_id) ?? []),
-          roleLabels[r.role],
+        tasks.set(r.jury_category_id, [
+          ...(tasks.get(r.jury_category_id) ?? []),
+          taskLabels[r.task],
         ]);
       }
-      return [...roles].map(
+      return [...tasks].map(
         ([id, labels]) => `${names.get(id) ?? "?"}: ${labels.join("/")}`,
       );
     };
@@ -828,7 +828,7 @@ export default class CupViewAdminJudges extends LitElement {
     const body = {
       judge_id,
       jury_category_id: select.dataset.category!,
-      role: select.dataset.role as JudgeRole,
+      task: select.dataset.task as JudgeTask,
     };
     await this.change(() => unwrap(client.assignJudge({ body })), "Einteilen");
   }

@@ -3,7 +3,7 @@
 //! the songs into memory and passes the commands on to the sound card (the
 //! `output`), reporting its status back. A lost connection is opened again
 //! with the same id while the music plays on, so the player keeps its
-//! active role. Built with the cargo feature `player-client`.
+//! active status. Built with the cargo feature `player-client`.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -49,7 +49,7 @@ pub struct Options {
     pub password: String,
     /// Shown in the music control.
     pub name: String,
-    /// The same for every connection, so a reconnect keeps the active role.
+    /// The same for every connection, so a reconnect keeps the active status.
     pub id: Uuid,
 }
 
@@ -211,7 +211,7 @@ impl Session {
         url.set_scheme(scheme)
             .map_err(|()| ConnectError::Failed(format!("Can't connect to {url}")))?;
         url.query_pairs_mut()
-            .append_pair("role", "player")
+            .append_pair("mode", "player")
             .append_pair("kind", "cli")
             .append_pair("name", &options.name)
             .append_pair("id", &options.id.to_string());

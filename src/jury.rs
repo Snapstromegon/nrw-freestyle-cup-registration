@@ -53,7 +53,7 @@ pub struct JuryCategory {
     #[schema(value_type = Option<String>, format = Date)]
     pub day: Option<Date>,
     pub sort_order: i64,
-    /// Judges it needs per role.
+    /// Judges it needs per task.
     pub needed_technical: i64,
     pub needed_performance: i64,
     pub needed_dismounts: i64,
@@ -201,7 +201,7 @@ pub(crate) fn duplicate_name(name: &str) -> HttpError {
 )]
 #[serde(rename_all = "snake_case")]
 #[sqlx(type_name = "TEXT", rename_all = "snake_case")]
-pub enum JudgeRole {
+pub enum JudgeTask {
     /// Technik.
     Technical,
     /// Performance (Präsentation).
@@ -210,13 +210,13 @@ pub enum JudgeRole {
     Dismounts,
 }
 
-/// A judge's role in a jury category.
+/// A judge's task in a jury category.
 #[derive(
     Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, utoipa::ToSchema,
 )]
 pub struct JudgeRegistration {
     pub jury_category_id: Uuid,
-    pub role: JudgeRole,
+    pub task: JudgeTask,
 }
 
 /// A club's judge with what they registered for.
@@ -305,7 +305,7 @@ impl JudgeFields {
             && self
                 .registrations
                 .iter()
-                .any(|r| r.role != JudgeRole::Dismounts)
+                .any(|r| r.task != JudgeTask::Dismounts)
         {
             return Err(
                 "Nicht geschulte Personen können nur als AbstiegszählerIn gemeldet werden."
@@ -398,7 +398,7 @@ pub async fn save_judge(
     if !fields.is_trained {
         // Untrained people only count dismounts, also in the Juryplan.
         sqlx::query!(
-            "DELETE FROM jury_assignments WHERE judge_id = ? AND role != 'dismounts'",
+            "DELETE FROM jury_assignments WHERE judge_id = ? AND task != 'dismounts'",
             judge_id
         )
         .execute(&mut *conn)
@@ -417,10 +417,10 @@ pub async fn save_judge(
             ));
         }
         sqlx::query!(
-            "INSERT INTO judge_registration (judge_id, jury_category_id, role) VALUES (?, ?, ?)",
+            "INSERT INTO judge_registration (judge_id, jury_category_id, task) VALUES (?, ?, ?)",
             judge_id,
             registration.jury_category_id,
-            registration.role,
+            registration.task,
         )
         .execute(&mut *conn)
         .await?;
@@ -440,12 +440,12 @@ pub async fn list_judges(
         SELECT
             judge_registration.judge_id as "judge_id!: Uuid",
             judge_registration.jury_category_id as "jury_category_id!: Uuid",
-            judge_registration.role as "role!: JudgeRole"
+            judge_registration.task as "task!: JudgeTask"
         FROM judge_registration
         JOIN judge ON judge.id = judge_registration.judge_id
         JOIN jury_categories ON jury_categories.id = judge_registration.jury_category_id
         WHERE ?1 IS NULL OR judge.club_id = ?1
-        ORDER BY jury_categories.sort_order, judge_registration.role
+        ORDER BY jury_categories.sort_order, judge_registration.task
         "#,
         club_id
     )
@@ -457,7 +457,7 @@ pub async fn list_judges(
             .or_default()
             .push(JudgeRegistration {
                 jury_category_id: row.jury_category_id,
-                role: row.role,
+                task: row.task,
             });
     }
     let judges = sqlx::query!(
@@ -569,7 +569,7 @@ pub struct JuryObligation {
 /// without the fee being waived. It counts for its owner club: the
 /// group's creator, or the club of a single's or pair's riders. A trained
 /// judge counts the deployments of every jury category they registered for
-/// (once per category, whatever the roles), at most `max_deployments`.
+/// (once per category, whatever the tasks), at most `max_deployments`.
 pub async fn obligations(
     conn: &mut sqlx::SqliteConnection,
     rules: &JuryRules,
@@ -652,10 +652,10 @@ pub async fn obligations(
         .collect())
 }
 
-/// A judge's role in a jury category of the Juryplan.
+/// A judge's task in a jury category of the Juryplan.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
 pub struct JuryAssignment {
     pub judge_id: Uuid,
     pub jury_category_id: Uuid,
-    pub role: JudgeRole,
+    pub task: JudgeTask,
 }

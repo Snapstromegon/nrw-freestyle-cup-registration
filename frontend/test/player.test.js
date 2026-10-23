@@ -21,14 +21,14 @@ describe("playerSocketUrl", () => {
   test("follows the page's protocol and host", () => {
     assert.equal(
       playerSocketUrl({ protocol: "http:", host: "10.0.0.5:3000" }, "player"),
-      "ws://10.0.0.5:3000/api/ws/player?role=player",
+      "ws://10.0.0.5:3000/api/ws/player?mode=player",
     );
     assert.equal(
       playerSocketUrl(
         { protocol: "https:", host: "cup.example" },
         "controller",
       ),
-      "wss://cup.example/api/ws/player?role=controller",
+      "wss://cup.example/api/ws/player?mode=controller",
     );
   });
 
@@ -36,11 +36,11 @@ describe("playerSocketUrl", () => {
     const location = { protocol: "http:", host: "h" };
     assert.equal(
       playerSocketUrl(location, "player", "  Tontisch & Bühne ?"),
-      "ws://h/api/ws/player?role=player&name=Tontisch%20%26%20B%C3%BChne%20%3F",
+      "ws://h/api/ws/player?mode=player&name=Tontisch%20%26%20B%C3%BChne%20%3F",
     );
     assert.equal(
       playerSocketUrl(location, "player", "   "),
-      "ws://h/api/ws/player?role=player",
+      "ws://h/api/ws/player?mode=player",
     );
   });
 });
@@ -329,7 +329,7 @@ describe("PlayerSocket", () => {
 
   const create = () =>
     new PlayerSocket({
-      url: () => `ws://h/api/ws/player?role=player&name=${name}`,
+      url: () => `ws://h/api/ws/player?mode=player&name=${name}`,
       onMessage: (message) => messages.push(message),
       onChange: () => changes++,
       onOpen: () => opens++,
@@ -429,7 +429,7 @@ describe("PlayerSocket", () => {
     assert.equal(FakeSocket.all[0].closed, true);
     assert.equal(
       FakeSocket.all[1].url,
-      "ws://h/api/ws/player?role=player&name=B",
+      "ws://h/api/ws/player?mode=player&name=B",
     );
     FakeSocket.all[1].serverOpens();
     assert.equal(opens, 2);

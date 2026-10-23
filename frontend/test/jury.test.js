@@ -58,14 +58,14 @@ describe("jury", () => {
     assert.equal(ageOnStart("2012-06-06T00:00:00.000Z", null), null);
   });
 
-  test("coverage counts trained and untrained judges per category and role", () => {
+  test("coverage counts trained and untrained judges per category and task", () => {
     const start = { start_date: "2027-06-05" };
     const judge = (birthdate, is_trained, registrations) => ({
       birthdate,
       is_trained,
-      registrations: registrations.map(([jury_category_id, role]) => ({
+      registrations: registrations.map(([jury_category_id, task]) => ({
         jury_category_id,
-        role,
+        task,
       })),
     });
     const judges = [
@@ -108,10 +108,10 @@ describe("jury", () => {
       { id: "4", birthdate: "2012-01-01T00:00:00.000Z" },
       { id: "5", birthdate: "1990-01-01T00:00:00.000Z" },
     ];
-    const assign = (judge_id, role, jury_category_id = "a") => ({
+    const assign = (judge_id, task, jury_category_id = "a") => ({
       judge_id,
       jury_category_id,
-      role,
+      task,
     });
     assert.deepEqual(
       planWarnings(
@@ -157,7 +157,7 @@ describe("jury", () => {
       { id: "finale", deployments: 1 },
       { id: "gruppe", deployments: 2 },
     ];
-    // Two roles in the heat count once.
+    // Two tasks in the heat count once.
     const ticked = [
       "vorlauf:technical",
       "vorlauf:performance",

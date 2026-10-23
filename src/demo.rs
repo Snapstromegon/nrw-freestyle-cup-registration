@@ -115,7 +115,7 @@ pub struct DemoJudge {
     pub trained: bool,
     pub max_deployments: Option<i64>,
     pub note: Option<String>,
-    /// Jury categories (by name) and roles.
+    /// Jury categories (by name) and tasks.
     #[serde(default)]
     pub registrations: Vec<DemoJudgeRegistration>,
 }
@@ -124,7 +124,7 @@ pub struct DemoJudge {
 #[serde(deny_unknown_fields)]
 pub struct DemoJudgeRegistration {
     pub category: String,
-    pub role: crate::jury::JudgeRole,
+    pub task: crate::jury::JudgeTask,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -501,7 +501,7 @@ impl DemoData {
                             .get(&r.category)
                             .map(|id| crate::jury::JudgeRegistration {
                                 jury_category_id: *id,
-                                role: r.role,
+                                task: r.task,
                             })
                             .ok_or_else(|| {
                                 format!("Judge {name}: unknown jury category {:?}", r.category)
