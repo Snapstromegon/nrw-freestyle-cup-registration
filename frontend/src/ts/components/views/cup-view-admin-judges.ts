@@ -96,6 +96,18 @@ export default class CupViewAdminJudges extends LitElement {
       section {
         margin-top: 1.5rem;
       }
+
+      /* "Juryplan drucken": only the plan, one page per day. */
+      @media print {
+        .print-plan section:not(.plan-section),
+        .print-plan > .toolbar {
+          display: none;
+        }
+
+        .print-plan .plan-section h3:not(:first-of-type) {
+          break-before: page;
+        }
+      }
     `,
   ];
 
@@ -107,6 +119,8 @@ export default class CupViewAdminJudges extends LitElement {
   @state() private search = "";
   /** Offer every judge for a role, not only those who registered for it. */
   @state() private showAll = false;
+  /** While printing only the Juryplan. */
+  @state() private printingPlan = false;
 
   @consume({ context: systemStatusContext, subscribe: true })
   systemStatus: SystemStatus | null = null;
@@ -127,7 +141,7 @@ export default class CupViewAdminJudges extends LitElement {
   });
 
   override render() {
-    return html`<div class="page-pad">
+    return html`<div class="page-pad ${this.printingPlan ? "print-plan" : ""}">
       <div class="toolbar">
         <h1>Jury</h1>
         ${this.renderKpis()}
@@ -251,6 +265,9 @@ export default class CupViewAdminJudges extends LitElement {
           />
           alle zeigen</label
         >
+        <button class="btn small no-print" @click=${this.printPlan}>
+          <span class="material-icon">print</span> Juryplan drucken
+        </button>
         <button
           class="btn small no-print ${published ? "" : "primary"}"
           ?disabled=${this.saving}
@@ -789,6 +806,14 @@ export default class CupViewAdminJudges extends LitElement {
 
   private print() {
     window.print();
+  }
+
+  /** Prints only the Juryplan, one page per day. */
+  private async printPlan() {
+    this.printingPlan = true;
+    await this.updateComplete;
+    window.print();
+    this.printingPlan = false;
   }
 
   private async onOverrideChange(e: Event) {

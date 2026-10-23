@@ -894,3 +894,54 @@ async fn assignments_follow_the_jury_rules(db: SqlitePool) {
         json!([assignment(&anna, &ids[0], "technical")])
     );
 }
+
+#[sqlx::test]
+async fn a_cross_club_group_counts_for_its_owner_club_only(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let (owner, club_id) = app.create_club_owner("Owner", "RSV").await;
+    let (guest, guest_club) = app.create_club_owner("Guest", "RSV Gast").await;
+    let own = app.add_riders(&owner, club_id, "Eigen", 2).await;
+    let guests = app.add_riders(&guest, guest_club, "Gast", 2).await;
+    let group = app.create_group(&owner, club_id, "Gemeinsam").await;
+    app.set_group_members(&owner, club_id, group, &own, &[])
+        .await;
+    // The guest club adds one regular rider and one replacement.
+    let response = app
+        .set_group_members(&guest, guest_club, group, &guests[..1], &guests[1..])
+        .await;
+    assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+
+    assert_eq!(club(&app, &owner).await["jury"]["acts"], 1);
+    assert_eq!(club(&app, &guest).await["jury"]["acts"], 0);
+}
+
+#[sqlx::test]
+async fn untrained_judges_lose_their_technical_and_performance_assignments(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let admin = app.create_admin().await;
+    let (owner, club_id) = app.create_club_owner("Owner", "RSV").await;
+    let ids = category_ids(&app, &owner).await;
+    let anna = add_judge(&app, &owner, judge_body(club_id, "Anna", ADULT, true, &[]))
+        .await
+        .body["judge_id"]
+        .clone();
+    for body in [
+        assignment(&anna, &ids[0], "technical"),
+        assignment(&anna, &ids[1], "dismounts"),
+    ] {
+        app.post("/api/command/assign_judge", body, Some(&admin))
+            .await;
+    }
+
+    let mut edit = judge_body(club_id, "Anna", ADULT, false, &[]);
+    edit.as_object_mut().unwrap().remove("club_id");
+    edit["judge_id"] = anna.clone();
+    let edited = app
+        .post("/api/command/edit_club_judge", edit, Some(&owner))
+        .await;
+    assert_eq!(edited.status, StatusCode::OK, "{:?}", edited.body);
+    assert_eq!(
+        plan(&app, &admin, None).await.body["assignments"],
+        json!([assignment(&anna, &ids[1], "dismounts")])
+    );
+}

@@ -342,7 +342,8 @@ pub async fn ensure_judge_access(
     Ok(club_id)
 }
 
-/// Writes a judge's fields and replaces their registrations. Unknown jury
+/// Writes a judge's fields and replaces their registrations; an untrained
+/// judge also loses their Technik and Performance assignments. Unknown jury
 /// categories and duplicate names are refused with a German message.
 pub async fn save_judge(
     conn: &mut sqlx::SqliteConnection,
@@ -390,6 +391,15 @@ pub async fn save_judge(
     )
     .execute(&mut *conn)
     .await?;
+    if !fields.is_trained {
+        // Untrained people only count dismounts, also in the Juryplan.
+        sqlx::query!(
+            "DELETE FROM jury_assignments WHERE judge_id = ? AND role != 'dismounts'",
+            judge_id
+        )
+        .execute(&mut *conn)
+        .await?;
+    }
     for registration in &fields.registrations {
         let known = sqlx::query_scalar!(
             r#"SELECT COUNT(*) as "count!: i64" FROM jury_categories WHERE id = ?"#,
