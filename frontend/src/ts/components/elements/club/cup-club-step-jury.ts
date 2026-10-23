@@ -390,25 +390,214 @@ export default class CupClubStepJury extends LitElement {
         color: var(--cup-muted);
       }
 
-      /* The whole cell toggles the role. */
+      /*
+       * A role is a toggle: an empty circle, or a filled one with a check.
+       * The whole cell toggles it; the checkbox stays for keyboard and
+       * screen readers. On desktop only the circle shows (the heading names
+       * the role), on phones the role's name too.
+       */
       table.grid td.role label {
+        position: relative;
         display: flex;
         justify-content: center;
         align-items: center;
+        gap: 0.35rem;
         min-height: 2.75rem;
         cursor: pointer;
       }
 
       table.grid td.role input {
-        width: 1.15rem;
-        height: 1.15rem;
-        accent-color: var(--cup-blue);
-        cursor: inherit;
+        position: absolute;
+        opacity: 0;
+        width: 1px;
+        height: 1px;
+        margin: 0;
+      }
+
+      table.grid .chk {
+        display: inline-grid;
+        place-items: center;
+        flex: none;
+        width: 1.4rem;
+        height: 1.4rem;
+        border-radius: 50%;
+        border: 2px solid var(--cup-border);
+        background: var(--cup-surface);
+      }
+
+      table.grid .chk .material-icon {
+        font-size: 1rem;
+        color: transparent;
+      }
+
+      table.grid td.role input:checked + .chk {
+        background: var(--cup-blue);
+        border-color: var(--cup-blue);
+      }
+
+      table.grid td.role input:checked + .chk .material-icon {
+        color: #fff;
+      }
+
+      table.grid td.role input:focus-visible + .chk {
+        outline: 2px solid var(--cup-blue);
+        outline-offset: 2px;
+      }
+
+      table.grid td.role:not(.off) label:hover .chk {
+        border-color: var(--cup-blue);
       }
 
       table.grid td.role.off label {
         cursor: not-allowed;
         opacity: 0.35;
+      }
+
+      table.grid .long,
+      table.grid .short,
+      table.grid .unit {
+        display: none;
+      }
+
+      /* Phones: each jury category as a card with three role buttons. */
+      @media (max-width: 720px) {
+        .grid-wrap {
+          border: none;
+          overflow: visible;
+        }
+
+        table.grid > thead {
+          display: none;
+        }
+
+        table.grid,
+        table.grid > tbody,
+        table.grid > tfoot,
+        table.grid > * > tr,
+        table.grid > * > tr > td {
+          display: block;
+        }
+
+        /* The card decides for all three buttons whether the names fit. */
+        table.grid > tbody > tr {
+          container: jury-card / inline-size;
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 0.4rem;
+          margin-bottom: 0.6rem;
+          padding: 0.75rem;
+          border: 1px solid var(--cup-border);
+          border-radius: 0.75rem;
+          background: var(--cup-surface);
+        }
+
+        table.grid > tbody > tr:nth-child(even),
+        table.grid > tbody > tr:hover {
+          background: var(--cup-surface);
+        }
+
+        table.grid > tbody > tr > td {
+          padding: 0;
+          border: none;
+        }
+
+        table.grid td.category {
+          grid-column: 1 / 3;
+          padding: 0;
+          font-weight: 600;
+        }
+
+        table.grid td.category small {
+          font-weight: normal;
+        }
+
+        table.grid td.count {
+          grid-column: 3;
+          justify-self: end;
+          align-self: start;
+          width: auto;
+          padding: 0.125rem 0.5rem;
+          border-radius: 99px;
+          background: color-mix(in srgb, var(--cup-blue-2) 35%, var(--cup-surface));
+          color: var(--cup-blue);
+          font-size: 0.8rem;
+          font-weight: 700;
+          white-space: nowrap;
+        }
+
+        table.grid .unit {
+          display: inline;
+        }
+
+
+        table.grid td.role label {
+          padding: 0 0.5rem;
+          border: 1.5px solid var(--cup-border);
+          border-radius: 0.6rem;
+          background: var(--cup-surface);
+          color: var(--cup-blue);
+          font-size: 0.85rem;
+          font-weight: 600;
+        }
+
+        table.grid td.role:has(input:checked) label {
+          background: var(--cup-blue);
+          border-color: var(--cup-blue);
+          color: #fff;
+        }
+
+        table.grid td.role input:checked + .chk {
+          background: #fff;
+          border-color: #fff;
+        }
+
+        table.grid td.role input:checked + .chk .material-icon {
+          color: var(--cup-blue);
+        }
+
+        table.grid td.role.off label {
+          border-style: dashed;
+        }
+
+        table.grid .long {
+          display: inline;
+        }
+
+        /* "Performance" with its circle and padding needs about 9rem. */
+        @container jury-card (max-width: 29rem) {
+          table.grid .long {
+            display: none;
+          }
+
+          table.grid .short {
+            display: inline;
+          }
+        }
+
+        table.grid > tfoot > tr {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 0.75rem;
+          border: 2px solid var(--cup-border);
+          border-radius: 0.75rem;
+          background: var(--cup-surface-2);
+        }
+
+        table.grid > tfoot > tr > td {
+          border: none;
+          background: none;
+          padding: 0;
+        }
+
+        table.grid > tfoot > tr > td:empty {
+          display: none;
+        }
+
+        table.grid > tfoot td.count {
+          background: none;
+          font-size: 1.1rem;
+        }
       }
 
       .registrations {
@@ -921,6 +1110,11 @@ export default class CupClubStepJury extends LitElement {
             ?disabled=${off}
             @change=${this.onRegistrationChange}
           />
+          <span class="chk" aria-hidden="true"
+            ><i class="material-icon">check</i></span
+          >
+          <span class="long" aria-hidden="true">${roleNames[role]}</span>
+          <span class="short" aria-hidden="true">${roleLabels[role]}</span>
         </label>
       </td>`;
     });
@@ -929,7 +1123,11 @@ export default class CupClubStepJury extends LitElement {
         ${category.name}
         ${category.day ? html`<small>${formatDate(category.day)}</small>` : nothing}
       </td>
-      <td class="count">${category.deployments}</td>
+      <td class="count">
+        ${category.deployments}<span class="unit">
+          ${category.deployments === 1 ? "Einsatz" : "Einsätze"}</span
+        >
+      </td>
       ${cells}
     </tr>`;
   }
