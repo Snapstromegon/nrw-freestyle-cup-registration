@@ -1,6 +1,7 @@
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
+import { styleMap } from "lit/directives/style-map.js";
 import { errorMessage, unwrap } from "../../../api";
 import { client, type schemas } from "../../../apiClient";
 import {
@@ -9,7 +10,13 @@ import {
   type JuryCategory,
   starterName,
 } from "../../../club-data";
-import { ageOnStart, ROLES, roleLabels, roleNames } from "../../../jury";
+import {
+  ageOnStart,
+  deploymentNote,
+  ROLES,
+  roleLabels,
+  roleNames,
+} from "../../../jury";
 import { iconStyles, resetStyles } from "../../../styles/base";
 import { clubPortalStyles } from "../../../styles/club-portal";
 import { type Competition, formatDate, formatMoney } from "../../../utils";
@@ -93,6 +100,41 @@ export default class CupClubStepJury extends LitElement {
 
       .add-judge {
         margin-bottom: 1rem;
+      }
+
+      .progress {
+        position: relative;
+        height: 1.75rem;
+        margin: -0.25rem 0 0.75rem;
+        border-radius: 0.5rem;
+        border: 1px solid var(--cup-border);
+        background: var(--cup-surface);
+        overflow: hidden;
+      }
+
+      /* Light fills, so the label on top stays readable. */
+      .progress .bar {
+        height: 100%;
+        background: color-mix(in srgb, var(--cup-amber) 35%, var(--cup-surface));
+      }
+
+      .progress .bar.full {
+        background: color-mix(in srgb, var(--cup-green) 35%, var(--cup-surface));
+      }
+
+      .progress span {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.875rem;
+        font-weight: 600;
+      }
+
+      td.deployments small {
+        display: block;
+        white-space: nowrap;
       }
 
       /* Jury categories × roles in the judge form. */
@@ -262,6 +304,9 @@ export default class CupClubStepJury extends LitElement {
                     <th>Name</th>
                     <th>Alter</th>
                     <th>Wertet</th>
+                    <th class="num" title="Juryeinsätze, die für euren Verein zählen">
+                      Einsätze
+                    </th>
                     <th><span class="visually-hidden">Aktionen</span></th>
                   </tr>
                 </thead>
@@ -272,11 +317,12 @@ export default class CupClubStepJury extends LitElement {
                     (judge) =>
                       this.editing === judge.id
                         ? html`<tr>
-                            <td colspan="4">${this.renderForm()}</td>
+                            <td colspan="5">${this.renderForm()}</td>
                           </tr>`
                         : this.renderJudge(judge),
                   )}
                 </tbody>
+                ${this.renderTotal()}
               </table>`
         }
       </section>
@@ -355,6 +401,52 @@ export default class CupClubStepJury extends LitElement {
     </section>`;
   }
 
+  /** How much of the obligation the club has filled, as a bar. */
+  private renderProgress(credited: number, required: number) {
+    if (!required) {
+      return nothing;
+    }
+    const share = Math.min(1, credited / required);
+    return html`<div
+      class="progress"
+      role="progressbar"
+      aria-valuemin="0"
+      aria-valuemax=${required}
+      aria-valuenow=${credited}
+      aria-label="Gemeldete Pflicht-Juryeinsätze"
+    >
+      <div
+        class="bar ${credited >= required ? "full" : ""}"
+        style=${styleMap({ width: `${share * 100}%` })}
+      ></div>
+      <span>${credited} von ${required} Pflicht-Juryeinsätzen gemeldet</span>
+    </div>`;
+  }
+
+  /** Sum of the judges' Einsätze against the club's obligation. */
+  private renderTotal() {
+    const jury = this.data.club.jury;
+    const counted = this.judges.reduce(
+      (sum, j) => sum + j.counted_deployments,
+      0,
+    );
+    const override =
+      jury?.credited_override !== null && jury?.credited_override !== undefined;
+    return html`<tfoot>
+      <tr>
+        <td colspan="3">
+          Gesamt${jury ? html` · Pflicht ${jury.required}` : nothing}${
+            override
+              ? html` · vom Veranstalter angerechnet: ${jury!.credited}`
+              : nothing
+          }
+        </td>
+        <td class="num"><strong>${counted}</strong></td>
+        <td></td>
+      </tr>
+    </tfoot>`;
+  }
+
   /** Küren, required and credited Einsätze, and the fee for missing ones. */
   private renderObligation() {
     const jury = this.data.club.jury;
@@ -393,6 +485,7 @@ export default class CupClubStepJury extends LitElement {
           >
         </div>
       </div>
+      ${this.renderProgress(jury.credited, jury.required)}
       <p class="muted small">
         Pro angefangene 2 Küren sind ${rules.deployments_per_two_acts}
         Juryeinsätze zu melden; jeder fehlende kostet
@@ -439,12 +532,15 @@ export default class CupClubStepJury extends LitElement {
                     >`,
                 )
           }
-          ${
-            judge.max_deployments
-              ? html`<span class="chip">max. ${judge.max_deployments} Einsätze</span>`
-              : nothing
-          }
         </div>
+      </td>
+      <td class="num deployments">
+        <strong>${judge.counted_deployments}</strong>
+        ${
+          deploymentNote(judge)
+            ? html`<small class="muted">${deploymentNote(judge)}</small>`
+            : nothing
+        }
       </td>
       <td class="actions-col">
         ${

@@ -233,6 +233,10 @@ pub struct ClubJudge {
     pub max_deployments: Option<i64>,
     pub note: Option<String>,
     pub registrations: Vec<JudgeRegistration>,
+    /// What the jury categories they registered for are worth (each once).
+    pub registered_deployments: i64,
+    /// What of it counts for the club: see [`counted_deployments`].
+    pub counted_deployments: i64,
 }
 
 /// What clubs set for a judge.
@@ -467,7 +471,14 @@ pub async fn list_judges(
             judge.birthdate as "birthdate: OffsetDateTime",
             judge.is_trained,
             judge.max_deployments,
-            judge.note
+            judge.note,
+            (
+                SELECT COALESCE(SUM(c.deployments), 0) FROM jury_categories c
+                WHERE c.id IN (
+                    SELECT jury_category_id FROM judge_registration
+                    WHERE judge_id = judge.id
+                )
+            ) as "registered_deployments!: i64"
         FROM judge
         JOIN clubs ON clubs.id = judge.club_id
         WHERE ?1 IS NULL OR judge.club_id = ?1
@@ -490,8 +501,32 @@ pub async fn list_judges(
             is_trained: row.is_trained,
             max_deployments: row.max_deployments,
             note: row.note,
+            registered_deployments: row.registered_deployments,
+            counted_deployments: counted_deployments(
+                row.is_trained,
+                row.registered_deployments,
+                row.max_deployments,
+            ),
         })
         .collect())
+}
+
+/// The deployments a judge counts for their club: what their jury
+/// categories are worth, at most their maximum; untrained people count
+/// none.
+///
+/// ```
+/// use nrw_freestyle_cup_registration::jury::counted_deployments;
+///
+/// assert_eq!(counted_deployments(true, 6, None), 6);
+/// assert_eq!(counted_deployments(true, 6, Some(2)), 2);
+/// assert_eq!(counted_deployments(false, 6, None), 0);
+/// ```
+pub fn counted_deployments(is_trained: bool, registered: i64, max: Option<i64>) -> i64 {
+    if !is_trained {
+        return 0;
+    }
+    max.map_or(registered, |max| registered.min(max))
 }
 
 /// Jury deployments (Einsätze) a club must provide: `per_two_acts` for every
@@ -593,9 +628,7 @@ pub async fn obligations(
     .await?;
     let mut registered: std::collections::HashMap<Uuid, i64> = std::collections::HashMap::new();
     for judge in judges {
-        let deployments = judge
-            .max_deployments
-            .map_or(judge.deployments, |max| judge.deployments.min(max));
+        let deployments = counted_deployments(true, judge.deployments, judge.max_deployments);
         *registered.entry(judge.club_id).or_default() += deployments;
     }
     Ok(clubs

@@ -169,3 +169,23 @@ export const planWarnings = (
   }
   return warnings;
 };
+
+/**
+ * Why a judge's counted Einsätze differ from what their jury categories are
+ * worth: capped by their maximum, or not counted as they're untrained.
+ * Empty when everything counts.
+ */
+export const deploymentNote = (judge: {
+  is_trained: boolean;
+  registered_deployments: number;
+  counted_deployments: number;
+  max_deployments?: number | null;
+}) => {
+  if (!judge.is_trained) {
+    return "zählt nicht (nicht geschult)";
+  }
+  if (judge.counted_deployments < judge.registered_deployments) {
+    return `von ${judge.registered_deployments}, max. ${judge.max_deployments}`;
+  }
+  return "";
+};

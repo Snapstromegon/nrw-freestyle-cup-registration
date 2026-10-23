@@ -600,6 +600,27 @@ async fn clubs_owe_a_fee_for_missing_einsaetze(db: SqlitePool) {
     assert_eq!(jury["registered"], 5);
     assert_eq!(jury["missing"], 3);
     assert_eq!(jury["fee"], 21.0);
+
+    // Per judge: what their categories are worth, and what counts of it.
+    let judges = club_judges(&app, &owner, club_id).await;
+    let per_judge: Vec<Value> = judges
+        .iter()
+        .map(|j| {
+            json!([
+                j["firstname"],
+                j["registered_deployments"],
+                j["counted_deployments"]
+            ])
+        })
+        .collect();
+    assert_eq!(
+        per_judge,
+        vec![
+            json!(["Anna", 3, 3]),
+            json!(["Berta", 4, 2]),
+            json!(["Carla", 2, 0])
+        ]
+    );
 }
 
 #[sqlx::test]

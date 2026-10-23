@@ -3,6 +3,7 @@ import { describe, test } from "vite-plus/test";
 import {
   ageOnStart,
   coverage,
+  deploymentNote,
   planWarnings,
   isJudgeRegistrationOpen,
   judgeRegistrationEnd,
@@ -129,6 +130,22 @@ describe("jury", () => {
         start,
       ),
       ["4 JurorInnen sind 15 (höchstens 3)"],
+    );
+  });
+
+  test("deploymentNote explains what of a judge's Einsätze counts", () => {
+    const judge = (is_trained, registered, counted, max = null) => ({
+      is_trained,
+      registered_deployments: registered,
+      counted_deployments: counted,
+      max_deployments: max,
+    });
+    assert.equal(deploymentNote(judge(true, 3, 3)), "");
+    assert.equal(deploymentNote(judge(true, 4, 2, 2)), "von 4, max. 2");
+    assert.equal(deploymentNote(judge(true, 2, 2, 5)), "");
+    assert.equal(
+      deploymentNote(judge(false, 2, 0)),
+      "zählt nicht (nicht geschult)",
     );
   });
 });

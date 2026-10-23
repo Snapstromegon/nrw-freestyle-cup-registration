@@ -12,6 +12,7 @@ import {
 import {
   ageOnStart,
   coverage,
+  deploymentNote,
   judgeRegistrationEnd,
   neededFor,
   planWarnings,
@@ -566,7 +567,13 @@ export default class CupViewAdminJudges extends LitElement {
           }
         </td>
         <td><div class="chips">${chips}</div></td>
-        <td class="num">${judge.max_deployments ?? ""}</td>
+        <td class="num" title=${deploymentNote(judge)}>
+          ${judge.counted_deployments}${
+            deploymentNote(judge)
+              ? html`<br /><small class="muted">${deploymentNote(judge)}</small>`
+              : nothing
+          }
+        </td>
         <td>${judge.note ?? ""}</td>
       </tr>`;
     });
@@ -591,7 +598,9 @@ export default class CupViewAdminJudges extends LitElement {
             <th class="num" title="Am ersten Wettkampftag">Alter</th>
             <th></th>
             <th>Wertet</th>
-            <th class="num" title="Maximale Einsätze">Max.</th>
+            <th class="num" title="Juryeinsätze, die für den Verein zählen">
+              Einsätze
+            </th>
             <th>Notiz</th>
           </tr>
         </thead>
