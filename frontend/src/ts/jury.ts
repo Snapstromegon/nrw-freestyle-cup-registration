@@ -120,3 +120,52 @@ export const coverage = (
   }
   return result;
 };
+
+/** Judges a jury category needs per role. */
+export const neededFor = (
+  category: {
+    needed_technical: number;
+    needed_performance: number;
+    needed_dismounts: number;
+  },
+  role: Role,
+) =>
+  role === "technical"
+    ? category.needed_technical
+    : role === "performance"
+      ? category.needed_performance
+      : category.needed_dismounts;
+
+/** At most this many 15-year-old judges per category (Jury-Konzept 4). */
+export const MAX_FIFTEEN = 3;
+
+/**
+ * What's wrong with a jury category in the Juryplan: roles with fewer judges
+ * than needed, and more than three 15-year-old judges. More judges than
+ * needed are fine.
+ */
+export const planWarnings = (
+  category: Parameters<typeof neededFor>[0] & { id: string },
+  assignments: { judge_id: string; jury_category_id: string; role: Role }[],
+  judges: { id: string; birthdate: string }[],
+  competition: Pick<Competition, "start_date"> | null | undefined,
+) => {
+  const own = assignments.filter((a) => a.jury_category_id === category.id);
+  const warnings: string[] = [];
+  for (const role of ROLES) {
+    const assigned = own.filter((a) => a.role === role).length;
+    const needed = neededFor(category, role);
+    if (assigned < needed) {
+      warnings.push(`${roleNames[role]}: ${assigned} von ${needed}`);
+    }
+  }
+  const birthdates = new Map(judges.map((j) => [j.id, j.birthdate]));
+  const fifteen = own.filter((a) => {
+    const birthdate = birthdates.get(a.judge_id);
+    return birthdate && ageOnStart(birthdate, competition) === 15;
+  }).length;
+  if (fifteen > MAX_FIFTEEN) {
+    warnings.push(`${fifteen} JurorInnen sind 15 (höchstens ${MAX_FIFTEEN})`);
+  }
+  return warnings;
+};

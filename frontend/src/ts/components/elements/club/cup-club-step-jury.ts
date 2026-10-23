@@ -208,7 +208,60 @@ export default class CupClubStepJury extends LitElement {
                 </tbody>
               </table>`
         }
-      </section>`;
+      </section>
+      ${this.renderPlan()}`;
+  }
+
+  /** The club's judges' assignments, once the Juryplan is published. */
+  private renderPlan() {
+    const plan = this.data.juryPlan;
+    if (!plan?.published_at) {
+      return nothing;
+    }
+    const categories = new Map(this.categories.map((c) => [c.id, c]));
+    const judges = new Map(this.judges.map((j) => [j.id, j]));
+    const rows = plan.assignments.map((a) => {
+      const category = categories.get(a.jury_category_id);
+      const judge = judges.get(a.judge_id);
+      return html`<tr>
+        <td>${judge ? starterName(judge) : "?"}</td>
+        <td>
+          ${category?.name ?? "?"}
+          ${
+            category?.day
+              ? html`<span class="muted">(${formatDate(category.day)})</span>`
+              : nothing
+          }
+        </td>
+        <td>${roleNames[a.role]}</td>
+      </tr>`;
+    });
+    return html`<section class="card">
+      <header>
+        <h3>Juryplan</h3>
+        <span class="hint">Stand ${formatDate(plan.published_at)}</span>
+      </header>
+      ${
+        rows.length
+          ? html`<table>
+              <thead>
+                <tr>
+                  <th>JurorIn</th>
+                  <th>Jury-Kategorie</th>
+                  <th>Rolle</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows}
+              </tbody>
+            </table>`
+          : html`<p class="muted">Eure JurorInnen sind nicht eingeteilt.</p>`
+      }
+      <p class="muted small">
+        Der Juryplan kann sich noch ändern. Bei Krankheit meldet sich die
+        JurorIn bitte schnellstmöglich bei der Juryleitung.
+      </p>
+    </section>`;
   }
 
   /** Küren, required and credited Einsätze, and the fee for missing ones. */

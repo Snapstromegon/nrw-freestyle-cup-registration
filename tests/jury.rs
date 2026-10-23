@@ -707,3 +707,190 @@ async fn there_is_no_jury_fee_without_the_flag(db: SqlitePool) {
     assert_eq!(body["amount_due"]["jury_fee"], 0.0);
     assert_eq!(body["amount_due"]["total"], 45.0);
 }
+
+// ---------- Juryplan (#231) ----------
+
+async fn plan(app: &TestApp, cookie: &str, club_id: Option<Uuid>) -> TestResponse {
+    let uri = match club_id {
+        Some(id) => format!("/api/query/list_jury_plan?club_id={id}"),
+        None => "/api/query/list_jury_plan".to_string(),
+    };
+    app.get(&uri, Some(cookie)).await
+}
+
+fn assignment(judge: &Value, category: &Value, role: &str) -> Value {
+    json!({ "judge_id": judge, "jury_category_id": category, "role": role })
+}
+
+#[sqlx::test]
+async fn admins_assign_judges_and_publish_the_plan(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let admin = app.create_admin().await;
+    let (owner, club_id) = app.create_club_owner("Owner", "RSV").await;
+    let (other, other_club) = app.create_club_owner("Other", "RSV Andere").await;
+    let ids = category_ids(&app, &owner).await;
+    let anna = add_judge(
+        &app,
+        &owner,
+        judge_body(club_id, "Anna", ADULT, true, &[(&ids[0], "technical")]),
+    )
+    .await
+    .body["judge_id"]
+        .clone();
+    let olga = add_judge(
+        &app,
+        &other,
+        judge_body(other_club, "Olga", ADULT, true, &[]),
+    )
+    .await
+    .body["judge_id"]
+        .clone();
+
+    let forbidden = app
+        .post(
+            "/api/command/assign_judge",
+            assignment(&anna, &ids[0], "technical"),
+            Some(&owner),
+        )
+        .await;
+    assert_eq!(forbidden.status, StatusCode::FORBIDDEN);
+    // Also judges who didn't register for it can be assigned (the UI warns).
+    for body in [
+        assignment(&anna, &ids[0], "technical"),
+        assignment(&olga, &ids[0], "performance"),
+    ] {
+        let response = app
+            .post("/api/command/assign_judge", body, Some(&admin))
+            .await;
+        assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+    }
+
+    let all = plan(&app, &admin, None).await;
+    assert_eq!(all.status, StatusCode::OK, "{:?}", all.body);
+    assert_eq!(all.body["published_at"], Value::Null);
+    assert_eq!(all.body["assignments"].as_array().unwrap().len(), 2);
+
+    // Clubs see nothing before publishing, then only their own judges.
+    let own = plan(&app, &owner, Some(club_id)).await;
+    assert_eq!(own.body["assignments"], json!([]));
+    let published = app
+        .post(
+            "/api/command/set_jury_plan_published",
+            json!({ "published": true }),
+            Some(&admin),
+        )
+        .await;
+    assert_eq!(published.status, StatusCode::OK, "{:?}", published.body);
+    let own = plan(&app, &owner, Some(club_id)).await;
+    assert!(own.body["published_at"].is_string());
+    assert_eq!(
+        own.body["assignments"],
+        json!([assignment(&anna, &ids[0], "technical")])
+    );
+    assert_eq!(
+        plan(&app, &owner, Some(other_club)).await.status,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(plan(&app, &owner, None).await.status, StatusCode::FORBIDDEN);
+
+    // Edits after publishing show at once.
+    let removed = app
+        .post(
+            "/api/command/unassign_judge",
+            json!({ "judge_id": anna, "jury_category_id": ids[0] }),
+            Some(&admin),
+        )
+        .await;
+    assert_eq!(removed.status, StatusCode::OK, "{:?}", removed.body);
+    assert_eq!(
+        plan(&app, &owner, Some(club_id)).await.body["assignments"],
+        json!([])
+    );
+
+    app.post(
+        "/api/command/set_jury_plan_published",
+        json!({ "published": false }),
+        Some(&admin),
+    )
+    .await;
+    assert_eq!(
+        plan(&app, &admin, None).await.body["published_at"],
+        Value::Null
+    );
+}
+
+#[sqlx::test]
+async fn assignments_follow_the_jury_rules(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let admin = app.create_admin().await;
+    let (owner, club_id) = app.create_club_owner("Owner", "RSV").await;
+    let ids = category_ids(&app, &owner).await;
+    let anna = add_judge(&app, &owner, judge_body(club_id, "Anna", ADULT, true, &[]))
+        .await
+        .body["judge_id"]
+        .clone();
+    let carla = add_judge(
+        &app,
+        &owner,
+        judge_body(club_id, "Carla", ADULT, false, &[]),
+    )
+    .await
+    .body["judge_id"]
+        .clone();
+
+    // Untrained people only count dismounts.
+    let untrained = app
+        .post(
+            "/api/command/assign_judge",
+            assignment(&carla, &ids[0], "technical"),
+            Some(&admin),
+        )
+        .await;
+    assert!(!untrained.status.is_success());
+    let counter = app
+        .post(
+            "/api/command/assign_judge",
+            assignment(&carla, &ids[0], "dismounts"),
+            Some(&admin),
+        )
+        .await;
+    assert_eq!(counter.status, StatusCode::OK, "{:?}", counter.body);
+
+    // One role per judge and category.
+    app.post(
+        "/api/command/assign_judge",
+        assignment(&anna, &ids[0], "technical"),
+        Some(&admin),
+    )
+    .await;
+    let second = app
+        .post(
+            "/api/command/assign_judge",
+            assignment(&anna, &ids[0], "performance"),
+            Some(&admin),
+        )
+        .await;
+    assert!(!second.status.is_success());
+
+    // A category with assignments can't be deleted; a judge can.
+    let refused = app
+        .post(
+            "/api/command/delete_jury_category",
+            json!({ "id": ids[0] }),
+            Some(&admin),
+        )
+        .await;
+    assert!(!refused.status.is_success());
+    let deleted = app
+        .post(
+            "/api/command/delete_club_judge",
+            json!({ "judge_id": carla }),
+            Some(&admin),
+        )
+        .await;
+    assert_eq!(deleted.status, StatusCode::OK, "{:?}", deleted.body);
+    assert_eq!(
+        plan(&app, &admin, None).await.body["assignments"],
+        json!([assignment(&anna, &ids[0], "technical")])
+    );
+}

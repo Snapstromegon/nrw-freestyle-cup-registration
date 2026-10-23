@@ -601,3 +601,11 @@ pub async fn obligations(
         })
         .collect())
 }
+
+/// A judge's role in a jury category of the Juryplan.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
+pub struct JuryAssignment {
+    pub judge_id: Uuid,
+    pub jury_category_id: Uuid,
+    pub role: JudgeRole,
+}

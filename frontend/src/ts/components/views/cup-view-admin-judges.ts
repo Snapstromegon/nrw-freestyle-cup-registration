@@ -9,7 +9,15 @@ import {
   type SystemStatus,
   systemStatusContext,
 } from "../../contexts/systemStatus";
-import { ageOnStart, coverage, ROLES, roleLabels, roleNames } from "../../jury";
+import {
+  ageOnStart,
+  coverage,
+  neededFor,
+  planWarnings,
+  ROLES,
+  roleLabels,
+  roleNames,
+} from "../../jury";
 import { adminStyles } from "../../styles/admin";
 import { iconStyles, resetStyles } from "../../styles/base";
 import { formatDate, formatMoney } from "../../utils";
@@ -18,6 +26,8 @@ type JuryCategory = schemas.JuryCategory;
 type JuryCategoryFields = schemas.JuryCategoryFields;
 type ClubJudge = schemas.ClubJudge;
 type ClubOverview = schemas.ClubOverview;
+type JuryPlan = schemas.JuryPlan;
+type JudgeRole = schemas.JudgeRole;
 type NumberField =
   | "deployments"
   | "needed_technical"
@@ -95,6 +105,8 @@ export default class CupViewAdminJudges extends LitElement {
   @state() private saving = false;
   @state() private error: string | null = null;
   @state() private search = "";
+  /** Offer every judge for a role, not only those who registered for it. */
+  @state() private showAll = false;
 
   @consume({ context: systemStatusContext, subscribe: true })
   systemStatus: SystemStatus | null = null;
@@ -107,7 +119,11 @@ export default class CupViewAdminJudges extends LitElement {
   private judges = new Task(this, {
     args: () => [],
     task: () =>
-      Promise.all([unwrap(client.listJudges()), unwrap(client.listClubs())]),
+      Promise.all([
+        unwrap(client.listJudges()),
+        unwrap(client.listClubs()),
+        unwrap(client.listJuryPlan()),
+      ]),
   });
 
   override render() {
@@ -150,7 +166,7 @@ export default class CupViewAdminJudges extends LitElement {
   }
 
   private renderKpis() {
-    const [judges, clubs] = this.judges.value ?? [[], []];
+    const [judges, clubs] = this.judges.value ?? [[], [], null];
     const trained = judges.filter((j) => j.is_trained).length;
     const withObligation = clubs.filter((c) => c.jury && c.jury.required > 0);
     const met = withObligation.filter((c) => c.jury!.missing === 0).length;
@@ -171,21 +187,195 @@ export default class CupViewAdminJudges extends LitElement {
         html`<div class="error-banner" role="alert">
           JurorInnen konnten nicht geladen werden: ${errorMessage(error)}
         </div>`,
-      complete: ([judges, clubs]) =>
-        html`${this.renderCoverage(categories, judges)}
-        ${this.renderClubs(clubs)} ${this.renderJudges(categories, judges)}`,
+      complete: ([judges, clubs, plan]) =>
+        html`${this.renderPlan(categories, judges, plan)}
+        ${this.renderCoverage(categories, judges)} ${this.renderClubs(clubs)}
+        ${this.renderJudges(categories, judges)}`,
     });
+  }
+
+  /**
+   * The Juryplan: per jury category and role the assigned judges, a picker to
+   * assign more and the category's warnings; grouped by day for printing.
+   */
+  private renderPlan(
+    categories: JuryCategory[],
+    judges: ClubJudge[],
+    plan: JuryPlan,
+  ) {
+    const byDay = new Map<string, JuryCategory[]>();
+    for (const category of categories) {
+      const day = category.day ?? "";
+      byDay.set(day, [...(byDay.get(day) ?? []), category]);
+    }
+    const days = [...byDay].sort(([a], [b]) =>
+      a === "" ? 1 : b === "" ? -1 : a.localeCompare(b),
+    );
+    const headers = ROLES.map((role) => html`<th>${roleNames[role]}</th>`);
+    const groups = days.map(
+      ([day, dayCategories]) =>
+        html`<h3>${day ? formatDate(day) : "Ohne Tag"}</h3>
+          <table class="dense fit plan">
+            <thead>
+              <tr>
+                <th>Jury-Kategorie</th>
+                ${headers}
+              </tr>
+            </thead>
+            <tbody>
+              ${repeat(
+                dayCategories,
+                (category) => category.id,
+                (category) => this.renderPlanRow(category, judges, plan),
+              )}
+            </tbody>
+          </table>`,
+    );
+    const published = plan.published_at;
+    return html`<section class="plan-section">
+      <div class="toolbar">
+        <h2>Juryplan</h2>
+        <span class="chip ${published ? "ok" : ""}"
+          >${
+            published
+              ? `veröffentlicht ${formatDate(published)}`
+              : "nur für Admins"
+          }</span
+        >
+        <span class="spacer"></span>
+        <label class="no-print"
+          ><input
+            type="checkbox"
+            .checked=${this.showAll}
+            @change=${this.onShowAllChange}
+          />
+          alle zeigen</label
+        >
+        <button
+          class="btn small no-print ${published ? "" : "primary"}"
+          ?disabled=${this.saving}
+          @click=${this.onPublishClick}
+        >
+          ${published ? "Zurückziehen" : "Juryplan veröffentlichen"}
+        </button>
+      </div>
+      <p class="muted small no-print">
+        Vorgeschlagen werden die JurorInnen, die sich für die Jury-Kategorie
+        und Rolle gemeldet haben; mit „alle zeigen“ auch alle anderen.
+        Veröffentlicht sieht jeder Verein die Einteilung seiner JurorInnen.
+      </p>
+      ${groups}
+    </section>`;
+  }
+
+  private renderPlanRow(
+    category: JuryCategory,
+    judges: ClubJudge[],
+    plan: JuryPlan,
+  ) {
+    const competition = this.systemStatus?.competition;
+    const assigned = plan.assignments.filter(
+      (a) => a.jury_category_id === category.id,
+    );
+    const warnings = planWarnings(
+      category,
+      plan.assignments,
+      judges,
+      competition,
+    );
+    const byId = new Map(judges.map((j) => [j.id, j]));
+    const cells = ROLES.map((role) => {
+      const names = assigned
+        .filter((a) => a.role === role)
+        .map((a) => {
+          const judge = byId.get(a.judge_id);
+          const registered = judge?.registrations.some(
+            (r) => r.jury_category_id === category.id && r.role === role,
+          );
+          return html`<span
+            class="chip ${registered ? "" : "warn"}"
+            title=${registered ? (judge?.club_name ?? "") : "Nicht dafür gemeldet"}
+            >${judge ? `${judge.firstname} ${judge.lastname}` : "?"}
+            <button
+              class="icon-btn no-print"
+              title="Entfernen"
+              aria-label="Entfernen"
+              data-judge=${a.judge_id}
+              data-category=${category.id}
+              ?disabled=${this.saving}
+              @click=${this.onUnassignClick}
+            >
+              close
+            </button></span
+          >`;
+        });
+      return html`<td>
+        <div class="chips">${names}</div>
+        <small class="muted"
+          >${assigned.filter((a) => a.role === role).length}/${neededFor(category, role)}</small
+        >
+        ${this.renderPicker(category, role, judges, assigned)}
+      </td>`;
+    });
+    const warningLines = warnings.map(
+      (warning) => html`<br /><small class="text-warn">${warning}</small>`,
+    );
+    return html`<tr>
+      <td>
+        <b>${category.name}</b>
+        ${warningLines}
+      </td>
+      ${cells}
+    </tr>`;
+  }
+
+  /** Judges that can be added to a role; untrained ones only count dismounts. */
+  private renderPicker(
+    category: JuryCategory,
+    role: JudgeRole,
+    judges: ClubJudge[],
+    assigned: { judge_id: string }[],
+  ) {
+    const taken = new Set(assigned.map((a) => a.judge_id));
+    const registered = (judge: ClubJudge) =>
+      judge.registrations.some(
+        (r) => r.jury_category_id === category.id && r.role === role,
+      );
+    const options = judges
+      .filter(
+        (judge) =>
+          !taken.has(judge.id) &&
+          (judge.is_trained || role === "dismounts") &&
+          (this.showAll || registered(judge)),
+      )
+      .map(
+        (judge) =>
+          html`<option value=${judge.id}>
+            ${judge.lastname}, ${judge.firstname} (${judge.club_name})${
+              registered(judge) ? "" : " – nicht gemeldet"
+            }
+          </option>`,
+      );
+    if (!options.length) {
+      return nothing;
+    }
+    return html`<select
+      class="no-print"
+      aria-label="${category.name}: ${roleNames[role]} einteilen"
+      data-category=${category.id}
+      data-role=${role}
+      ?disabled=${this.saving}
+      @change=${this.onAssignChange}
+    >
+      <option value="" selected>+ einteilen</option>
+      ${options}
+    </select>`;
   }
 
   /** Jury category × role: trained (and untrained) judges against needed. */
   private renderCoverage(categories: JuryCategory[], judges: ClubJudge[]) {
     const counts = coverage(categories, judges, this.systemStatus?.competition);
-    const needed = (category: JuryCategory, role: (typeof ROLES)[number]) =>
-      role === "technical"
-        ? category.needed_technical
-        : role === "performance"
-          ? category.needed_performance
-          : category.needed_dismounts;
+    const needed = neededFor;
     const headers = ROLES.map(
       (role) =>
         html`<th class="num" title=${roleNames[role]}>${roleLabels[role]}</th>`,
@@ -553,6 +743,44 @@ export default class CupViewAdminJudges extends LitElement {
         </button>
       </td>
     </tr>`;
+  }
+
+  private onShowAllChange(e: Event) {
+    this.showAll = (e.target as HTMLInputElement).checked;
+  }
+
+  private async onPublishClick() {
+    const published = !this.judges.value?.[2].published_at;
+    await this.change(
+      () => unwrap(client.setJuryPlanPublished({ body: { published } })),
+      published ? "Veröffentlichen" : "Zurückziehen",
+    );
+  }
+
+  private async onAssignChange(e: Event) {
+    const select = e.target as HTMLSelectElement;
+    const judge_id = select.value;
+    if (!judge_id) {
+      return;
+    }
+    const body = {
+      judge_id,
+      jury_category_id: select.dataset.category!,
+      role: select.dataset.role as JudgeRole,
+    };
+    await this.change(() => unwrap(client.assignJudge({ body })), "Einteilen");
+  }
+
+  private async onUnassignClick(e: Event) {
+    const button = e.currentTarget as HTMLElement;
+    const body = {
+      judge_id: button.dataset.judge!,
+      jury_category_id: button.dataset.category!,
+    };
+    await this.change(
+      () => unwrap(client.unassignJudge({ body })),
+      "Entfernen",
+    );
   }
 
   private onSearchInput(e: InputEvent) {

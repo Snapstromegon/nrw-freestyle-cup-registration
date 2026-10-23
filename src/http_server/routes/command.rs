@@ -7,6 +7,7 @@ mod add_club_starter;
 mod add_final;
 mod add_jury_category;
 mod add_timeplan_entry;
+mod assign_judge;
 mod create_club;
 mod create_club_group;
 mod delete_category;
@@ -51,12 +52,14 @@ mod set_final_placement;
 mod set_final_published;
 mod set_jury_category_order;
 mod set_jury_deployments_override;
+mod set_jury_plan_published;
 mod set_payment;
 mod set_photo_hidden;
 mod set_song_checked;
 mod set_user_admin;
 mod timeplan_backward;
 mod timeplan_forward;
+mod unassign_judge;
 mod verify_email;
 
 pub fn get_command_router() -> OpenApiRouter {
@@ -120,5 +123,8 @@ pub fn get_command_router() -> OpenApiRouter {
         .routes(routes!(
             set_jury_deployments_override::set_jury_deployments_override
         ))
+        .routes(routes!(assign_judge::assign_judge))
+        .routes(routes!(set_jury_plan_published::set_jury_plan_published))
+        .routes(routes!(unassign_judge::unassign_judge))
         .layer(DefaultBodyLimit::max(save_act_song::MAX_REQUEST_SIZE))
 }

@@ -505,6 +505,7 @@ export default class CupClubPortal extends LitElement {
         allStarters,
         judges,
         juryCategories,
+        juryPlan,
       ] = await Promise.all([
         unwrap(client.getClub(query)),
         unwrap(client.listClubStarters(query)),
@@ -517,6 +518,7 @@ export default class CupClubPortal extends LitElement {
           ? unwrap(client.listClubJudges(query))
           : Promise.resolve(undefined),
         jury ? unwrap(client.listJuryCategories()) : Promise.resolve(undefined),
+        jury ? unwrap(client.listJuryPlan(query)) : Promise.resolve(undefined),
       ]);
       return {
         club,
@@ -527,6 +529,7 @@ export default class CupClubPortal extends LitElement {
         allStarters,
         judges,
         juryCategories,
+        juryPlan,
       };
     },
     args: () =>

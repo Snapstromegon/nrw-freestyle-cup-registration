@@ -3,6 +3,7 @@ import { describe, test } from "vite-plus/test";
 import {
   ageOnStart,
   coverage,
+  planWarnings,
   isJudgeRegistrationOpen,
   judgeRegistrationEnd,
 } from "../src/ts/jury.ts";
@@ -87,5 +88,47 @@ describe("jury", () => {
     });
     assert.deepEqual(result.get("b").technical, { trained: 1, untrained: 0 });
     assert.equal(result.get("c").fifteen, 0);
+  });
+
+  test("planWarnings flags missing judges and too many 15-year-olds", () => {
+    const start = { start_date: "2027-06-05" };
+    const category = {
+      id: "a",
+      needed_technical: 2,
+      needed_performance: 1,
+      needed_dismounts: 0,
+    };
+    const judges = [
+      { id: "1", birthdate: "2012-01-01T00:00:00.000Z" },
+      { id: "2", birthdate: "2012-01-01T00:00:00.000Z" },
+      { id: "3", birthdate: "2012-01-01T00:00:00.000Z" },
+      { id: "4", birthdate: "2012-01-01T00:00:00.000Z" },
+      { id: "5", birthdate: "1990-01-01T00:00:00.000Z" },
+    ];
+    const assign = (judge_id, role, jury_category_id = "a") => ({
+      judge_id,
+      jury_category_id,
+      role,
+    });
+    assert.deepEqual(
+      planWarnings(
+        category,
+        [assign("5", "technical"), assign("1", "technical", "b")],
+        judges,
+        start,
+      ),
+      ["Technik: 1 von 2", "Performance: 0 von 1"],
+    );
+    assert.deepEqual(
+      planWarnings(
+        category,
+        ["1", "2", "3", "4"].map((id, i) =>
+          assign(id, i < 2 ? "technical" : "performance"),
+        ),
+        judges,
+        start,
+      ),
+      ["4 JurorInnen sind 15 (höchstens 3)"],
+    );
   });
 });

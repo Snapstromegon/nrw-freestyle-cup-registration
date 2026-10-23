@@ -18,6 +18,7 @@ mod list_finals;
 mod list_groups;
 mod list_judges;
 mod list_jury_categories;
+mod list_jury_plan;
 mod list_starters;
 mod list_timeplan;
 mod list_users;
@@ -51,4 +52,5 @@ pub fn get_query_router() -> OpenApiRouter {
         .routes(routes!(list_check_ins::list_check_ins))
         .routes(routes!(list_club_judges::list_club_judges))
         .routes(routes!(list_judges::list_judges))
+        .routes(routes!(list_jury_plan::list_jury_plan))
 }

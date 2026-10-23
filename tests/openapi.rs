@@ -61,6 +61,9 @@ const COMMANDS: &[&str] = &[
     "delete_club_judge",
     "edit_club_judge",
     "set_jury_deployments_override",
+    "assign_judge",
+    "set_jury_plan_published",
+    "unassign_judge",
 ];
 
 const QUERIES: &[&str] = &[
@@ -88,6 +91,7 @@ const QUERIES: &[&str] = &[
     "list_jury_categories",
     "list_club_judges",
     "list_judges",
+    "list_jury_plan",
 ];
 
 #[test]
