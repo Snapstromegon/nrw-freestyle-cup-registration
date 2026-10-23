@@ -348,18 +348,31 @@ impl TestApp {
 
     /// Inserts a verified user directly into the database.
     pub async fn create_user(&self, name: &str, is_admin: bool) -> Uuid {
+        let roles: &[&str] = if is_admin { &["admin"] } else { &[] };
+        self.create_user_with_roles(name, roles).await
+    }
+
+    /// Creates a user holding `roles`, e.g. `["treasurer"]`.
+    pub async fn create_user_with_roles(&self, name: &str, roles: &[&str]) -> Uuid {
         let id = Uuid::now_v7();
         sqlx::query(
-            "INSERT INTO users (id, email, email_verified, name, password, is_admin) VALUES (?, ?, true, ?, ?, ?)",
+            "INSERT INTO users (id, email, email_verified, name, password) VALUES (?, ?, true, ?, ?)",
         )
         .bind(id)
         .bind(email_for(name))
         .bind(name)
         .bind(generate_hash(PASSWORD))
-        .bind(is_admin)
         .execute(&self.db)
         .await
         .unwrap();
+        for role in roles {
+            sqlx::query("INSERT INTO user_roles (user_id, role) VALUES (?, ?)")
+                .bind(id)
+                .bind(role)
+                .execute(&self.db)
+                .await
+                .unwrap();
+        }
         id
     }
 

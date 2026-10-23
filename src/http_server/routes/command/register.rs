@@ -69,15 +69,14 @@ pub async fn register(
     let hashed_password = generate_hash(body.password);
     sqlx::query!(
         r#"
-        INSERT INTO users (id, name, email, email_verified, password, is_admin)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO users (id, name, email, email_verified, password)
+        VALUES (?, ?, ?, ?, ?)
         "#,
         user_id,
         body.name,
         body.email,
         false,
         hashed_password,
-        false
     )
     .execute(&db)
     .await?;

@@ -76,7 +76,7 @@ pub struct DemoUser {
     pub email: String,
     pub password: String,
     #[serde(default)]
-    pub admin: bool,
+    pub roles: Vec<crate::roles::Role>,
     #[serde(default = "default_true")]
     pub email_verified: bool,
     /// Pending email verification, usable at `/verify_email?token=…`.
@@ -341,19 +341,28 @@ impl DemoData {
             let id = Uuid::now_v7();
             sqlx::query!(
                 r#"
-                INSERT INTO users (id, email, email_verified, name, password, is_admin)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO users (id, email, email_verified, name, password)
+                VALUES (?, ?, ?, ?, ?)
                 "#,
                 id,
                 user.email,
                 user.email_verified,
                 user.name,
                 hash,
-                user.admin,
             )
             .execute(db)
             .await
             .map_err(|e| format!("Couldn't insert user {}: {e}", user.name))?;
+            for role in &user.roles {
+                sqlx::query!(
+                    "INSERT INTO user_roles (user_id, role) VALUES (?, ?)",
+                    id,
+                    role
+                )
+                .execute(db)
+                .await
+                .map_err(|e| format!("Couldn't grant {} a role: {e}", user.name))?;
+            }
             if let Some(token) = user.verification_token {
                 sqlx::query!(
                     "INSERT INTO mail_verification (id, user_id, created_at) VALUES (?, ?, ?)",

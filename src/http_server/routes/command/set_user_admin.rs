@@ -50,16 +50,21 @@ pub async fn set_user_admin(
     let db = db.get().await.clone();
     let mut transaction = begin_write(&db).await?;
 
-    let current_is_admin: Option<bool> =
-        sqlx::query_scalar("SELECT is_admin FROM users WHERE id = ?")
-            .bind(body.user_id)
-            .fetch_optional(&mut *transaction)
-            .await?;
-    let current_is_admin = current_is_admin.ok_or(HttpError::NotFound)?;
+    let exists: Option<i64> = sqlx::query_scalar("SELECT 1 FROM users WHERE id = ?")
+        .bind(body.user_id)
+        .fetch_optional(&mut *transaction)
+        .await?;
+    exists.ok_or(HttpError::NotFound)?;
+    let current_is_admin: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM user_roles WHERE user_id = ? AND role = 'admin')",
+    )
+    .bind(body.user_id)
+    .fetch_one(&mut *transaction)
+    .await?;
 
     if current_is_admin && !body.is_admin {
         let admin_count: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM users WHERE is_admin = true")
+            sqlx::query_scalar("SELECT COUNT(*) FROM user_roles WHERE role = 'admin'")
                 .fetch_one(&mut *transaction)
                 .await?;
         if admin_count <= 1 {
@@ -67,11 +72,17 @@ pub async fn set_user_admin(
         }
     }
 
-    sqlx::query("UPDATE users SET is_admin = ? WHERE id = ?")
-        .bind(body.is_admin)
-        .bind(body.user_id)
-        .execute(&mut *transaction)
-        .await?;
+    if body.is_admin {
+        sqlx::query("INSERT OR IGNORE INTO user_roles (user_id, role) VALUES (?, 'admin')")
+            .bind(body.user_id)
+            .execute(&mut *transaction)
+            .await?;
+    } else {
+        sqlx::query("DELETE FROM user_roles WHERE user_id = ? AND role = 'admin'")
+            .bind(body.user_id)
+            .execute(&mut *transaction)
+            .await?;
+    }
 
     transaction.commit().await?;
     info!(

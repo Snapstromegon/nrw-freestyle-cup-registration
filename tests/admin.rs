@@ -58,7 +58,7 @@ async fn list_users_is_admin_only(db: SqlitePool) {
     assert_eq!(names, ["Admin", "Alex"]);
 
     let forbidden = app.get("/api/query/list_users", Some(&user)).await;
-    assert_eq!(forbidden.status, StatusCode::UNAUTHORIZED);
+    assert_eq!(forbidden.status, StatusCode::FORBIDDEN);
 
     let anonymous = app.get("/api/query/list_users", None).await;
     assert_eq!(anonymous.status, StatusCode::UNAUTHORIZED);
@@ -157,7 +157,7 @@ async fn last_admin_cannot_be_demoted(db: SqlitePool) {
         .await;
     assert_eq!(response.status, StatusCode::FORBIDDEN);
 
-    let is_admin: bool = sqlx::query_scalar("SELECT is_admin FROM users WHERE id = ?")
+    let is_admin: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM user_roles WHERE user_id = ? AND role = 'admin')")
         .bind(admin_id)
         .fetch_one(&app.db)
         .await
@@ -181,7 +181,7 @@ async fn admin_cannot_demote_themselves_even_when_another_admin_exists(db: Sqlit
         .await;
     assert_eq!(response.status, StatusCode::FORBIDDEN);
 
-    let is_admin: bool = sqlx::query_scalar("SELECT is_admin FROM users WHERE id = ?")
+    let is_admin: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM user_roles WHERE user_id = ? AND role = 'admin')")
         .bind(admin_id)
         .fetch_one(&app.db)
         .await

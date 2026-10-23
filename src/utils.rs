@@ -298,7 +298,7 @@ mod tests {
     async fn insert_club(db: &SqlitePool) -> Uuid {
         let owner_id = Uuid::now_v7();
         sqlx::query(
-            "INSERT INTO users (id, email, email_verified, name, password, is_admin) VALUES (?, ?, true, ?, 'x', false)",
+            "INSERT INTO users (id, email, email_verified, name, password) VALUES (?, ?, true, ?, 'x')",
         )
         .bind(owner_id)
         .bind(format!("{owner_id}@example.com"))

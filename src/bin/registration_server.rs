@@ -132,7 +132,7 @@ async fn main() -> eyre::Result<()> {
 async fn admin_user_exists(db: &sqlx::SqlitePool) -> sqlx::Result<bool> {
     let result = sqlx::query!(
         r#"
-        SELECT COUNT(*) as count FROM users WHERE is_admin = true
+        SELECT COUNT(*) as count FROM user_roles WHERE role = 'admin'
         "#,
     )
     .fetch_one(db)
@@ -153,13 +153,19 @@ async fn insert_admin_user(
     let id = Uuid::now_v7();
     sqlx::query!(
         r#"
-        INSERT INTO users (id, email, email_verified, name, password, is_admin)
-        VALUES (?, ?, true, ?, ?, true)
+        INSERT INTO users (id, email, email_verified, name, password)
+        VALUES (?, ?, true, ?, ?)
         "#,
         id,
         email,
         name,
         hash
+    )
+    .execute(db)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO user_roles (user_id, role) VALUES (?, 'admin')",
+        id
     )
     .execute(db)
     .await?;

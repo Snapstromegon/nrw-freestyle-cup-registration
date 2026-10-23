@@ -45,7 +45,7 @@ pub async fn rename_club(
         return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
     }
     let db = db.get().await.clone();
-    if auth.is_admin {
+    if auth.is_admin() {
         sqlx::query!(
             r#"
             UPDATE clubs SET name = ? WHERE id = ?

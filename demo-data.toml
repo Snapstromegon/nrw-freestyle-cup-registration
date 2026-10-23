@@ -52,7 +52,7 @@ iban = "DE02 1203 0000 0000 2020 51"
 bic = "BYLADEM1001"
 reference = "Startgeld"
 
-# Users. Optional: admin (false), email_verified (true), verification_token,
+# Users. Optional: roles ([]), email_verified (true), verification_token,
 # password_reset_token. Passwords are inserted as they are, without the
 # password policy of the registration.
 
@@ -60,7 +60,44 @@ reference = "Startgeld"
 name = "Admin"
 email = "admin@example.org"
 password = "Admin"
-admin = true
+roles = ["admin"]
+
+# One account per role of the organizer team (ADR 0003).
+[[users]]
+name = "Juryleitung"
+email = "juryleitung@example.org"
+password = "Juryleitung"
+roles = ["jury_lead"]
+
+[[users]]
+name = "Kasse"
+email = "kasse@example.org"
+password = "Kasse"
+roles = ["treasurer"]
+
+[[users]]
+name = "Check-in"
+email = "checkin@example.org"
+password = "Checkin"
+roles = ["check_in"]
+
+[[users]]
+name = "Musiksteuerung"
+email = "musik@example.org"
+password = "Musik"
+roles = ["music_control"]
+
+[[users]]
+name = "Moderation"
+email = "moderation@example.org"
+password = "Moderation"
+roles = ["moderation"]
+
+[[users]]
+name = "Musikprüfung"
+email = "musikpruefung@example.org"
+password = "Musikpruefung"
+roles = ["music_check"]
 
 [[users]]
 name = "Maria Wagner"

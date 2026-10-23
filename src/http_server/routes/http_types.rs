@@ -1,6 +1,10 @@
 use uuid::Uuid;
 
-use crate::{act_type::ActType, normalize::NormalizationStatus};
+use crate::{
+    act_type::ActType,
+    normalize::NormalizationStatus,
+    roles::{Permission, Role},
+};
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct User {
@@ -8,8 +12,20 @@ pub struct User {
     pub name: String,
     pub email: String,
     pub email_verified: bool,
+    /// Holds the Admin role.
     pub is_admin: bool,
+    /// Sorted.
+    pub roles: Vec<Role>,
     pub club_id: Option<Uuid>,
+}
+
+/// The logged-in user with what their roles allow.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct CurrentUser {
+    #[serde(flatten)]
+    pub user: User,
+    /// Sorted.
+    pub permissions: Vec<Permission>,
 }
 
 /// A participant of an act, as stored in the `participants` JSON of `view_act`.
