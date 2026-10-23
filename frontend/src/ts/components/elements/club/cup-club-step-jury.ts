@@ -108,6 +108,154 @@ export default class CupClubStepJury extends LitElement {
         margin-bottom: 1rem;
       }
 
+      /* The judges and the published plan, like the riders table. */
+      table.list {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      table.list th {
+        padding: 0.5rem;
+        background: var(--cup-surface-2);
+        border-bottom: 1px solid var(--cup-border);
+        color: var(--cup-muted);
+        font-size: 0.8rem;
+        font-weight: 600;
+        text-align: left;
+      }
+
+      table.list td {
+        padding: 0.5rem;
+        border-bottom: 1px solid var(--cup-border);
+        vertical-align: middle;
+      }
+
+      table.list tfoot td {
+        background: var(--cup-surface-2);
+        border-top: 2px solid var(--cup-border);
+        border-bottom: none;
+        font-weight: 600;
+      }
+
+      table.list td.name {
+        font-weight: 600;
+        white-space: nowrap;
+      }
+
+      table.list td.name small {
+        display: block;
+        font-weight: normal;
+        white-space: normal;
+      }
+
+      table.list th.icon,
+      table.list td.icon {
+        width: 2.5rem;
+        text-align: center;
+      }
+
+      table.list th.icon .material-icon {
+        font-size: 1.15rem;
+        vertical-align: middle;
+      }
+
+      table.list .material-icon.trained {
+        color: var(--cup-green);
+      }
+
+      table.list th.num,
+      table.list td.num {
+        text-align: right;
+      }
+
+      table.list .unit {
+        display: none;
+      }
+
+      /* Phones: each judge as a small card, like the riders. */
+      @media (max-width: 720px) {
+        table.judges thead {
+          display: none;
+        }
+
+        table.judges,
+        table.judges tbody,
+        table.judges tfoot,
+        table.judges tr,
+        table.judges td {
+          display: block;
+        }
+
+        table.judges tbody tr {
+          display: grid;
+          grid-template-columns: 1fr auto auto;
+          grid-template-areas:
+            "name icon actions"
+            "age count count"
+            "regs regs regs";
+          gap: 0.25rem 0.5rem;
+          padding: 0.75rem 0;
+          border-bottom: 1px solid var(--cup-border);
+        }
+
+        table.judges tbody td {
+          padding: 0;
+          border: none;
+        }
+
+        table.judges tbody tr.editing {
+          display: block;
+        }
+
+        table.judges td.name {
+          grid-area: name;
+          white-space: normal;
+        }
+
+        table.judges td.icon {
+          grid-area: icon;
+          width: auto;
+        }
+
+        table.judges td.actions-col {
+          grid-area: actions;
+        }
+
+        table.judges td.age {
+          grid-area: age;
+          color: var(--cup-muted);
+          font-size: 0.9rem;
+        }
+
+        table.judges .unit {
+          display: inline;
+        }
+
+        table.judges td.deployments {
+          grid-area: count;
+        }
+
+        table.judges td.regs {
+          grid-area: regs;
+        }
+
+        table.judges tfoot tr {
+          display: flex;
+          justify-content: space-between;
+          background: var(--cup-surface-2);
+          border-top: 2px solid var(--cup-border);
+        }
+
+        table.judges tfoot td:empty {
+          display: none;
+        }
+
+        table.judges tfoot td {
+          border: none;
+          background: none;
+        }
+      }
+
       .progress {
         position: relative;
         height: 1.75rem;
@@ -253,9 +401,7 @@ export default class CupClubStepJury extends LitElement {
         white-space: normal;
       }
 
-      td.name {
-        overflow-wrap: anywhere;
-      }
+
     `,
   ];
 
@@ -326,10 +472,14 @@ export default class CupClubStepJury extends LitElement {
                 <i class="material-icon">gavel</i>
                 <strong>Noch keine JurorInnen</strong>
               </div>`
-            : html`<table>
+            : html`<table class="list judges">
                 <thead>
                   <tr>
                     <th>Name</th>
+                    <th class="icon" title="Geschult (IUF-Rulebook)">
+                      <i class="material-icon" aria-hidden="true">school</i>
+                      <span class="visually-hidden">Geschult</span>
+                    </th>
                     <th>Alter</th>
                     <th>Wertet</th>
                     <th class="num" title="Juryeinsätze, die für euren Verein zählen">
@@ -344,8 +494,8 @@ export default class CupClubStepJury extends LitElement {
                     (judge) => judge.id,
                     (judge) =>
                       this.editing === judge.id
-                        ? html`<tr>
-                            <td colspan="5">${this.renderForm()}</td>
+                        ? html`<tr class="editing">
+                            <td colspan="6">${this.renderForm()}</td>
                           </tr>`
                         : this.renderJudge(judge),
                   )}
@@ -408,7 +558,7 @@ export default class CupClubStepJury extends LitElement {
       </header>
       ${
         rows.length
-          ? html`<table>
+          ? html`<table class="list">
               <thead>
                 <tr>
                   <th>JurorIn</th>
@@ -462,7 +612,7 @@ export default class CupClubStepJury extends LitElement {
       jury?.credited_override !== null && jury?.credited_override !== undefined;
     return html`<tfoot>
       <tr>
-        <td colspan="3">
+        <td colspan="4">
           Gesamt${jury ? html` · Pflicht ${jury.required}` : nothing}${
             override
               ? html` · vom Veranstalter angerechnet: ${jury!.credited}`
@@ -536,18 +686,30 @@ export default class CupClubStepJury extends LitElement {
       <td class="name">
         ${starterName(judge)}
         ${
-          judge.is_trained
-            ? html`<span class="chip">geschult</span>`
-            : html`<span class="chip warn">AbstiegszählerIn</span>`
-        }
-        ${
           judge.note
-            ? html`<br /><small class="muted">${judge.note}</small>`
+            ? html`<small class="muted">${judge.note}</small>`
             : nothing
         }
       </td>
-      <td>${ageOnStart(judge.birthdate, this.competition) ?? ""}</td>
-      <td>
+      <td
+        class="icon"
+        title=${
+          judge.is_trained
+            ? "Geschult (IUF-Rulebook)"
+            : "Nicht geschult: nur AbstiegszählerIn"
+        }
+      >
+        ${
+          judge.is_trained
+            ? html`<i class="material-icon trained" aria-label="geschult">school</i>`
+            : html`<span class="muted" aria-label="nicht geschult">–</span>`
+        }
+      </td>
+      <td class="age">
+        ${ageOnStart(judge.birthdate, this.competition) ?? ""}
+        <span class="unit">Jahre</span>
+      </td>
+      <td class="regs">
         <div class="registrations">
           ${
             byCategory.size === 0
