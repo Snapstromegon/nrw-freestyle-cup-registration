@@ -153,6 +153,16 @@ export default class CupViewAdminJudges extends LitElement {
         </button>
       </div>
       ${
+        this.systemStatus?.competition && !this.systemStatus.competition.jury
+          ? html`<div class="warn-banner" role="status">
+              Für diesen Wettkampf sind keine Jury-Regeln eingetragen
+              (<code>[competition.jury]</code> in der Config). Ohne sie gibt es
+              keine Pflicht-Juryeinsätze und keine Jurygebühr; JurorInnen können
+              trotzdem gemeldet und eingeteilt werden.
+            </div>`
+          : nothing
+      }
+      ${
         this.error
           ? html`<div class="error-banner" role="alert">
               <span>${this.error}</span>
