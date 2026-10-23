@@ -1,5 +1,5 @@
 import { consume } from "@lit/context";
-import { Task } from "@lit/task";
+import { Task, TaskStatus } from "@lit/task";
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
@@ -166,17 +166,13 @@ export default class CupViewAdminJudges extends LitElement {
             </div>`
           : nothing
       }
-      ${this.categories.render({
-        pending: () => html`<p class="empty">Lade Jury-Kategorien …</p>`,
-        error: (error) =>
-          html`<div class="error-banner" role="alert">
-            Jury-Kategorien konnten nicht geladen werden:
-            ${errorMessage(error)}
-          </div>`,
-        complete: (categories) =>
+      ${this.renderLoaded(
+        this.categories,
+        "Jury-Kategorien",
+        (categories) =>
           html`${this.renderJudgeSections(categories)}
           ${this.renderCategories(categories)}`,
-      })}
+      )}
     </div>`;
   }
 
@@ -196,17 +192,35 @@ export default class CupViewAdminJudges extends LitElement {
   }
 
   private renderJudgeSections(categories: JuryCategory[]) {
-    return this.judges.render({
-      pending: () => html`<p class="empty">Lade JurorInnen …</p>`,
-      error: (error) =>
-        html`<div class="error-banner" role="alert">
-          JurorInnen konnten nicht geladen werden: ${errorMessage(error)}
-        </div>`,
-      complete: ([judges, clubs, plan]) =>
+    return this.renderLoaded(
+      this.judges,
+      "JurorInnen",
+      ([judges, clubs, plan]) =>
         html`${this.renderPlan(categories, judges, plan)}
         ${this.renderCoverage(categories, judges)} ${this.renderClubs(clubs)}
         ${this.renderJudges(categories, judges)}`,
-    });
+    );
+  }
+
+  /**
+   * A task's content. While it reloads after a change, the last data stays,
+   * so the page doesn't shrink and lose its scroll position; only the first
+   * load shows a placeholder.
+   */
+  private renderLoaded<T>(
+    task: Task<readonly unknown[], T>,
+    what: string,
+    complete: (value: T) => unknown,
+  ) {
+    if (task.value !== undefined) {
+      return complete(task.value);
+    }
+    if (task.status === TaskStatus.ERROR) {
+      return html`<div class="error-banner" role="alert">
+        ${what} konnten nicht geladen werden: ${errorMessage(task.error)}
+      </div>`;
+    }
+    return html`<p class="empty">Lade ${what} …</p>`;
   }
 
   /**
