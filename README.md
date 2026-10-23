@@ -26,7 +26,9 @@ Event settings only come from the config file:
 - `[[categories]]`, `[[finals]]` and `[[timeplan]]`: only written into empty
   tables, so changes made in the admin UI are kept. A final reserves slots for
   the best riders of the heats ("1. Finalist (U11–U15)") before the results are
-  known; a `[[timeplan]]` entry with `final = "…"` plans it.
+  known; a `[[timeplan]]` entry with `final = "…"` plans it. Custom entries
+  can leave out the photos on the info board (`show_photos = false`) or be
+  internal (`internal = true`, see [Info board](#info-board-moderation-screen-and-photos)).
 - `[competition.jury]`: the clubs' jury obligation (minimum age of judges,
   Einsätze per two Küren, fee per missing Einsatz, optional judge deadline).
   The defaults are the Jury-Konzept Einrad Freestyle's rules.
@@ -54,6 +56,25 @@ The migrations of the 2024–2026 seasons were squashed into one baseline
 migration; the originals are kept in `migrations-archive/` for reference. A
 database created by those migrations can't be migrated with the baseline.
 
+## Roles
+
+The organizer team works with roles ([ADR 0003](docs/adr/0003-fixed-roles-for-the-organizer-side.md)).
+A user can hold several; Admins grant them in the users table of the admin
+overview (`/admin`). The first Admin comes from the `ADMIN` setting. Roles
+never open another club's registration: that stays with the club contact.
+
+| Role | Can |
+|---|---|
+| Admin | Everything, including granting roles |
+| Juryleitung | Jury categories, judges, the jury plan, finals placements, the moderation screen |
+| Kasse | Payments, with the clubs, their contacts and riders |
+| Check-in | The check-in desk with birthdates and club balances, the medals |
+| Musiksteuerung | The music control, players, award ceremonies, the moderation screen and checking riders in at the start |
+| Moderation | The moderation screen |
+| Musikprüfung | Marking songs as checked in the acts overview |
+
+Give player logins (web player, `cup-player`) only the Musiksteuerung role.
+
 ## Metrics
 
 With `METRICS_TOKEN` (or `[server] metrics_token`) set, `GET /metrics` serves
@@ -76,11 +97,12 @@ scrape_configs:
 
 ## Remote music playback / event server
 
-The music control (admin) can play the current act's song itself, or drive a
+The music control (Musiksteuerung role) can play the current act's song itself, or drive a
 player on another device: the web player at `/player` (any browser, e.g. a
 laptop at the sound desk) or the server player, which plays on the server's own
 sound card. Players and the music control talk over a websocket
-(`/api/ws/player`); both need an admin login. "Weiter" in the timeplan cues the
+(`/api/ws/player`); both need a login with the Musiksteuerung (or Admin) role.
+"Weiter" in the timeplan cues the
 next song on the active player but never starts it. The act timer starts with
 the act's music, not with "Weiter" (acts without music: with "Weiter"), and the
 waveform marks where the act's time runs out.
@@ -93,10 +115,10 @@ waveform marks where the act's time runs out.
 - **Command-line player:** `cup-player` plays on the sound card of the
   computer it runs on, without a browser: no audio to unlock, no tab to close
   by accident. Build it with `make cup-player` (needs the ALSA headers like
-  the server player) and start it with an admin login:
+  the server player) and start it with a login with the Musiksteuerung role:
 
   ```sh
-  CUP_SERVER=https://anmeldung.example.org CUP_EMAIL=admin@example.org \
+  CUP_SERVER=https://anmeldung.example.org CUP_EMAIL=musik@example.org \
     CUP_PASSWORD=… target/release/cup-player
   ```
 
@@ -120,7 +142,14 @@ Event day setup:
 
 - **Info board** (`/info-board`, public): the big screen in the hall. After an
   act it shows the newest photo, in breaks random recent ones, and a QR code
-  to the photos if `[competition] photos_url` is set.
+  to the photos if `[competition] photos_url` is set. During a custom
+  timeplan entry it shows the entry's name and the clock, with photos unless
+  the entry turns them off ("Fotos" in the admin timeplan).
+- **Internal timeplan entries** ("intern" in the admin timeplan): custom
+  entries only the organizer team sees, e.g. a jury meeting. They take their
+  time like any entry; the info board, the startlist and its CSV leave them
+  out and show a break. Admin, Juryleitung, Moderation and Musiksteuerung see
+  them, marked "intern".
 - **Photos:** set `[photos] source` (see `config.example.toml`): a Nextcloud
   folder over WebDAV with a user and an app password, a Nextcloud share link,
   or a local folder. The server lists it every 15 s (the folder and its direct
@@ -128,7 +157,8 @@ Event day setup:
   it can. The music control shows the newest photo below the act ("Nach der
   Kür auf dem Info-Board") and can hide it from the info board until the
   server restarts.
-- **Moderation screen** (`/admin-moderation`, public): the clock, the delay
+- **Moderation screen** (`/admin-moderation`, Moderation, Musiksteuerung,
+  Juryleitung or Admin role): the clock, the delay
   as a big timer, the current act with its riders, description and progress
   (the act time from the music start, and the song's waveform while it plays),
   what comes next, and the timeplan. It has no controls.
@@ -148,7 +178,7 @@ unregistered partners), groups (a small group across clubs with a replacement
 rider, a large group and an incomplete group without category), acts with
 names, songs and orders, a final, a timeplan that is partly run and a check-in in
 progress (one club fully, one partly, one not checked in). The file lists the
-logins at the top. The database and data path are resolved like for the
+logins at the top, including one account per role. The database and data path are resolved like for the
 server; use `--demo` / `DEMO_DATA` for another file. Tests can load it with
 `demo::DemoData`.
 

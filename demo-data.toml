@@ -18,6 +18,14 @@
 # - tim.neumann@example.org       verified, no club yet
 # - paul.hoffmann@example.org     email not verified
 #
+# One login per role of the organizer team (password in brackets):
+# - juryleitung@example.org       Juryleitung (Juryleitung)
+# - kasse@example.org             Kasse (Kasse)
+# - checkin@example.org           Check-in (Checkin)
+# - musik@example.org             Musiksteuerung (Musik), e.g. for players
+# - moderation@example.org        Moderation (Moderation)
+# - musikpruefung@example.org     Musikprüfung (Musikpruefung)
+#
 # Links with the fixed tokens below:
 # - /verify_email?token=00000000-0000-4000-8000-000000000001
 # - /reset_password?token=00000000-0000-4000-8000-000000000002
