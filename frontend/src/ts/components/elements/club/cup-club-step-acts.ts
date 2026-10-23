@@ -366,6 +366,8 @@ export default class CupClubStepActs extends LitElement {
   @property() target?: string;
   /** Admins can link pair partners of other clubs. */
   @property({ type: Boolean }) admin = false;
+  /** The jury step comes next (jury registration on). */
+  @property({ type: Boolean, attribute: "jury-step" }) juryStep = false;
 
   @state() newKind: NewKind | null = null;
   @state() newRider = "";
@@ -588,9 +590,10 @@ export default class CupClubStepActs extends LitElement {
       <div class="next-step">
         <button
           class="btn blue"
-          @click=${this.goToPayment}
+          @click=${this.goToNext}
         >
-          Weiter: Startgeld <i class="material-icon">arrow_forward</i>
+          Weiter: ${this.juryStep ? "Jury" : "Startgeld"}
+          <i class="material-icon">arrow_forward</i>
         </button>
       </div>`;
   }
@@ -609,8 +612,8 @@ export default class CupClubStepActs extends LitElement {
     navigateTo(this, { step: "fahrer" });
   }
 
-  goToPayment() {
-    navigateTo(this, { step: "startgeld" });
+  goToNext() {
+    navigateTo(this, { step: this.juryStep ? "jury" : "startgeld" });
   }
 
   clearError() {

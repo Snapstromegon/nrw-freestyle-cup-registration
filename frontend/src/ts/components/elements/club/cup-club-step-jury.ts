@@ -13,7 +13,7 @@ import { ageOnStart, ROLES, roleLabels, roleNames } from "../../../jury";
 import { iconStyles, resetStyles } from "../../../styles/base";
 import { clubPortalStyles } from "../../../styles/club-portal";
 import { type Competition, formatDate, formatMoney } from "../../../utils";
-import { dataChanged } from "./events";
+import { dataChanged, navigateTo } from "./events";
 
 type JudgeRole = schemas.JudgeRole;
 
@@ -106,6 +106,15 @@ export default class CupClubStepJury extends LitElement {
         flex-wrap: wrap;
         gap: 0.25rem;
       }
+
+      /* Long category names wrap instead of widening the page. */
+      .registrations .chip {
+        white-space: normal;
+      }
+
+      td.name {
+        overflow-wrap: anywhere;
+      }
     `,
   ];
 
@@ -140,16 +149,7 @@ export default class CupClubStepJury extends LitElement {
 
       <p class="banner info">
         <i class="material-icon">gavel</i>
-        <span class="grow"
-          >Geschulte JurorInnen (IUF-Rulebook) müssen am ersten Wettkampftag
-          mindestens ${rules?.min_age ?? 15} Jahre alt sein. Nicht geschulte
-          Personen können als AbstiegszählerInnen gemeldet werden, zählen aber
-          nicht für die Pflicht-Juryeinsätze. Mit der Anmeldung erklären die
-          gemeldeten JurorInnen, dass sie mit der Speicherung und
-          Veröffentlichung der wettkampfrelevanten personenbezogenen Daten
-          sowie Fotos und Videos, die im Zusammenhang mit dieser Veranstaltung
-          entstehen, einverstanden sind.</span
-        >
+        <span class="grow">${this.infoText(rules?.min_age ?? 15)}</span>
       </p>
       ${this.renderObligation()}
       ${
@@ -209,7 +209,27 @@ export default class CupClubStepJury extends LitElement {
               </table>`
         }
       </section>
-      ${this.renderPlan()}`;
+      ${this.renderPlan()}
+
+      <div class="next-step">
+        <button class="btn blue" @click=${this.goToPayment}>
+          Weiter: Startgeld <i class="material-icon">arrow_forward</i>
+        </button>
+      </div>`;
+  }
+
+  private goToPayment() {
+    navigateTo(this, { step: "startgeld" });
+  }
+
+  /** The rules and the Ausschreibung's consent, as one line of text. */
+  private infoText(minAge: number) {
+    return (
+      `Geschulte JurorInnen (IUF-Rulebook) müssen am ersten Wettkampftag mindestens ${minAge} Jahre alt sein. ` +
+      "Nicht geschulte Personen können als AbstiegszählerInnen gemeldet werden, zählen aber nicht für die Pflicht-Juryeinsätze. " +
+      "Mit der Anmeldung erklären die gemeldeten JurorInnen, dass sie mit der Speicherung und Veröffentlichung der wettkampfrelevanten " +
+      "personenbezogenen Daten sowie Fotos und Videos, die im Zusammenhang mit dieser Veranstaltung entstehen, einverstanden sind."
+    );
   }
 
   /** The club's judges' assignments, once the Juryplan is published. */

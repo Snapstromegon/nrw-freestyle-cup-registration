@@ -563,7 +563,9 @@ export default class CupClubPortal extends LitElement {
     const [hashStep, target] = location.hash.slice(1).split("/");
     // Riders used to be assigned in a step of their own.
     const step = hashStep === "zuordnung" ? "kueren" : hashStep;
-    if (isStepId(step) && (step !== "jury" || this.juryRegistration)) {
+    // The jury step is checked when rendering: the system status may not be
+    // loaded yet.
+    if (isStepId(step)) {
       this.step = step;
       this.target = target || undefined;
       this.stepChosen = true;
@@ -776,14 +778,15 @@ export default class CupClubPortal extends LitElement {
   }
 
   renderAmount(data: ClubData) {
-    const { amount, open } = paymentState(data);
+    const { amount, open, juryFee } = paymentState(data);
     const paid = amount > 0 && open < 0.01;
+    const what = juryFee > 0 ? "Startgeld + Jury" : "Startgeld";
     return html`<a
       href="#startgeld"
       class=${classMap({ amount: true, paid })}
       @click=${this.onAmountClick}
     >
-      <span>${paid ? "Startgeld bezahlt" : "Startgeld offen"}</span>
+      <span>${what} ${paid ? "bezahlt" : "offen"}</span>
       <strong>${formatEuro(paid ? amount : Math.max(open, 0))}</strong>
     </a>`;
   }
@@ -876,7 +879,9 @@ export default class CupClubPortal extends LitElement {
       canRegister: !!this.systemStatus?.can_register_starter,
       canUpload: !!this.systemStatus?.can_upload_music,
     };
-    switch (this.step) {
+    const step =
+      this.step === "jury" && !this.juryRegistration ? "verein" : this.step;
+    switch (step) {
       case "verein":
         return html`<cup-club-step-club
           .data=${common.data}
@@ -893,6 +898,7 @@ export default class CupClubPortal extends LitElement {
       case "kueren":
         return html`<cup-club-step-acts
           ?admin=${this.admin}
+          ?jury-step=${this.juryRegistration}
           .data=${common.data}
           .competition=${common.competition}
           .canRegister=${common.canRegister}
@@ -900,13 +906,11 @@ export default class CupClubPortal extends LitElement {
           .target=${this.target}
         ></cup-club-step-acts>`;
       case "jury":
-        return this.juryRegistration
-          ? html`<cup-club-step-jury
-              .data=${common.data}
-              .competition=${common.competition}
-              .canRegister=${!!this.systemStatus?.can_register_judge}
-            ></cup-club-step-jury>`
-          : nothing;
+        return html`<cup-club-step-jury
+          .data=${common.data}
+          .competition=${common.competition}
+          .canRegister=${!!this.systemStatus?.can_register_judge}
+        ></cup-club-step-jury>`;
       case "startgeld":
         return html`<cup-club-step-payment
           number=${this.juryRegistration ? 5 : 4}

@@ -245,12 +245,13 @@ export const clubIssues = (
       target: withoutTitle.length === 1 ? withoutTitle[0].id : undefined,
     });
   }
-  const { open } = paymentState(data);
+  const { open, juryFee } = paymentState(data);
   if (open >= 0.01) {
     issues.push({
       level: "warn",
       step: "startgeld",
-      text: `Startgeld offen.`,
+      text:
+        juryFee > 0 ? "Startgeld und Jurygebühr offen." : "Startgeld offen.",
     });
   }
   const order: IssueLevel[] = ["error", "warn", "info"];
