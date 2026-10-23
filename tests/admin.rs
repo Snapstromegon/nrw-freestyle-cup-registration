@@ -65,15 +65,15 @@ async fn list_users_is_admin_only(db: SqlitePool) {
 }
 
 #[sqlx::test]
-async fn admins_can_promote_and_demote_users(db: SqlitePool) {
+async fn admins_can_grant_and_revoke_admin(db: SqlitePool) {
     let app = TestApp::new(db).await;
     let admin = app.create_admin().await;
     let user_id = app.create_user("Alex", false).await;
 
     let promoted = app
         .post(
-            "/api/command/set_user_admin",
-            json!({ "user_id": user_id, "is_admin": true }),
+            "/api/command/set_user_roles",
+            json!({ "user_id": user_id, "roles": ["admin"] }),
             Some(&admin),
         )
         .await;
@@ -92,8 +92,8 @@ async fn admins_can_promote_and_demote_users(db: SqlitePool) {
 
     let demoted = app
         .post(
-            "/api/command/set_user_admin",
-            json!({ "user_id": user_id, "is_admin": false }),
+            "/api/command/set_user_roles",
+            json!({ "user_id": user_id, "roles": [] }),
             Some(&admin),
         )
         .await;
@@ -112,21 +112,21 @@ async fn admins_can_promote_and_demote_users(db: SqlitePool) {
 }
 
 #[sqlx::test]
-async fn setting_admin_status_is_admin_only_and_checks_the_user(db: SqlitePool) {
+async fn setting_roles_is_admin_only_and_checks_the_user(db: SqlitePool) {
     let app = TestApp::new(db).await;
     let admin = app.create_admin().await;
     let user_id = app.create_user("Alex", false).await;
     let user = app.cookie_for(user_id);
-    let body = json!({ "user_id": user_id, "is_admin": true });
+    let body = json!({ "user_id": user_id, "roles": ["admin"] });
 
     assert_eq!(
-        app.post("/api/command/set_user_admin", body.clone(), Some(&user))
+        app.post("/api/command/set_user_roles", body.clone(), Some(&user))
             .await
             .status,
         StatusCode::FORBIDDEN
     );
     assert_eq!(
-        app.post("/api/command/set_user_admin", body, None)
+        app.post("/api/command/set_user_roles", body, None)
             .await
             .status,
         StatusCode::UNAUTHORIZED
@@ -134,8 +134,8 @@ async fn setting_admin_status_is_admin_only_and_checks_the_user(db: SqlitePool) 
 
     let missing = app
         .post(
-            "/api/command/set_user_admin",
-            json!({ "user_id": uuid::Uuid::now_v7(), "is_admin": true }),
+            "/api/command/set_user_roles",
+            json!({ "user_id": uuid::Uuid::now_v7(), "roles": ["admin"] }),
             Some(&admin),
         )
         .await;
@@ -143,15 +143,15 @@ async fn setting_admin_status_is_admin_only_and_checks_the_user(db: SqlitePool) 
 }
 
 #[sqlx::test]
-async fn last_admin_cannot_be_demoted(db: SqlitePool) {
+async fn the_last_admin_cannot_drop_admin(db: SqlitePool) {
     let app = TestApp::new(db).await;
     let admin_id = app.create_user("Admin", true).await;
     let admin = app.cookie_for(admin_id);
 
     let response = app
         .post(
-            "/api/command/set_user_admin",
-            json!({ "user_id": admin_id, "is_admin": false }),
+            "/api/command/set_user_roles",
+            json!({ "user_id": admin_id, "roles": [] }),
             Some(&admin),
         )
         .await;
@@ -176,8 +176,8 @@ async fn admin_cannot_demote_themselves_even_when_another_admin_exists(db: Sqlit
 
     let response = app
         .post(
-            "/api/command/set_user_admin",
-            json!({ "user_id": admin_id, "is_admin": false }),
+            "/api/command/set_user_roles",
+            json!({ "user_id": admin_id, "roles": [] }),
             Some(&admin),
         )
         .await;

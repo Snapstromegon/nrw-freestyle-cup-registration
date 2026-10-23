@@ -13,6 +13,7 @@ import {
 } from "../../contexts/systemStatus";
 import { type User as CurrentUser, userContext } from "../../contexts/user";
 import { type PairCandidate, unconfirmedPairs } from "../../pairs";
+import { ROLES, type Role, roleLock, roleNames, withRole } from "../../roles";
 import type { PickerOption } from "../elements/cup-rider-picker";
 import "../elements/cup-rider-picker.js";
 import { linkPartners } from "../elements/club/club-actions";
@@ -447,6 +448,16 @@ export default class CupViewAdmin extends LitElement {
         color: var(--cup-muted);
       }
 
+      /* One column per role in the users table. */
+      th.role,
+      td.role {
+        text-align: center;
+      }
+
+      th.role {
+        font-size: 0.8em;
+      }
+
       /* The overpaid sum goes below the open sum, not next to it. */
       td.open-total .chip {
         display: table;
@@ -658,6 +669,9 @@ export default class CupViewAdmin extends LitElement {
     const rows = buildClubRows(data, this.checkIns);
     const issues = buildIssues(data, rows, competition);
     const adminCount = data.users.filter((user) => user.is_admin).length;
+    const roleHeaders = ROLES.map(
+      (role) => html`<th class="role">${roleNames[role]}</th>`,
+    );
     return html`
       <h1 class="sr-only">Übersicht</h1>
       ${this.renderKpis(data, rows)}
@@ -697,7 +711,7 @@ export default class CupViewAdmin extends LitElement {
                     <th>Name</th>
                     <th>E-Mail</th>
                     <th>Status</th>
-                    <th class="actions">Rolle</th>
+                    ${roleHeaders}
                   </tr>
                 </thead>
                 <tbody>
@@ -716,34 +730,9 @@ export default class CupViewAdmin extends LitElement {
                                   >unverifiziert</span
                                 >`
                           }
-                          ${
-                            u.is_admin
-                              ? html`<span class="chip info">Admin</span>`
-                              : nothing
-                          }
                         </span>
                       </td>
-                      <td class="actions">
-                        <button
-                          class="btn small"
-                          data-user-id=${u.id}
-                          ?disabled=${
-                            this.updatingUserRoles.has(u.id) ||
-                            (u.is_admin &&
-                              (u.id === this.currentUser?.id ||
-                                adminCount === 1))
-                          }
-                          @click=${this.onToggleUserAdmin}
-                        >
-                          ${
-                            this.updatingUserRoles.has(u.id)
-                              ? "Speichert…"
-                              : u.is_admin
-                                ? "Adminrechte entziehen"
-                                : "Zum Admin machen"
-                          }
-                        </button>
-                      </td>
+                      ${this.renderRoleCells(u, adminCount)}
                     </tr>`,
                   )}
                 </tbody>
@@ -752,6 +741,25 @@ export default class CupViewAdmin extends LitElement {
         }
       </details>
     `;
+  }
+
+  /** A checkbox per role; locked where `roleLock` says so. */
+  renderRoleCells(user: schemas.User, adminCount: number) {
+    return ROLES.map((role) => {
+      const lock = roleLock(user, role, this.currentUser?.id, adminCount);
+      return html`<td class="role">
+        <input
+          type="checkbox"
+          aria-label="${user.name}: ${roleNames[role]}"
+          title=${lock ?? roleNames[role]}
+          data-user-id=${user.id}
+          data-role=${role}
+          .checked=${user.roles.includes(role)}
+          ?disabled=${this.updatingUserRoles.has(user.id) || lock !== null}
+          @change=${this.onUserRoleChange}
+        />
+      </td>`;
+    });
   }
 
   renderKpis(data: DashboardData, rows: ClubRow[]) {
@@ -1303,20 +1311,24 @@ export default class CupViewAdmin extends LitElement {
     this.error = null;
   }
 
-  async onToggleUserAdmin(e: Event) {
-    const userId = (e.currentTarget as HTMLElement).dataset.userId;
+  async onUserRoleChange(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const { userId, role } = input.dataset;
     const user = (this.data.value ?? this.lastData)?.users.find(
       (candidate) => candidate.id === userId,
     );
-    if (!user || !userId) {
+    if (!user || !userId || !role) {
       return;
     }
 
     this.updatingUserRoles = new Set(this.updatingUserRoles).add(userId);
     try {
       await unwrap(
-        client.setUserAdmin({
-          body: { user_id: userId, is_admin: !user.is_admin },
+        client.setUserRoles({
+          body: {
+            user_id: userId,
+            roles: withRole(user.roles, role as Role, input.checked),
+          },
         }),
       );
       await this.data.run();

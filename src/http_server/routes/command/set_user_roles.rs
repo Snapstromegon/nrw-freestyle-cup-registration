@@ -7,28 +7,30 @@ use uuid::Uuid;
 use crate::{
     http_server::{ClientError, HttpError, extractor::auth::Granted},
     reloadable_sqlite::{ReloadableSqlite, begin_write},
-    roles::permit,
+    roles::{Role, permit},
 };
 
 #[derive(Debug, Serialize, ToSchema)]
-pub struct SetUserAdminResponse {}
+pub struct SetUserRolesResponse {}
 
 #[derive(Debug, Deserialize, ToSchema)]
-pub struct SetUserAdminBody {
+pub struct SetUserRolesBody {
     user_id: Uuid,
-    is_admin: bool,
+    /// Every role the user holds afterwards.
+    roles: Vec<Role>,
 }
 
-/// Promote a user to admin or return an admin to a normal user.
+/// Grant a user exactly these roles.
 ///
-/// Admin only. The last administrator cannot be demoted.
+/// Admin only. Admins can't drop their own Admin role, and the last Admin
+/// stays one.
 #[utoipa::path(
     post,
     tags=["command", "user"],
-    path="/set_user_admin",
-    request_body=SetUserAdminBody,
+    path="/set_user_roles",
+    request_body=SetUserRolesBody,
     responses(
-        (status=200, content_type="application/json", body=SetUserAdminResponse),
+        (status=200, content_type="application/json", body=SetUserRolesResponse),
         (status=403, content_type="application/json", body=ClientError),
         (status=404, content_type="application/json", body=ClientError),
         (status=409, content_type="application/json", body=ClientError),
@@ -37,12 +39,13 @@ pub struct SetUserAdminBody {
 )]
 #[instrument(skip(db))]
 #[axum::debug_handler]
-pub async fn set_user_admin(
+pub async fn set_user_roles(
     Extension(db): Extension<ReloadableSqlite>,
     auth: Granted<permit::ManageUsers>,
-    Json(body): Json<SetUserAdminBody>,
-) -> Result<Json<SetUserAdminResponse>, HttpError> {
-    if auth.user_id == body.user_id && !body.is_admin {
+    Json(body): Json<SetUserRolesBody>,
+) -> Result<Json<SetUserRolesResponse>, HttpError> {
+    let keeps_admin = body.roles.contains(&Role::Admin);
+    if auth.user_id == body.user_id && !keeps_admin {
         return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
     }
     let db = db.get().await.clone();
@@ -53,39 +56,32 @@ pub async fn set_user_admin(
         .fetch_optional(&mut *transaction)
         .await?;
     exists.ok_or(HttpError::NotFound)?;
-    let current_is_admin: bool = sqlx::query_scalar(
-        "SELECT EXISTS (SELECT 1 FROM user_roles WHERE user_id = ? AND role = 'admin')",
-    )
-    .bind(body.user_id)
-    .fetch_one(&mut *transaction)
-    .await?;
 
-    if current_is_admin && !body.is_admin {
-        let admin_count: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM user_roles WHERE role = 'admin'")
-                .fetch_one(&mut *transaction)
-                .await?;
-        if admin_count <= 1 {
+    if !keeps_admin {
+        let other_admins: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM user_roles WHERE role = 'admin' AND user_id != ?",
+        )
+        .bind(body.user_id)
+        .fetch_one(&mut *transaction)
+        .await?;
+        if other_admins == 0 {
             return Err(HttpError::StatusCode(StatusCode::CONFLICT));
         }
     }
 
-    if body.is_admin {
-        sqlx::query("INSERT OR IGNORE INTO user_roles (user_id, role) VALUES (?, 'admin')")
+    sqlx::query("DELETE FROM user_roles WHERE user_id = ?")
+        .bind(body.user_id)
+        .execute(&mut *transaction)
+        .await?;
+    for role in &body.roles {
+        sqlx::query("INSERT OR IGNORE INTO user_roles (user_id, role) VALUES (?, ?)")
             .bind(body.user_id)
-            .execute(&mut *transaction)
-            .await?;
-    } else {
-        sqlx::query("DELETE FROM user_roles WHERE user_id = ? AND role = 'admin'")
-            .bind(body.user_id)
+            .bind(role)
             .execute(&mut *transaction)
             .await?;
     }
 
     transaction.commit().await?;
-    info!(
-        "Set admin status of user {} to {}",
-        body.user_id, body.is_admin
-    );
-    Ok(Json(SetUserAdminResponse {}))
+    info!("Set the roles of user {} to {:?}", body.user_id, body.roles);
+    Ok(Json(SetUserRolesResponse {}))
 }

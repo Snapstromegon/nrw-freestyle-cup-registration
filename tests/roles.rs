@@ -124,23 +124,90 @@ async fn a_missing_permission_is_forbidden_a_missing_login_unauthorized(db: Sqli
 }
 
 #[sqlx::test]
-async fn making_a_user_admin_keeps_their_other_roles(db: SqlitePool) {
+async fn admins_grant_and_revoke_several_roles_at_once(db: SqlitePool) {
     let app = TestApp::new(db).await;
+    let admin = app.create_admin().await;
     let kim = app.create_user_with_roles("Kim", &["treasurer"]).await;
+    let set = |roles: Value| json!({ "user_id": kim, "roles": roles });
 
     let response = app
         .post(
-            "/api/command/set_user_admin",
-            json!({ "user_id": kim, "is_admin": true }),
-            Some(&app.create_admin().await),
+            "/api/command/set_user_roles",
+            set(json!(["check_in", "music_control"])),
+            Some(&admin),
         )
         .await;
     assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
-
     let whoami = app
         .get("/api/query/whoami", Some(&app.cookie_for(kim)))
         .await;
-    assert_eq!(strings(&whoami.body["roles"]), ["admin", "treasurer"]);
+    assert_eq!(
+        strings(&whoami.body["roles"]),
+        ["check_in", "music_control"]
+    );
+
+    let users = app.get("/api/query/list_users", Some(&admin)).await;
+    let listed = users
+        .body
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|user| user["id"] == kim.to_string())
+        .unwrap();
+    assert_eq!(strings(&listed["roles"]), ["check_in", "music_control"]);
+
+    let unknown = app
+        .post(
+            "/api/command/set_user_roles",
+            set(json!(["dj"])),
+            Some(&admin),
+        )
+        .await;
+    assert_eq!(unknown.status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[sqlx::test]
+async fn admins_keep_their_admin_role_but_may_change_the_others(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let admin_id = app.create_user("Admin", true).await;
+    let admin = app.cookie_for(admin_id);
+    let set = |roles: Value| json!({ "user_id": admin_id, "roles": roles });
+
+    let response = app
+        .post(
+            "/api/command/set_user_roles",
+            set(json!(["admin", "music_control"])),
+            Some(&admin),
+        )
+        .await;
+    assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+    let response = app
+        .post(
+            "/api/command/set_user_roles",
+            set(json!(["music_control"])),
+            Some(&admin),
+        )
+        .await;
+    assert_eq!(response.status, StatusCode::FORBIDDEN);
+
+    let whoami = app.get("/api/query/whoami", Some(&admin)).await;
+    assert_eq!(strings(&whoami.body["roles"]), ["admin", "music_control"]);
+}
+
+#[sqlx::test]
+async fn only_admins_set_roles(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let jury_lead = app.create_user_with_roles("Jury", &["jury_lead"]).await;
+    let body = json!({ "user_id": jury_lead, "roles": ["jury_lead", "treasurer"] });
+
+    let response = app
+        .post(
+            "/api/command/set_user_roles",
+            body,
+            Some(&app.cookie_for(jury_lead)),
+        )
+        .await;
+    assert_eq!(response.status, StatusCode::FORBIDDEN);
 }
 
 /// A user holding `roles`, with their cookie.
