@@ -18,13 +18,18 @@ const authed = (x: TemplateResult) =>
   html`<cup-context-user>${x}</cup-context-user>`;
 
 /**
- * An admin page: logged in, inside the admin shell. The shell only renders
- * `view` for admins, so the page doesn't load or poll anything otherwise.
+ * An organizer page: logged in, inside the admin shell. The shell only
+ * renders `view` for users whose roles open the page, so it doesn't load or
+ * poll anything otherwise. `bare` leaves out the shell's bar.
  */
-const admin = (view: () => TemplateResult, { fullscreen = false } = {}) =>
+const admin = (
+  view: () => TemplateResult,
+  { fullscreen = false, bare = false } = {},
+) =>
   authed(
     html`<cup-admin-shell
       ?fullscreen=${fullscreen}
+      ?bare=${bare}
       .view=${view}
     ></cup-admin-shell>`,
   );
@@ -168,9 +173,12 @@ export default class CupApp extends LitElement {
     },
     {
       path: new URLPattern({ pathname: "/admin-moderation" }),
-      load: () => import("./views/cup-view-admin-moderation.js"),
+      load: loadAdmin(() => import("./views/cup-view-admin-moderation.js")),
       render: () =>
-        html`<cup-view-admin-moderation></cup-view-admin-moderation>`,
+        admin(
+          () => html`<cup-view-admin-moderation></cup-view-admin-moderation>`,
+          { bare: true },
+        ),
     },
   ];
 

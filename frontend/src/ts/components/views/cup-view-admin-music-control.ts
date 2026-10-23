@@ -8,6 +8,7 @@ import { errorMessage, PollController, unwrap } from "../../api";
 import { client } from "../../apiClient";
 import type { schemas } from "../../apiClient";
 import { type User, userContext } from "../../contexts/user";
+import { can } from "../../roles";
 import {
   BLOCKED_MESSAGE,
   type ControllerMessage,
@@ -691,8 +692,9 @@ export default class CupViewAdminMusicControl extends LitElement {
       this.initialized = true;
       this.load();
     }
-    // Only admins may control the players; opening twice is a no-op.
-    if (this.user?.is_admin && this.isConnected) {
+    // Only the music control may control the players; opening twice is a
+    // no-op.
+    if (can(this.user, "control_music") && this.isConnected) {
       this.remote.open();
     }
   }
@@ -702,7 +704,7 @@ export default class CupViewAdminMusicControl extends LitElement {
     window.addEventListener("beforeunload", this.onBeforeUnload);
     this.load();
     void this.photosPoll.runNow();
-    if (this.user?.is_admin) {
+    if (can(this.user, "control_music")) {
       this.remote.open();
     }
     this.reportTimer = setInterval(() => this.reportLocalPlayback(), 1000);
@@ -735,7 +737,7 @@ export default class CupViewAdminMusicControl extends LitElement {
   /** Loads timeplan, acts and check-ins; unchanged data isn't re-rendered. */
   private async load(signal?: AbortSignal) {
     // The admin shell shows "Kein Zugriff" instead; don't poll in vain.
-    if (!this.user?.is_admin) {
+    if (!can(this.user, "control_music")) {
       return;
     }
     const seq = ++this.loadSeq;

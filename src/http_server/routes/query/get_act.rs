@@ -37,7 +37,7 @@ pub struct GetActQuery {
 pub async fn get_act(
     Extension(db): Extension<ReloadableSqlite>,
     Query(query): Query<GetActQuery>,
-    registrations: Option<Granted<permit::ManageRegistrations>>,
+    birthdates: Option<Granted<permit::ViewBirthdates>>,
 ) -> Result<Json<Act>, HttpError> {
     let db = db.get().await.clone();
     let act = sqlx::query_as!(
@@ -79,5 +79,5 @@ pub async fn get_act(
     )
     .fetch_one(&db)
     .await?;
-    Ok(Json(Act::from(act).for_viewer(registrations.is_some())))
+    Ok(Json(Act::from(act).for_viewer(birthdates.is_some())))
 }

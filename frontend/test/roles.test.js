@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "vite-plus/test";
-import { roleLock, withRole } from "../src/ts/roles.ts";
+import { adminPages, canOpen, roleLock, withRole } from "../src/ts/roles.ts";
 
 describe("withRole", () => {
   test("adds a role in the order of the role table", () => {
@@ -35,5 +35,73 @@ describe("roleLock", () => {
 
   test("granting Admin is never locked", () => {
     assert.equal(roleLock({ id: "x", roles: [] }, "admin", "me", 1), null);
+  });
+});
+
+describe("canOpen", () => {
+  const can = (path, permissions) => canOpen(path, permissions);
+
+  test("pages without a requirement are open to everyone", () => {
+    assert.equal(can("/info-board", []), true);
+  });
+
+  test("the music check reaches the acts overview but not the planning", () => {
+    const musicCheck = ["check_songs"];
+    assert.equal(can("/admin-acts-overview", musicCheck), true);
+    assert.equal(can("/admin-categories", musicCheck), false);
+    assert.equal(can("/admin", musicCheck), false);
+  });
+
+  test("the check-in desk needs riders too, the music control can't", () => {
+    const desk = [
+      "view_clubs",
+      "view_club_balances",
+      "view_riders",
+      "check_in",
+      "view_medals",
+    ];
+    const music = ["check_in", "control_music", "view_moderation"];
+    assert.equal(can("/admin-check-in", desk), true);
+    assert.equal(can("/admin-medals", desk), true);
+    assert.equal(can("/admin-check-in", music), false);
+    assert.equal(can("/admin-music-control", music), true);
+    assert.equal(can("/player", music), true);
+    assert.equal(can("/admin-moderation", music), true);
+    assert.equal(can("/admin-moderation", desk), false);
+  });
+});
+
+describe("adminPages", () => {
+  test("lists the pages a treasurer may open", () => {
+    const treasurer = [
+      "manage_payments",
+      "view_clubs",
+      "view_club_balances",
+      "view_club_contacts",
+      "view_riders",
+    ];
+    assert.deepEqual(adminPages(treasurer), ["/admin-payments"]);
+  });
+
+  test("starts with the overview for admins", () => {
+    const admin = [
+      "manage_users",
+      "plan_competition",
+      "manage_registrations",
+      "manage_payments",
+      "view_clubs",
+      "view_club_balances",
+      "view_club_contacts",
+      "view_riders",
+      "manage_jury",
+      "manage_results",
+      "check_in",
+      "view_medals",
+      "control_music",
+      "view_moderation",
+      "check_songs",
+    ];
+    assert.equal(adminPages(admin)[0], "/admin");
+    assert.ok(adminPages(admin).includes("/admin-judges"));
   });
 });

@@ -59,7 +59,7 @@ pub struct Act {
     pub song_checked: bool,
     pub act_type: ActType,
     /// Age of the oldest rider (replacements included) on the determining
-    /// day. Only for who manages registrations, `null` for everyone else: it
+    /// day. Only for who may see birthdates, `null` for everyone else: it
     /// would give away the rider's birthdate.
     pub max_age: Option<f64>,
     pub participants: Vec<ActParticipant>,
@@ -80,10 +80,9 @@ pub struct Act {
 }
 
 impl Act {
-    /// Hides data only who manages registrations may see, see
-    /// [`Act::max_age`].
-    pub fn for_viewer(mut self, manages_registrations: bool) -> Self {
-        if !manages_registrations {
+    /// Hides data only who may see birthdates may see, see [`Act::max_age`].
+    pub fn for_viewer(mut self, sees_birthdates: bool) -> Self {
+        if !sees_birthdates {
             self.max_age = None;
         }
         self

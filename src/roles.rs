@@ -94,9 +94,11 @@ permissions! {
     ManageUsers,
     /// Categories, the timeplan, finals and the order of acts.
     PlanCompetition,
-    /// Every club's registration, also after the Meldeschluss: riders'
-    /// birthdates and ages, withdrawals, pairs across clubs, replacing riders.
+    /// Every club's registration, also after the Meldeschluss: withdrawals,
+    /// pairs across clubs, replacing riders.
     ManageRegistrations,
+    /// Riders' birthdates and ages, also of other clubs.
+    ViewBirthdates,
     /// Record payments.
     ManagePayments,
     /// The list of clubs.
@@ -261,7 +263,12 @@ mod tests {
     #[test]
     fn only_admins_manage_users_plan_and_registrations() {
         for role in Role::ALL {
-            let admin_only = [P::ManageUsers, P::PlanCompetition, P::ManageRegistrations];
+            let admin_only = [
+                P::ManageUsers,
+                P::PlanCompetition,
+                P::ManageRegistrations,
+                P::ViewBirthdates,
+            ];
             for permission in admin_only {
                 assert_eq!(
                     role.permissions().contains(&permission),

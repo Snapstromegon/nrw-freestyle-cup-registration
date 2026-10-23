@@ -10,6 +10,7 @@ import {
 } from "../../contexts/systemStatus";
 import { type User, userContext } from "../../contexts/user";
 import { isJudgeRegistrationOpen, judgeRegistrationEnd } from "../../jury";
+import { canOpen } from "../../roles";
 import { iconStyles, resetStyles } from "../../styles/base";
 import {
   competitionName,
@@ -55,8 +56,9 @@ const lowViewport = "(max-height: 500px)";
  * the registration and music upload state and a logout button, and below it
  * the page that `view` renders:
  * `<cup-admin-shell .view=${() => html`<cup-view-admin></cup-view-admin>`}>`.
- * The page is only rendered for admins, so it doesn't load or poll anything
- * for anyone else; they only see "Kein Zugriff".
+ * The page is only rendered for users whose roles open it (see
+ * `canOpen`), so it doesn't load or poll anything for anyone else; they only
+ * see "Kein Zugriff". The navigation shows only the pages they can open.
  *
  * `<cup-admin-shell ?fullscreen=${true}>` (music control): the page fills the
  * rest of the viewport (`height: 100%` inside it works) and the document
@@ -293,7 +295,10 @@ export default class CupAdminShell extends LitElement {
   /** The page fills the viewport below the bar instead of scrolling. */
   @property({ type: Boolean, reflect: true }) fullscreen = false;
 
-  /** Renders the page; only called for admins. */
+  /** Without the bar, for display screens like the moderation. */
+  @property({ type: Boolean, reflect: true }) bare = false;
+
+  /** Renders the page; only called for users whose roles open it. */
   @property({ attribute: false }) view?: () => unknown;
 
   @query("header") private header?: HTMLElement | null;
@@ -304,15 +309,19 @@ export default class CupAdminShell extends LitElement {
   private lowViewportQuery?: MediaQueryList;
 
   override render() {
-    const isAdmin = !!this.user?.is_admin;
+    const permissions = this.user?.permissions ?? [];
+    const allowed = !!this.user && canOpen(location.pathname, permissions);
+    if (this.bare && allowed) {
+      return this.view?.();
+    }
     const name = competitionName(this.systemStatus?.competition);
     return html`<header>
         <a class="brand" href="/" title="${name} – zur Vereinsanmeldung"
           >${name}</a
         >
-        ${isAdmin ? this.renderNav() : nothing}
+        ${this.user ? this.renderNav() : nothing}
         <span class="spacer"></span>
-        ${isAdmin ? this.renderStatus() : nothing}
+        ${allowed ? this.renderStatus() : nothing}
         <button
           class="icon-btn logout"
           title="Abmelden${this.user ? ` (${this.user.name})` : ""}"
@@ -323,12 +332,13 @@ export default class CupAdminShell extends LitElement {
         </button>
       </header>
       ${
-        isAdmin
+        allowed
           ? html`<main>${this.view?.()}</main>`
           : html`<main class="denied">
             <h1>Kein Zugriff</h1>
             <p>
-              Dieser Bereich ist nur für Admins.
+              Dieser Bereich ist nur für das Orga-Team mit der passenden
+              Rolle.
               ${
                 this.user
                   ? html`Du bist als <b>${this.user.name}</b>
@@ -344,9 +354,11 @@ export default class CupAdminShell extends LitElement {
   private renderNav() {
     const path = location.pathname;
     const jury = !!this.systemStatus?.jury_registration;
+    const permissions = this.user?.permissions ?? [];
+    const opens = (link: NavLink) => canOpen(link.href, permissions);
     return html`<nav aria-label="Adminbereich">
         ${repeat(
-          adminLinks.filter((link) => !link.jury || jury),
+          adminLinks.filter((link) => (!link.jury || jury) && opens(link)),
           (link) => link.href,
           (link) =>
             html`<a
@@ -359,7 +371,7 @@ export default class CupAdminShell extends LitElement {
       </nav>
       <nav class="displays" aria-label="Anzeigen">
         ${repeat(
-          displayLinks,
+          displayLinks.filter(opens),
           (link) => link.href,
           (link) =>
             html`<a

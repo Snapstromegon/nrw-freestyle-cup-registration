@@ -10,6 +10,8 @@ import {
   type SystemStatus,
   systemStatusContext,
 } from "../../contexts/systemStatus";
+import { type User, userContext } from "../../contexts/user";
+import { can } from "../../roles";
 import { adminStyles } from "../../styles/admin";
 import { iconStyles, resetStyles } from "../../styles/base";
 import {
@@ -442,6 +444,14 @@ export default class CupViewAdminCheckIn extends LitElement {
   @consume({ context: systemStatusContext, subscribe: true })
   systemStatus: SystemStatus | null = null;
 
+  @consume({ context: userContext, subscribe: true })
+  user: User | null = null;
+
+  /** Birthdates (for the ID check) only with the permission to see them. */
+  private get birthdates() {
+    return can(this.user, "view_birthdates");
+  }
+
   @state() private starters: Starter[] | null = null;
   @state() private startersError: string | null = null;
   @state() private acts: Act[] | null = null;
@@ -831,10 +841,17 @@ export default class CupViewAdminCheckIn extends LitElement {
             <th>Status</th>
             <th class="col-last">Nachname</th>
             <th class="col-first">Vorname</th>
-            <th class="num opt" title="Geburtsdatum (für die Ausweiskontrolle)">
-              Geb.
-            </th>
-            <th class="num opt" title="Alter am Stichtag">Alter</th>
+            ${
+              this.birthdates
+                ? html`<th
+                      class="num opt"
+                      title="Geburtsdatum (für die Ausweiskontrolle)"
+                    >
+                      Geb.
+                    </th>
+                    <th class="num opt" title="Alter am Stichtag">Alter</th>`
+                : nothing
+            }
             <th>Starts</th>
             <th
               class="num col-start"
@@ -873,7 +890,7 @@ export default class CupViewAdminCheckIn extends LitElement {
     const which = filtered ? "Angezeigte" : "Alle";
     return html`<tbody>
       <tr class="group-head">
-        <th colspan="8">
+        <th colspan=${this.birthdates ? 8 : 6}>
           <div class="club-head">
             <span class="club-name">${club.name}</span>
             <span class=${classMap({ chip: true, ok: checkedIn === total })}
@@ -999,8 +1016,14 @@ export default class CupViewAdminCheckIn extends LitElement {
       </td>
       <td class="last">${starter.lastname}</td>
       <td>${starter.firstname}</td>
-      <td class="num opt">${starter.birthdate ? formatDate(starter.birthdate) : "–"}</td>
-      <td class="num opt">${formatAge(starter.age_on_competition)}</td>
+      ${
+        this.birthdates
+          ? html`<td class="num opt">
+                ${starter.birthdate ? formatDate(starter.birthdate) : "–"}
+              </td>
+              <td class="num opt">${formatAge(starter.age_on_competition)}</td>`
+          : nothing
+      }
       <td class="wrap">
         <span class="chips"
           >${repeat(

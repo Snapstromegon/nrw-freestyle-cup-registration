@@ -11,6 +11,7 @@ import {
   systemStatusContext,
 } from "../../contexts/systemStatus";
 import { type User, userContext } from "../../contexts/user";
+import { can } from "../../roles";
 import { iconStyles, resetStyles } from "../../styles/base";
 import { clubManagerStyles } from "../../styles/club-manager";
 import {
@@ -141,7 +142,7 @@ export default class CupClubActManager extends LitElement {
         </tr>
         ${this.renderCount("Namen vorhanden", acts, (act) => !!act.name)}
         ${
-          this.user?.is_admin
+          can(this.user, "manage_registrations")
             ? this.renderCount(
                 "Beschreibung vorhanden",
                 acts,
@@ -394,7 +395,7 @@ export default class CupClubActManager extends LitElement {
    */
   canEditAct(act: Act) {
     return (
-      !!this.user?.is_admin ||
+      can(this.user, "manage_registrations") ||
       (!!this.systemStatus?.can_upload_music && !this.isOtherClubsGroup(act))
     );
   }

@@ -9,6 +9,7 @@ import {
   systemStatusContext,
 } from "../../contexts/systemStatus";
 import { type User, userContext } from "../../contexts/user";
+import { adminPages, can } from "../../roles";
 import { iconStyles, resetStyles } from "../../styles/base";
 import { clubPortalStyles } from "../../styles/club-portal";
 import { competitionName, formatDate, formatDateRange } from "../../utils";
@@ -195,7 +196,7 @@ export default class CupViewHome extends LitElement {
             a.name.localeCompare(b.name, "de"),
           )
         : [],
-    args: () => [!!this.user?.is_admin],
+    args: () => [can(this.user, "manage_registrations")],
   });
 
   override connectedCallback() {
@@ -214,7 +215,7 @@ export default class CupViewHome extends LitElement {
 
   /** The club shown: the admin's choice, otherwise the user's own. */
   get shownClub() {
-    if (this.user?.is_admin && this.viewedClub) {
+    if (can(this.user, "manage_registrations") && this.viewedClub) {
       return this.viewedClub;
     }
     return this.user?.club_id ?? null;
@@ -260,6 +261,8 @@ export default class CupViewHome extends LitElement {
 
   renderTopbar() {
     const competition = this.systemStatus?.competition;
+    // The first organizer page the user's roles open.
+    const orgaPage = adminPages(this.user?.permissions ?? [])[0];
     return html`<header class="topbar">
       <img src="/assets/images/nrw-freestyle-cup.svg" alt="" />
       <span class="event">
@@ -276,13 +279,13 @@ export default class CupViewHome extends LitElement {
             : nothing
         }
       </span>
-      ${this.user?.is_admin ? this.renderClubSwitch() : nothing}
+      ${can(this.user, "manage_registrations") ? this.renderClubSwitch() : nothing}
       <span class="user" title=${this.user?.email ?? ""}>${this.user?.name}</span>
       ${
-        this.user?.is_admin
-          ? html`<a class="top-btn" href="/admin"
+        orgaPage
+          ? html`<a class="top-btn" href=${orgaPage}
               ><i class="material-icon">admin_panel_settings</i
-              ><span class="label">Admin</span></a
+              ><span class="label">Orga</span></a
             >`
           : nothing
       }
@@ -303,7 +306,7 @@ export default class CupViewHome extends LitElement {
         club,
         html`<cup-club-portal
           club-id=${club}
-          ?admin=${this.user.is_admin}
+          ?admin=${can(this.user, "manage_registrations")}
           ?foreign=${club !== this.user.club_id}
         ></cup-club-portal>`,
       );

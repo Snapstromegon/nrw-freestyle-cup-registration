@@ -1,8 +1,11 @@
+import { consume } from "@lit/context";
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, query, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 import { errorMessage, PollController, unwrap } from "../../api";
 import { client, type schemas } from "../../apiClient";
+import { type User, userContext } from "../../contexts/user";
+import { can } from "../../roles";
 import { adminStyles } from "../../styles/admin";
 import { iconStyles, resetStyles } from "../../styles/base";
 import {
@@ -296,6 +299,9 @@ export default class CupViewAdminActsOverview extends LitElement {
     `,
   ];
 
+  @consume({ context: userContext, subscribe: true })
+  user: User | null = null;
+
   @state() private clubs: ClubOverview[] = [];
   @state() private acts: Act[] = [];
   @state() private categories: Category[] = [];
@@ -409,10 +415,12 @@ export default class CupViewAdminActsOverview extends LitElement {
   private async load(signal?: AbortSignal) {
     try {
       const [clubs, acts, categories, checkIns, timeplan] = await Promise.all([
-        unwrap(client.listClubs({ signal })),
+        can(this.user, "view_clubs")
+          ? unwrap(client.listClubs({ signal }))
+          : [],
         unwrap(client.listActs({ signal })),
         unwrap(client.listCategories({ signal })),
-        unwrap(client.listCheckIns({ signal })),
+        this.loadCheckIns(signal),
         unwrap(client.listTimeplan({ signal })),
       ]);
       this.clubs = clubs;
@@ -440,7 +448,7 @@ export default class CupViewAdminActsOverview extends LitElement {
     try {
       const [acts, checkIns, timeplan] = await Promise.all([
         unwrap(client.listActs({ signal })),
-        unwrap(client.listCheckIns({ signal })),
+        this.loadCheckIns(signal),
         unwrap(client.listTimeplan({ signal })),
       ]);
       if (version === this.version) {
@@ -453,6 +461,13 @@ export default class CupViewAdminActsOverview extends LitElement {
       // Shown apart from command errors: the next poll may succeed again.
       this.pollError = errorMessage(error);
     }
+  }
+
+  /** The check-ins, or none without the permission to see them. */
+  private async loadCheckIns(signal?: AbortSignal) {
+    return can(this.user, "check_in")
+      ? unwrap(client.listCheckIns({ signal }))
+      : [];
   }
 
   /** Stops the player when its act is gone (e.g. the club deleted it). */
@@ -802,6 +817,9 @@ export default class CupViewAdminActsOverview extends LitElement {
   }
 
   private renderClubs() {
+    if (!can(this.user, "view_clubs")) {
+      return nothing;
+    }
     const rows = this.clubRows();
     const done = rows.filter((r) => r.acts > 0 && r.ready === r.acts).length;
     // "x/y" in green when complete, as on the dashboard; "–" for nothing.
@@ -933,7 +951,8 @@ export default class CupViewAdminActsOverview extends LitElement {
       total += ci.total;
     }
     // Moving needs the neighbours, which a filter may hide.
-    const canMove = !busy && !this.isFiltering;
+    const canMove =
+      !busy && !this.isFiltering && can(this.user, "plan_competition");
 
     return html`<tbody>
       <tr class="group-head">
@@ -983,7 +1002,12 @@ export default class CupViewAdminActsOverview extends LitElement {
                   ? "Kategorie hat bereits begonnen"
                   : "Startreihenfolge zufällig mischen"
               }
-              ?disabled=${busy || acts.length < 2 || !!status}
+              ?disabled=${
+                busy ||
+                acts.length < 2 ||
+                !!status ||
+                !can(this.user, "plan_competition")
+              }
               data-category=${category.name}
               @click=${this.onShuffleClick}
             >
@@ -1027,6 +1051,7 @@ export default class CupViewAdminActsOverview extends LitElement {
                       class="icon-btn"
                       title="Abmelden: die Kür startet nicht, die Startgebühr bleibt"
                       aria-label="Abmelden"
+                      ?disabled=${!can(this.user, "manage_registrations")}
                       data-id=${act.id}
                       data-withdrawn="true"
                       @click=${this.onWithdrawClick}
@@ -1100,7 +1125,11 @@ export default class CupViewAdminActsOverview extends LitElement {
                     >
                   </td>
                   <td class="reason" title=${reason}>
-                    ${act.withdrawn ? this.renderWithdrawnActions(act) : nothing}${reason}
+                    ${
+                      act.withdrawn && can(this.user, "manage_registrations")
+                        ? this.renderWithdrawnActions(act)
+                        : nothing
+                    }${reason}
                   </td>
                   ${this.renderActCells(act)}
                 </tr>`;
@@ -1166,6 +1195,7 @@ export default class CupViewAdminActsOverview extends LitElement {
               title="Musik geprüft"
               aria-label="Musik geprüft"
               .checked=${act.song_checked}
+              ?disabled=${!can(this.user, "check_songs")}
               data-id=${act.id}
               @change=${this.onSongCheckedChange}
             />`

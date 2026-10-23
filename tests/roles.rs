@@ -324,7 +324,7 @@ async fn each_role_reaches_its_own_commands_only(db: SqlitePool) {
 }
 
 #[sqlx::test]
-async fn only_registration_managers_see_birthdates(db: SqlitePool) {
+async fn only_admins_see_birthdates(db: SqlitePool) {
     let app = TestApp::new(db).await;
     let (owner, club_id) = app.create_club_owner("Clara", "SSV").await;
     app.add_starter(&owner, starter_body(club_id, "Anna", true, false))

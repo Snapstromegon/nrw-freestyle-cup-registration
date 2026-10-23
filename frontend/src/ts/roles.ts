@@ -51,3 +51,41 @@ export const roleLock = (
   }
   return null;
 };
+
+export type Permission = schemas.Permission;
+
+/**
+ * What the organizer-side pages need: any one of the alternatives, each a
+ * set of permissions that must all be held. Pages not listed are open.
+ * Ordered like the admin navigation.
+ */
+const PAGES: Record<string, readonly (readonly Permission[])[]> = {
+  "/admin": [["manage_users"]],
+  "/admin-check-in": [["check_in", "view_riders"]],
+  "/admin-starters": [["manage_registrations"]],
+  "/admin-payments": [["manage_payments"]],
+  "/admin-acts-overview": [["plan_competition"], ["check_songs"]],
+  "/admin-categories": [["plan_competition"]],
+  "/admin-timeplan": [["plan_competition"]],
+  "/admin-music-control": [["control_music"]],
+  "/admin-awards": [["control_music"]],
+  "/admin-medals": [["view_medals"]],
+  "/admin-judges": [["manage_jury"]],
+  "/admin-moderation": [["view_moderation"]],
+  "/player": [["control_music"]],
+};
+
+/** Whether `permissions` open the page at `path`. */
+export const canOpen = (path: string, permissions: readonly Permission[]) =>
+  PAGES[path]?.some((needed) => needed.every((p) => permissions.includes(p))) ??
+  true;
+
+/** The organizer-side pages `permissions` open, in navigation order. */
+export const adminPages = (permissions: readonly Permission[]) =>
+  Object.keys(PAGES).filter((path) => canOpen(path, permissions));
+
+/** Whether `user` holds `permission`. */
+export const can = (
+  user: { permissions: readonly Permission[] } | null | undefined,
+  permission: Permission,
+) => !!user?.permissions.includes(permission);

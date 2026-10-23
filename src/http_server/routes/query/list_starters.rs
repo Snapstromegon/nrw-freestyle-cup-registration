@@ -16,7 +16,7 @@ pub struct Starter {
     club_name: String,
     firstname: String,
     lastname: String,
-    /// Only for who manages registrations.
+    /// Only for who may see birthdates.
     #[serde(with = "time::serde::iso8601::option")]
     birthdate: Option<time::OffsetDateTime>,
     gender: Option<Gender>,
@@ -27,7 +27,7 @@ pub struct Starter {
     partner_name: Option<String>,
     resolved_partner_name: Option<String>,
     resolved_partner_club: Option<String>,
-    /// On the determining day; only for who manages registrations.
+    /// On the determining day; only for who may see birthdates.
     age_on_competition: Option<f64>,
     /// When the starter checked in on competition day.
     #[serde(with = "time::serde::iso8601::option")]
@@ -40,7 +40,7 @@ pub struct Starter {
 }
 
 /// Every rider with their club and starts; birthdates and ages only for
-/// who manages registrations.
+/// who may see them.
 #[utoipa::path(
     get,
     tags=["query"],
@@ -56,7 +56,7 @@ pub struct Starter {
 pub async fn list_starters(
     Extension(db): Extension<ReloadableSqlite>,
     _: Granted<permit::ViewRiders>,
-    registrations: Option<Granted<permit::ManageRegistrations>>,
+    birthdates: Option<Granted<permit::ViewBirthdates>>,
 ) -> Result<Json<Vec<Starter>>, HttpError> {
     let db = db.get().await.clone();
     let club_starters: Vec<Starter> = sqlx::query_as!(
@@ -108,7 +108,7 @@ pub async fn list_starters(
     .await?
     .into_iter()
     .map(|starter| {
-        if registrations.is_some() {
+        if birthdates.is_some() {
             starter
         } else {
             Starter {
