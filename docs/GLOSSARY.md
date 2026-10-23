@@ -144,6 +144,10 @@ _Avoid_: Heat, Vorlauf, Session
 **Custom entry** (eigener Eintrag):
 A timeplan entry without acts, e.g. the opening, a lunch break or an award ceremony.
 
+**Internal timeplan entry** (Interner Zeitplaneintrag):
+A custom entry only the organizer team sees, e.g. a jury meeting; it takes its time in the timeplan, but public screens show a break.
+_Avoid_: Hidden entry, private entry
+
 **Break** (Pause):
 A pause inside a block, with a planned length.
 
