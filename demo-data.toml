@@ -37,8 +37,13 @@ music_upload_end = 2027-03-15T23:59:59+01:00
 fee_per_start = 15
 max_fee_per_starter = 45
 
-# The Jury-Konzept's rules.
+# The clubs' jury obligation (jury registration), with the Jury-Konzept's
+# values written out; an empty section would use the same defaults.
 [competition.jury]
+min_age = 15
+deployments_per_two_acts = 4
+missing_deployment_fee = 7
+# The judge registration ends with the registration (registration_end).
 
 [competition.payment]
 deadline = 2027-05-15
