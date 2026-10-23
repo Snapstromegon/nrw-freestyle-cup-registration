@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "vite-plus/test";
 import {
   ageOnStart,
+  coverage,
   isJudgeRegistrationOpen,
   judgeRegistrationEnd,
 } from "../src/ts/jury.ts";
@@ -51,5 +52,40 @@ describe("jury", () => {
     assert.equal(ageOnStart("2012-06-05T00:00:00.000Z", start), 15);
     assert.equal(ageOnStart("2012-06-06T00:00:00.000Z", start), 14);
     assert.equal(ageOnStart("2012-06-06T00:00:00.000Z", null), null);
+  });
+
+  test("coverage counts trained and untrained judges per category and role", () => {
+    const start = { start_date: "2027-06-05" };
+    const judge = (birthdate, is_trained, registrations) => ({
+      birthdate,
+      is_trained,
+      registrations: registrations.map(([jury_category_id, role]) => ({
+        jury_category_id,
+        role,
+      })),
+    });
+    const judges = [
+      judge("1990-01-01T00:00:00.000Z", true, [
+        ["a", "technical"],
+        ["a", "performance"],
+        ["b", "technical"],
+      ]),
+      // 15 on the first day.
+      judge("2012-01-01T00:00:00.000Z", true, [["a", "technical"]]),
+      judge("2014-01-01T00:00:00.000Z", false, [["a", "dismounts"]]),
+    ];
+    const result = coverage(
+      [{ id: "a" }, { id: "b" }, { id: "c" }],
+      judges,
+      start,
+    );
+    assert.deepEqual(result.get("a"), {
+      technical: { trained: 2, untrained: 0 },
+      performance: { trained: 1, untrained: 0 },
+      dismounts: { trained: 0, untrained: 1 },
+      fifteen: 1,
+    });
+    assert.deepEqual(result.get("b").technical, { trained: 1, untrained: 0 });
+    assert.equal(result.get("c").fifteen, 0);
   });
 });

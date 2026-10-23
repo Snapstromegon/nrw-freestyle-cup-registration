@@ -332,6 +332,21 @@ const buildIssues = (
     });
   }
 
+  // Only with the jury registration: clubs have a `jury` obligation then.
+  issues.push({
+    key: "jury",
+    tone: "warn",
+    label: "Vereine unter der Jury-Pflicht",
+    href: "/admin-judges",
+    view: "Jury",
+    items: data.clubs
+      .filter((club) => club.jury && club.jury.missing > 0)
+      .map(
+        (club) =>
+          `${club.name}: ${club.jury!.missing === 1 ? "1 Einsatz fehlt" : `${club.jury!.missing} Einsätze fehlen`} (${formatMoney(club.jury!.fee)})`,
+      ),
+  });
+
   return issues.filter((issue) => issue.items.length > 0);
 };
 
@@ -809,6 +824,7 @@ export default class CupViewAdmin extends LitElement {
       <a class="kpi" href="/admin-check-in"
         >Eingecheckt <b>${checkedIn}/${data.starters.length}</b></a
       >
+      ${this.renderJuryKpi(data)}
       <a class="kpi" href="/admin-payments"
         >Soll <b>${shortMoney(due)}</b> · Gezahlt <b>${shortMoney(paid)}</b> ·
         Offen
@@ -817,6 +833,21 @@ export default class CupViewAdmin extends LitElement {
         ></a
       >
     </div>`;
+  }
+
+  /** Clubs meeting their jury obligation, only with the jury registration. */
+  renderJuryKpi(data: DashboardData) {
+    const clubs = data.clubs.filter((club) => club.jury && club.jury.required);
+    if (!this.systemStatus?.jury_registration || !clubs.length) {
+      return nothing;
+    }
+    const met = clubs.filter((club) => club.jury!.missing === 0).length;
+    return html`<a class="kpi" href="/admin-judges"
+      >Jury-Pflicht erfüllt
+      <b class=${met < clubs.length ? "text-bad" : "text-ok"}
+        >${met}/${clubs.length}</b
+      ></a
+    >`;
   }
 
   renderIssues(issues: Issue[]) {
