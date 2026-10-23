@@ -22,6 +22,8 @@ interface NavLink {
   href: string;
   label: string;
   icon?: string;
+  /** Only while the jury registration is on. */
+  jury?: boolean;
 }
 
 const adminLinks: NavLink[] = [
@@ -35,6 +37,7 @@ const adminLinks: NavLink[] = [
   { href: "/admin-music-control", label: "Musik" },
   { href: "/admin-awards", label: "Siegerehrung" },
   { href: "/admin-medals", label: "Medaillen" },
+  { href: "/admin-judges", label: "Jury", jury: true },
 ];
 
 /** Display screens, opened in a new tab. */
@@ -340,9 +343,10 @@ export default class CupAdminShell extends LitElement {
 
   private renderNav() {
     const path = location.pathname;
+    const jury = !!this.systemStatus?.jury_registration;
     return html`<nav aria-label="Adminbereich">
         ${repeat(
-          adminLinks,
+          adminLinks.filter((link) => !link.jury || jury),
           (link) => link.href,
           (link) =>
             html`<a

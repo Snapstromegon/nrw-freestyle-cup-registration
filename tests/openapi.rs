@@ -53,6 +53,10 @@ const COMMANDS: &[&str] = &[
     "timeplan_backward",
     "timeplan_forward",
     "verify_email",
+    "add_jury_category",
+    "delete_jury_category",
+    "edit_jury_category",
+    "set_jury_category_order",
 ];
 
 const QUERIES: &[&str] = &[
@@ -77,6 +81,7 @@ const QUERIES: &[&str] = &[
     "predict_timeplan",
     "startlist",
     "whoami",
+    "list_jury_categories",
 ];
 
 #[test]

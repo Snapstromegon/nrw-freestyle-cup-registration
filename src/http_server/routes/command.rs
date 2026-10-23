@@ -4,6 +4,7 @@ use utoipa_axum::{router::OpenApiRouter, routes};
 mod add_category;
 mod add_club_starter;
 mod add_final;
+mod add_jury_category;
 mod add_timeplan_entry;
 mod create_club;
 mod create_club_group;
@@ -11,11 +12,13 @@ mod delete_category;
 mod delete_club_group;
 mod delete_club_starter;
 mod delete_final;
+mod delete_jury_category;
 mod delete_timeplan_entry;
 mod edit_category;
 mod edit_club_act;
 mod edit_club_starter;
 mod edit_final;
+mod edit_jury_category;
 mod edit_timeplan_entry;
 mod login;
 mod logout;
@@ -43,6 +46,7 @@ mod set_club_group_type;
 mod set_club_responsible;
 mod set_final_placement;
 mod set_final_published;
+mod set_jury_category_order;
 mod set_payment;
 mod set_photo_hidden;
 mod set_song_checked;
@@ -53,7 +57,11 @@ mod verify_email;
 
 pub fn get_command_router() -> OpenApiRouter {
     OpenApiRouter::new()
+        .routes(routes!(add_jury_category::add_jury_category))
+        .routes(routes!(delete_jury_category::delete_jury_category))
+        .routes(routes!(edit_jury_category::edit_jury_category))
         .routes(routes!(register::register))
+        .routes(routes!(set_jury_category_order::set_jury_category_order))
         .routes(routes!(verify_email::verify_email))
         .routes(routes!(resend_mail_validation::resend_mail_validation))
         .routes(routes!(request_password_reset::request_password_reset))

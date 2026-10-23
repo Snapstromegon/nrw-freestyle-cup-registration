@@ -64,6 +64,7 @@ async fn main() -> eyre::Result<()> {
         &settings.categories,
         &settings.finals,
         &settings.timeplan,
+        &settings.jury_categories,
     )
     .await
     .map_err(|e| eyre!(e))?;

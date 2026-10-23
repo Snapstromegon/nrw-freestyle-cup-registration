@@ -7,6 +7,7 @@ pub mod finals;
 pub mod gender;
 pub mod groups;
 pub mod http_server;
+pub mod jury;
 pub mod jwt;
 pub mod mailer;
 pub mod metrics;

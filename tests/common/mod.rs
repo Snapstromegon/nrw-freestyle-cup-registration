@@ -120,6 +120,7 @@ pub async fn seed_db(db: &SqlitePool, status: &StatusOptions) {
         &file.categories,
         &file.finals,
         &file.timeplan,
+        &file.jury_categories,
     )
     .await
     .unwrap();

@@ -94,6 +94,7 @@ pub struct ConfigFile {
     pub categories: Vec<CategoryConfig>,
     pub finals: Vec<FinalConfig>,
     pub timeplan: Vec<TimeplanEntryConfig>,
+    pub jury_categories: Vec<JuryCategoryConfig>,
 }
 
 impl ConfigFile {
@@ -385,6 +386,40 @@ pub struct FinalConfig {
     pub categories: Vec<String>,
 }
 
+/// What judges register for and get assigned to, e.g. one heat block (see
+/// `crate::jury`). Only seeded into an empty table.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct JuryCategoryConfig {
+    pub name: String,
+    /// Jury deployments (Einsätze) it counts for; a heat counts 2, a final 1.
+    #[serde(default = "default_category_deployments")]
+    pub deployments: i64,
+    /// The day it runs; within the event.
+    #[serde(default, deserialize_with = "toml_date_option")]
+    pub day: Option<Date>,
+    /// Judges it needs per role. 5 allows dropping the highest and lowest
+    /// score (Konzept Gemeinsame Wettkämpfe 4.1).
+    #[serde(default = "default_needed_judges")]
+    pub needed_technical: i64,
+    #[serde(default = "default_needed_judges")]
+    pub needed_performance: i64,
+    #[serde(default = "default_needed_dismount_counters")]
+    pub needed_dismounts: i64,
+}
+
+fn default_category_deployments() -> i64 {
+    2
+}
+
+fn default_needed_judges() -> i64 {
+    5
+}
+
+fn default_needed_dismount_counters() -> i64 {
+    3
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TimeplanEntryConfig {
@@ -462,6 +497,7 @@ pub struct Settings {
     pub categories: Vec<CategoryConfig>,
     pub finals: Vec<FinalConfig>,
     pub timeplan: Vec<TimeplanEntryConfig>,
+    pub jury_categories: Vec<JuryCategoryConfig>,
     /// Problems that don't stop the server, e.g. insecure defaults.
     pub warnings: Vec<String>,
 }
@@ -581,6 +617,7 @@ impl Settings {
             categories: file.categories,
             finals: file.finals,
             timeplan: file.timeplan,
+            jury_categories: file.jury_categories,
             warnings,
         })
     }

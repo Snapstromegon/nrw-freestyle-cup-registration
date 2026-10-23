@@ -20,8 +20,8 @@ use uuid::Uuid;
 use crate::{
     act_type::ActType,
     config::{
-        CategoryConfig, CompetitionConfig, FinalConfig, TimeplanEntryConfig, toml_date,
-        toml_datetime_option,
+        CategoryConfig, CompetitionConfig, FinalConfig, JuryCategoryConfig, TimeplanEntryConfig,
+        toml_date, toml_datetime_option,
     },
     gender::Gender,
     groups, seed, utils,
@@ -35,6 +35,8 @@ pub struct DemoData {
     pub categories: Vec<CategoryConfig>,
     #[serde(default)]
     pub finals: Vec<FinalConfig>,
+    #[serde(default)]
+    pub jury_categories: Vec<JuryCategoryConfig>,
     #[serde(default)]
     pub timeplan: Vec<DemoTimeplanEntry>,
     #[serde(default)]
@@ -255,6 +257,7 @@ impl DemoData {
             &self.categories,
             &self.finals,
             &timeplan,
+            &self.jury_categories,
         )
         .await?;
 

@@ -14,7 +14,9 @@ use tracing::{info, warn};
 use crate::{
     act_type::ActType,
     competition::{Competition, upsert_competition},
-    config::{CategoryConfig, CompetitionConfig, FinalConfig, TimeplanEntryConfig},
+    config::{
+        CategoryConfig, CompetitionConfig, FinalConfig, JuryCategoryConfig, TimeplanEntryConfig,
+    },
     finals::{self, SlotGroup},
     timeplan::EntryKind,
 };
@@ -420,6 +422,7 @@ pub async fn seed(
     categories: &[CategoryConfig],
     finals: &[FinalConfig],
     timeplan: &[TimeplanEntryConfig],
+    jury_categories: &[JuryCategoryConfig],
 ) -> Result<(), String> {
     let db_error = |e: sqlx::Error| format!("Database error while seeding: {e}");
     if let Some(competition) = competition {
@@ -596,6 +599,36 @@ pub async fn seed(
         info!("Seeded {} timeplan entries from the config", timeplan.len());
     } else if !timeplan.is_empty() {
         info!("Timeplan already present, [[timeplan]] in the config is ignored");
+    }
+
+    let jury_category_count: i64 =
+        sqlx::query_scalar!(r#"SELECT COUNT(*) as "count!: i64" FROM jury_categories"#)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(db_error)?;
+    if jury_category_count == 0 && !jury_categories.is_empty() {
+        let competition = Competition::current(&mut *tx).await.map_err(db_error)?;
+        for category in jury_categories {
+            let fields = crate::jury::JuryCategoryFields {
+                name: category.name.clone(),
+                deployments: category.deployments,
+                day: category.day,
+                needed_technical: category.needed_technical,
+                needed_performance: category.needed_performance,
+                needed_dismounts: category.needed_dismounts,
+            }
+            .normalize(competition.as_ref())
+            .map_err(|e| format!("[[jury_categories]] {:?}: {e}", category.name))?;
+            crate::jury::insert_category(&mut tx, &fields)
+                .await
+                .map_err(|e| format!("[[jury_categories]] {:?}: {e:?}", category.name))?;
+        }
+        info!(
+            "Seeded {} jury categories from the config",
+            jury_categories.len()
+        );
+    } else if !jury_categories.is_empty() {
+        info!("Jury categories already present, [[jury_categories]] in the config is ignored");
     }
 
     tx.commit().await.map_err(db_error)?;
@@ -813,6 +846,7 @@ mod tests {
             &file.categories,
             &file.finals,
             &file.timeplan,
+            &file.jury_categories,
         )
         .await
     }
