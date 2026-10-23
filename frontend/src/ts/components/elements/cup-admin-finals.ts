@@ -1,3 +1,4 @@
+import { consume } from "@lit/context";
 import { Task } from "@lit/task";
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
@@ -5,6 +6,8 @@ import { classMap } from "lit/directives/class-map.js";
 import { repeat } from "lit/directives/repeat.js";
 import { errorMessage, unwrap } from "../../api";
 import { client, type schemas } from "../../apiClient";
+import { type User, userContext } from "../../contexts/user";
+import { can } from "../../roles";
 import { adminStyles } from "../../styles/admin";
 import { iconStyles, resetStyles } from "../../styles/base";
 import {
@@ -189,6 +192,9 @@ export default class CupAdminFinals extends LitElement {
     `,
   ];
 
+  @consume({ context: userContext, subscribe: true })
+  user: User | null = null;
+
   @state() private editing: Editing | null = null;
   @state() private placing: Placing | null = null;
   @state() private busy = false;
@@ -225,7 +231,12 @@ export default class CupAdminFinals extends LitElement {
         <button
           class="btn primary small"
           title=${this.editing ? "Erst speichern oder abbrechen" : nothing}
-          ?disabled=${!finals || this.busy || this.editing !== null}
+          ?disabled=${
+            !finals ||
+            this.busy ||
+            this.editing !== null ||
+            !can(this.user, "plan_competition")
+          }
           @click=${this.startNew}
         >
           <span class="material-icon">add</span> Neues Finale
@@ -381,7 +392,7 @@ export default class CupAdminFinals extends LitElement {
           aria-label="Platzierung"
           aria-expanded=${this.placing?.name === final.name}
           data-name=${final.name}
-          ?disabled=${locked}
+          ?disabled=${locked || !can(this.user, "manage_results")}
           @click=${this.onTogglePlacement}
         >
           format_list_numbered
@@ -391,7 +402,7 @@ export default class CupAdminFinals extends LitElement {
           title=${this.editing ? "Erst speichern oder abbrechen" : "Bearbeiten"}
           aria-label="Bearbeiten"
           data-name=${final.name}
-          ?disabled=${locked}
+          ?disabled=${locked || !can(this.user, "plan_competition")}
           @click=${this.onEdit}
         >
           edit
@@ -405,7 +416,9 @@ export default class CupAdminFinals extends LitElement {
           }
           aria-label="Löschen"
           data-name=${final.name}
-          ?disabled=${locked || final.started}
+          ?disabled=${
+            locked || final.started || !can(this.user, "plan_competition")
+          }
           @click=${this.onDelete}
         >
           delete

@@ -24,17 +24,13 @@ describe("roleLock", () => {
   const other = { id: "other", roles: ["admin"] };
 
   test("admins can't drop their own Admin role", () => {
-    assert.match(roleLock(me, "admin", "me", 2), /eigene/);
-    assert.equal(roleLock(me, "treasurer", "me", 2), null);
+    assert.match(roleLock(me, "admin", "me"), /eigene/);
+    assert.equal(roleLock(me, "treasurer", "me"), null);
   });
 
-  test("the last Admin stays one", () => {
-    assert.match(roleLock(other, "admin", "me", 1), /letzte/);
-    assert.equal(roleLock(other, "admin", "me", 2), null);
-  });
-
-  test("granting Admin is never locked", () => {
-    assert.equal(roleLock({ id: "x", roles: [] }, "admin", "me", 1), null);
+  test("other admins' Admin role and granting Admin are never locked", () => {
+    assert.equal(roleLock(other, "admin", "me"), null);
+    assert.equal(roleLock({ id: "x", roles: [] }, "admin", "me"), null);
   });
 });
 
@@ -68,6 +64,19 @@ describe("canOpen", () => {
     assert.equal(can("/player", music), true);
     assert.equal(can("/admin-moderation", music), true);
     assert.equal(can("/admin-moderation", desk), false);
+  });
+});
+
+describe("jury lead", () => {
+  test("reaches the categories for the finals' placements", () => {
+    const juryLead = [
+      "view_clubs",
+      "view_club_contacts",
+      "manage_jury",
+      "manage_results",
+    ];
+    assert.equal(canOpen("/admin-categories", juryLead), true);
+    assert.equal(canOpen("/admin-timeplan", juryLead), false);
   });
 });
 

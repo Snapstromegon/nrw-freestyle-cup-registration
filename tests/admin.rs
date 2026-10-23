@@ -86,8 +86,8 @@ async fn admins_can_grant_and_revoke_admin(db: SqlitePool) {
             .unwrap()
             .iter()
             .find(|user| user["id"] == user_id.to_string())
-            .unwrap()["is_admin"],
-        true
+            .unwrap()["roles"],
+        json!(["admin"])
     );
 
     let demoted = app
@@ -106,8 +106,8 @@ async fn admins_can_grant_and_revoke_admin(db: SqlitePool) {
             .unwrap()
             .iter()
             .find(|user| user["id"] == user_id.to_string())
-            .unwrap()["is_admin"],
-        false
+            .unwrap()["roles"],
+        json!([])
     );
 }
 
@@ -143,7 +143,7 @@ async fn setting_roles_is_admin_only_and_checks_the_user(db: SqlitePool) {
 }
 
 #[sqlx::test]
-async fn the_last_admin_cannot_drop_admin(db: SqlitePool) {
+async fn a_lone_admin_keeps_admin_as_nobody_drops_their_own(db: SqlitePool) {
     let app = TestApp::new(db).await;
     let admin_id = app.create_user("Admin", true).await;
     let admin = app.cookie_for(admin_id);

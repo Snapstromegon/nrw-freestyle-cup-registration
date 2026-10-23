@@ -32,25 +32,16 @@ export const withRole = (roles: readonly Role[], role: Role, on: boolean) =>
 
 /**
  * Why `role` of `user` can't be revoked, or `null`: admins keep their own
- * Admin role, and the last Admin stays one.
+ * Admin role, so there's always one left.
  */
 export const roleLock = (
   user: { id: string; roles: readonly Role[] },
   role: Role,
   currentUserId: string | undefined,
-  adminCount: number,
-) => {
-  if (role !== "admin" || !user.roles.includes("admin")) {
-    return null;
-  }
-  if (user.id === currentUserId) {
-    return "Die eigene Admin-Rolle kann man nicht abgeben.";
-  }
-  if (adminCount <= 1) {
-    return "Der letzte Admin bleibt Admin.";
-  }
-  return null;
-};
+) =>
+  role === "admin" && user.roles.includes("admin") && user.id === currentUserId
+    ? "Die eigene Admin-Rolle kann man nicht abgeben."
+    : null;
 
 export type Permission = schemas.Permission;
 
@@ -65,7 +56,8 @@ const PAGES: Record<string, readonly (readonly Permission[])[]> = {
   "/admin-starters": [["manage_registrations"]],
   "/admin-payments": [["manage_payments"]],
   "/admin-acts-overview": [["plan_competition"], ["check_songs"]],
-  "/admin-categories": [["plan_competition"]],
+  // The jury lead places the finals there.
+  "/admin-categories": [["plan_competition"], ["manage_results"]],
   "/admin-timeplan": [["plan_competition"]],
   "/admin-music-control": [["control_music"]],
   "/admin-awards": [["control_music"]],

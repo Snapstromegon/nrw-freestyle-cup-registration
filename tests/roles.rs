@@ -83,7 +83,6 @@ async fn whoami_lists_roles_and_their_permissions(db: SqlitePool) {
             "view_riders"
         ]
     );
-    assert_eq!(response.body["is_admin"], false);
 }
 
 #[sqlx::test]
@@ -97,7 +96,7 @@ async fn admins_hold_every_permission(db: SqlitePool) {
         .get("/api/query/whoami", Some(&app.cookie_for(kim)))
         .await;
 
-    assert_eq!(response.body["is_admin"], true);
+    assert_eq!(strings(&response.body["roles"]), ["admin"]);
     let permissions = strings(&response.body["permissions"]);
     assert!(permissions.contains(&"manage_users"), "{permissions:?}");
     for permission in strings(&jury_lead.body["permissions"]) {
@@ -324,25 +323,27 @@ async fn each_role_reaches_its_own_commands_only(db: SqlitePool) {
 }
 
 #[sqlx::test]
-async fn only_admins_see_birthdates(db: SqlitePool) {
+async fn the_check_in_but_not_the_treasurer_sees_birthdates(db: SqlitePool) {
     let app = TestApp::new(db).await;
     let (owner, club_id) = app.create_club_owner("Clara", "SSV").await;
     app.add_starter(&owner, starter_body(club_id, "Anna", true, false))
         .await;
 
-    let desk = member(&app, "Desk", &["check_in"]).await;
-    let starters = app.get("/api/query/list_starters", Some(&desk)).await;
+    let treasurer = member(&app, "Kasse", &["treasurer"]).await;
+    let starters = app.get("/api/query/list_starters", Some(&treasurer)).await;
     assert_eq!(starters.status, StatusCode::OK, "{:?}", starters.body);
     assert_eq!(starters.body[0]["firstname"], "Anna");
     assert_eq!(starters.body[0]["birthdate"], Value::Null);
     assert_eq!(starters.body[0]["age_on_competition"], Value::Null);
-    let acts = app.get("/api/query/list_acts", Some(&desk)).await;
+    let acts = app.get("/api/query/list_acts", Some(&treasurer)).await;
     assert_eq!(acts.body[0]["max_age"], Value::Null);
 
-    let admin = app.create_admin().await;
-    let starters = app.get("/api/query/list_starters", Some(&admin)).await;
+    // For the ID and age check at the desk.
+    let desk = member(&app, "Desk", &["check_in"]).await;
+    let starters = app.get("/api/query/list_starters", Some(&desk)).await;
     assert_ne!(starters.body[0]["birthdate"], Value::Null);
-    let acts = app.get("/api/query/list_acts", Some(&admin)).await;
+    assert_ne!(starters.body[0]["age_on_competition"], Value::Null);
+    let acts = app.get("/api/query/list_acts", Some(&desk)).await;
     assert_ne!(acts.body[0]["max_age"], Value::Null);
 }
 

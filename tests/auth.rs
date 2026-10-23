@@ -33,7 +33,7 @@ async fn register_creates_unverified_user_logs_in_and_sends_mail(db: SqlitePool)
     assert_eq!(whoami.body["id"], user_id);
     assert_eq!(whoami.body["email"], email_for("Alex"));
     assert_eq!(whoami.body["email_verified"], false);
-    assert_eq!(whoami.body["is_admin"], false);
+    assert_eq!(whoami.body["roles"], serde_json::json!([]));
 
     let mail = app.single_mail().await;
     assert_eq!(mail.from, FROM_ADDRESS);

@@ -5,7 +5,7 @@ use uuid::Uuid;
 use crate::{
     http_server::{ClientError, HttpError, extractor::auth::Granted, routes::http_types::User},
     reloadable_sqlite::ReloadableSqlite,
-    roles::{self, Role, permit},
+    roles::{self, permit},
 };
 
 /// List all users.
@@ -42,7 +42,6 @@ pub async fn list_users(
             name: user.name,
             email: user.email,
             email_verified: user.email_verified,
-            is_admin: roles.contains(&Role::Admin),
             roles,
             club_id: user.club_id,
         }

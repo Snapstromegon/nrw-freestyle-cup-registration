@@ -1,3 +1,4 @@
+import { consume } from "@lit/context";
 import { Task, TaskStatus } from "@lit/task";
 import { css, html, LitElement, nothing } from "lit";
 import { customElement, query, state } from "lit/decorators.js";
@@ -5,6 +6,8 @@ import { classMap } from "lit/directives/class-map.js";
 import { repeat } from "lit/directives/repeat.js";
 import { errorMessage, unwrap } from "../../api";
 import { client, type schemas } from "../../apiClient";
+import { type User, userContext } from "../../contexts/user";
+import { can } from "../../roles";
 import { adminStyles } from "../../styles/admin";
 import { iconStyles, resetStyles } from "../../styles/base";
 import {
@@ -240,6 +243,9 @@ export default class CupViewAdminCategories extends LitElement {
     `,
   ];
 
+  @consume({ context: userContext, subscribe: true })
+  user: User | null = null;
+
   @state() private editing: Editing | null = null;
   @state() private busy = false;
   @state() private error = "";
@@ -289,7 +295,12 @@ export default class CupViewAdminCategories extends LitElement {
         <button
           class="btn primary small"
           title=${this.editing ? "Erst speichern oder abbrechen" : nothing}
-          ?disabled=${!data || this.busy || this.editing !== null}
+          ?disabled=${
+            !data ||
+            this.busy ||
+            this.editing !== null ||
+            !can(this.user, "plan_competition")
+          }
           @click=${this.startNew}
         >
           <span class="material-icon">add</span> Neue Kategorie
@@ -520,7 +531,9 @@ export default class CupViewAdminCategories extends LitElement {
     rangeIssue: RangeIssue | undefined,
   ) {
     const single = category.act_type === "single";
-    const locked = this.busy || this.editing !== null;
+    // The jury lead sees the categories, but only plans the finals' placements.
+    const locked =
+      this.busy || this.editing !== null || !can(this.user, "plan_competition");
     const lockedTitle = (title: string) =>
       this.editing ? "Erst speichern oder abbrechen" : title;
     return html`<tr class=${classMap({ muted: acts === 0 })}>

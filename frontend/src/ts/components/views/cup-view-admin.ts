@@ -668,7 +668,6 @@ export default class CupViewAdmin extends LitElement {
     const competition = this.systemStatus?.competition;
     const rows = buildClubRows(data, this.checkIns);
     const issues = buildIssues(data, rows, competition);
-    const adminCount = data.users.filter((user) => user.is_admin).length;
     const roleHeaders = ROLES.map(
       (role) => html`<th class="role">${roleNames[role]}</th>`,
     );
@@ -732,7 +731,7 @@ export default class CupViewAdmin extends LitElement {
                           }
                         </span>
                       </td>
-                      ${this.renderRoleCells(u, adminCount)}
+                      ${this.renderRoleCells(u)}
                     </tr>`,
                   )}
                 </tbody>
@@ -744,9 +743,9 @@ export default class CupViewAdmin extends LitElement {
   }
 
   /** A checkbox per role; locked where `roleLock` says so. */
-  renderRoleCells(user: schemas.User, adminCount: number) {
+  renderRoleCells(user: schemas.User) {
     return ROLES.map((role) => {
-      const lock = roleLock(user, role, this.currentUser?.id, adminCount);
+      const lock = roleLock(user, role, this.currentUser?.id);
       return html`<td class="role">
         <input
           type="checkbox"

@@ -22,8 +22,8 @@ pub struct SetUserRolesBody {
 
 /// Grant a user exactly these roles.
 ///
-/// Admin only. Admins can't drop their own Admin role, and the last Admin
-/// stays one.
+/// Admin only. Admins can't drop their own Admin role, so there's always
+/// one left.
 #[utoipa::path(
     post,
     tags=["command", "user"],
@@ -33,7 +33,6 @@ pub struct SetUserRolesBody {
         (status=200, content_type="application/json", body=SetUserRolesResponse),
         (status=403, content_type="application/json", body=ClientError),
         (status=404, content_type="application/json", body=ClientError),
-        (status=409, content_type="application/json", body=ClientError),
         (status=500, content_type="application/json", body=ClientError),
     ),
 )]
@@ -56,18 +55,6 @@ pub async fn set_user_roles(
         .fetch_optional(&mut *transaction)
         .await?;
     exists.ok_or(HttpError::NotFound)?;
-
-    if !keeps_admin {
-        let other_admins: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM user_roles WHERE role = 'admin' AND user_id != ?",
-        )
-        .bind(body.user_id)
-        .fetch_one(&mut *transaction)
-        .await?;
-        if other_admins == 0 {
-            return Err(HttpError::StatusCode(StatusCode::CONFLICT));
-        }
-    }
 
     sqlx::query("DELETE FROM user_roles WHERE user_id = ?")
         .bind(body.user_id)

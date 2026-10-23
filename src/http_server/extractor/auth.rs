@@ -191,12 +191,11 @@ pub enum Error {
 
 impl IntoResponse for Error {
     fn into_response(self) -> axum::response::Response<axum::body::Body> {
-        if let Error::PermissionMissing = self {
-            // The same body as other 403s of the API.
-            return HttpError::StatusCode(StatusCode::FORBIDDEN).into_response();
-        }
         let status = match self {
-            Error::PermissionMissing => StatusCode::FORBIDDEN,
+            // The same body as other 403s of the API.
+            Error::PermissionMissing => {
+                return HttpError::StatusCode(StatusCode::FORBIDDEN).into_response();
+            }
             Error::CookiesMissing | Error::JwtInvalid | Error::JwtMissing | Error::UserNotFound => {
                 StatusCode::UNAUTHORIZED
             }

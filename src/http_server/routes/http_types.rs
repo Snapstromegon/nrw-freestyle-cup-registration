@@ -12,8 +12,6 @@ pub struct User {
     pub name: String,
     pub email: String,
     pub email_verified: bool,
-    /// Holds the Admin role.
-    pub is_admin: bool,
     /// Sorted.
     pub roles: Vec<Role>,
     pub club_id: Option<Uuid>,

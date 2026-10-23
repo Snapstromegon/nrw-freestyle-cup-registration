@@ -126,17 +126,6 @@ permissions! {
 }
 
 impl Role {
-    /// Every role, e.g. to offer them for granting.
-    pub const ALL: &[Role] = &[
-        Role::Admin,
-        Role::JuryLead,
-        Role::Treasurer,
-        Role::CheckIn,
-        Role::MusicControl,
-        Role::Moderation,
-        Role::MusicCheck,
-    ];
-
     #[must_use]
     pub fn permissions(self) -> &'static [Permission] {
         use Permission as P;
@@ -155,10 +144,12 @@ impl Role {
                 P::ViewClubContacts,
                 P::ViewRiders,
             ],
+            // Birthdates for the ID and age check at the desk.
             Role::CheckIn => &[
                 P::ViewClubs,
                 P::ViewClubBalances,
                 P::ViewRiders,
+                P::ViewBirthdates,
                 P::CheckIn,
                 P::ViewMedals,
             ],
@@ -241,6 +232,7 @@ mod tests {
             (
                 Role::CheckIn,
                 vec![
+                    P::ViewBirthdates,
                     P::ViewClubs,
                     P::ViewClubBalances,
                     P::ViewRiders,
@@ -262,17 +254,21 @@ mod tests {
 
     #[test]
     fn only_admins_manage_users_plan_and_registrations() {
-        for role in Role::ALL {
-            let admin_only = [
-                P::ManageUsers,
-                P::PlanCompetition,
-                P::ManageRegistrations,
-                P::ViewBirthdates,
-            ];
+        let roles = [
+            Role::Admin,
+            Role::JuryLead,
+            Role::Treasurer,
+            Role::CheckIn,
+            Role::MusicControl,
+            Role::Moderation,
+            Role::MusicCheck,
+        ];
+        for role in roles {
+            let admin_only = [P::ManageUsers, P::PlanCompetition, P::ManageRegistrations];
             for permission in admin_only {
                 assert_eq!(
                     role.permissions().contains(&permission),
-                    *role == Role::Admin,
+                    role == Role::Admin,
                     "{role:?} {permission:?}"
                 );
             }
