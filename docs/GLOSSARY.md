@@ -29,12 +29,26 @@ The end of the judge registration; the Meldeschluss unless the competition sets 
 The last day clubs can upload their acts' music.
 
 **Organizer** (Veranstalter, Ausrichter):
-Whoever runs the competition, here the host club; acts in the tool through admin accounts.
-_Avoid_: Admin (for the role), host
+Whoever runs the competition, here the host club; acts in the tool through its organizer team.
+_Avoid_: Admin (for the organizer itself), host
 
 **Jury lead** (Juryleitung):
 The team that plans the jury, leads it at the event and decides objections.
 _Avoid_: Chief judge, Oberschiedsrichter
+
+### Access
+
+**Role** (Rolle):
+A fixed set of things a user may do on the organizer side, granted to a user; a user can hold several.
+_Avoid_: Permission (for the set), Recht
+
+**Admin**:
+The role that may do everything, including granting roles.
+_Avoid_: Superuser, Orga-Leitung
+
+**Organizer team** (Orga-Team):
+Every user holding at least one role.
+_Avoid_: Staff, Helfer (as a term in the tool)
 
 ### Clubs and riders
 
@@ -191,8 +205,9 @@ _Avoid_: Licensed judge (there's no judge register yet)
 An untrained judge who only counts dismounts and doesn't count towards the jury obligation.
 _Avoid_: Hospitation, helper
 
-**Role** (Rolle):
+**Task** (Aufgabe):
 What a judge does in a jury category: Technik (T), Performance (P) or Abstiege (A).
+_Avoid_: Role, Rolle (for this meaning)
 
 **Jury category** (Jury-Kategorie):
 A unit judges register for and are assigned to, e.g. one heat or one final, worth a number of jury deployments.
@@ -210,7 +225,7 @@ _Avoid_: Quota
 The deployments a club's trained judges registered for, each at most their maximum, unless the organizer credits a different number.
 
 **Jury plan** (Juryplan):
-Which judge judges which jury category in which role; published to the clubs after the judge registration deadline.
+Which judge judges which jury category in which task; published to the clubs after the judge registration deadline.
 _Avoid_: Jury schedule, Einteilung
 
 **Objection** (Einspruch):
@@ -230,12 +245,13 @@ An award for each rider of the first three places of a final, and for each group
 
 ## Relationships
 
+- A member of the **Organizer team** holds one or more **Roles**; the same user can also be a **Club contact**, and neither widens the other.
 - A **Club** has **Riders**, registers **Acts** and **Judges**, and owes an **Amount due**.
 - An **Act** has one or more **Starts**, one per **Rider**; a group's **Replacement riders** have starts too.
 - An **Act** belongs to one **Category** once it is complete and not withdrawn; a **Category** belongs to one **Heat**.
 - The best acts of a **Heat** fill the **Finalist slots** of its **Final**.
 - A **Block** runs one **Category** or one **Final**; **Custom entries** and **Breaks** fill the rest of the **Timeplan**.
-- A **Judge** registers for **Jury categories** in **Roles**; the **Jury plan** assigns each judge at most one role per jury category.
+- A **Judge** registers for **Jury categories** for **Tasks**; the **Jury plan** assigns each judge at most one task per jury category.
 - A club's **Credited deployments** below its **Jury obligation** cost a **Jury fee** per missing **Jury deployment**.
 
 ## Example dialogue
