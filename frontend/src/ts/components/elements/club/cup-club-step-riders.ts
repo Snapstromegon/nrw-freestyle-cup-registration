@@ -25,6 +25,7 @@ import {
   actTypeLabels,
   actTypeShort,
   type Competition,
+  dateInputValue,
   getStarterPrice,
 } from "../../../utils";
 import {
@@ -37,12 +38,6 @@ import {
   singleFlags,
 } from "./club-actions";
 import { dataChanged, navigateTo } from "./events";
-
-/**
- * The value of a date input for a date-time of the API, which may have an
- * expanded year ("+002017-08-12T00:00:00Z").
- */
-const dateValue = (date: string) => new Date(date).toISOString().slice(0, 10);
 
 /** A date input's value as a date, `null` if empty or invalid. */
 const parseDateInput = (value: string) => {
@@ -711,7 +706,7 @@ export default class CupClubStepRiders extends LitElement {
       id: starter.id,
       firstname: starter.firstname,
       lastname: starter.lastname,
-      birthdate: dateValue(starter.birthdate),
+      birthdate: dateInputValue(starter.birthdate),
       gender: starter.gender ?? "",
     };
   }

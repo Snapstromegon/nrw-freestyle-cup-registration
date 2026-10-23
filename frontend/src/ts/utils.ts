@@ -736,3 +736,10 @@ export const checkInStats = <P extends ParticipantLike>(
     ),
   };
 };
+
+/**
+ * The value of a date input for a date-time of the API, which may have an
+ * expanded year ("+002017-08-12T00:00:00Z").
+ */
+export const dateInputValue = (date: string) =>
+  new Date(date).toISOString().slice(0, 10);

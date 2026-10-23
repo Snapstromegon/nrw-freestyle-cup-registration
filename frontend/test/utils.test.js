@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "vite-plus/test";
 import { ApiError, errorMessage, unwrap } from "../src/ts/api.ts";
 import {
+  dateInputValue,
   actClubNames,
   actMatchesSearch,
   actParticipantsLabel,
@@ -1193,5 +1194,15 @@ describe("final blocks", () => {
     // The last finalist is judged after the block ended.
     const over = { ...final("Ended", [finalist("1", "Ended")]) };
     assert.equal(timeplanStatus(timeplan(over)), TimeplanStatus.Judging);
+  });
+});
+
+describe("dateInputValue", () => {
+  test("turns API date-times with expanded years into date input values", () => {
+    assert.equal(
+      dateInputValue("+001969-11-02T00:00:00.000000000Z"),
+      "1969-11-02",
+    );
+    assert.equal(dateInputValue("2017-08-12T00:00:00Z"), "2017-08-12");
   });
 });
