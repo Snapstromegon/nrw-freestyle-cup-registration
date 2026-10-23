@@ -1109,6 +1109,12 @@ label = "Mittagspause"
 duration_minutes = 45
 earliest_start = 2027-06-05T13:00:00+02:00
 
+# Only the organizer team sees it; the info board shows a break.
+[[timeplan]]
+label = "Jury-Besprechung"
+duration_minutes = 10
+internal = true
+
 [[timeplan]]
 category = "PU11"
 

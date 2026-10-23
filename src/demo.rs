@@ -63,6 +63,8 @@ pub struct DemoTimeplanEntry {
     pub duration_minutes: Option<f64>,
     #[serde(default = "crate::utils::default_true")]
     pub show_photos: bool,
+    #[serde(default)]
+    pub internal: bool,
     #[serde(default, deserialize_with = "toml_datetime_option")]
     pub earliest_start: Option<OffsetDateTime>,
     #[serde(default, deserialize_with = "toml_datetime_option")]
@@ -273,6 +275,7 @@ impl DemoData {
                 label: entry.label.clone(),
                 duration_minutes: entry.duration_minutes,
                 show_photos: entry.show_photos,
+                internal: entry.internal,
                 earliest_start: entry.earliest_start,
             })
             .collect();

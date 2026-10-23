@@ -257,6 +257,16 @@ export default class CupTimeplan extends LitElement {
         }
       }
 
+      /* Internal timeplan entries: only for the organizer team. */
+      .internal {
+        font-size: 0.75em;
+        font-weight: normal;
+        padding: 0 0.4em;
+        border: 1px solid currentColor;
+        border-radius: 1em;
+        opacity: 0.85;
+      }
+
       .dense > .cat,
       .dense > .act,
       .dense > .pause,
@@ -626,15 +636,24 @@ export default class CupTimeplan extends LitElement {
   }
 
   private renderCustom(item: TimeplanItem, custom: CustomEntry) {
+    // Only the organizer team gets internal entries at all.
+    const internal = custom.internal
+      ? html`<span
+          class="internal"
+          title="Interner Zeitplaneintrag: nur für das Orga-Team, öffentliche Anzeigen zeigen eine Pause"
+          >intern</span
+        >`
+      : nothing;
     if (this.dense) {
       return html`<div class="custom">
         ${this.renderDenseTime(item.predicted_start, item.planned_start)}
         <span class="who" title=${custom.label}>${custom.label}</span>
+        ${internal}
       </div>`;
     }
     return html`
       <section class="event">
-        <h3 class="title">${custom.label}</h3>
+        <h3 class="title">${custom.label} ${internal}</h3>
         <p class="time">
           ${niceTime(item.predicted_start)}${
             this.includeOriginalTime

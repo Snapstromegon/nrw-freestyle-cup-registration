@@ -1746,3 +1746,109 @@ async fn custom_entries_show_photos_unless_turned_off(db: SqlitePool) {
     assert_eq!(predicted["show_photos"], false);
     assert_eq!(listed["show_photos"], false);
 }
+
+/// The custom entry labelled `label` among the prediction's items, if shown.
+fn predicted_custom<'a>(prediction: &'a Value, label: &str) -> Option<&'a Value> {
+    prediction["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|i| i["timeplan_entry"]["Custom"]["label"] == label)
+}
+
+/// Adds an internal "Jury-Besprechung" of 10 minutes after the first entry.
+async fn add_internal_entry(app: &TestApp, admin: &str) {
+    let first = app.get("/api/query/list_timeplan", Some(admin)).await.body[0]["id"].clone();
+    let mut entry = custom_entry("Jury-Besprechung", 600);
+    entry["internal"] = json!(true);
+    entry["after_id"] = first;
+    let response = app
+        .post("/api/command/add_timeplan_entry", entry, Some(admin))
+        .await;
+    assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+}
+
+#[sqlx::test]
+async fn internal_entries_take_their_time_but_only_the_organizer_team_sees_them(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let admin = app.create_admin().await;
+    add_internal_entry(&app, &admin).await;
+
+    let full = app
+        .get("/api/query/predict_timeplan", Some(&admin))
+        .await
+        .body;
+    let internal = predicted_custom(&full, "Jury-Besprechung").expect("admins see it");
+    assert_eq!(internal["timeplan_entry"]["Custom"]["internal"], true);
+
+    // Public: left out, but the entry after it starts at the same time.
+    let public = app.get("/api/query/predict_timeplan", None).await.body;
+    assert!(predicted_custom(&public, "Jury-Besprechung").is_none());
+    let next_id = full["items"][2]["id"].clone();
+    let next = public["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|i| i["id"] == next_id)
+        .unwrap();
+    assert_eq!(next["predicted_start"], full["items"][2]["predicted_start"]);
+
+    // The info board asks for the public version, whoever is logged in.
+    let board = app
+        .get("/api/query/predict_timeplan?public=true", Some(&admin))
+        .await
+        .body;
+    assert!(predicted_custom(&board, "Jury-Besprechung").is_none());
+
+    for (name, role, sees) in [
+        ("Moderation", "moderation", true),
+        ("Jury", "jury_lead", true),
+        ("Musik", "music_control", true),
+        ("Desk", "check_in", false),
+    ] {
+        let cookie = app.cookie_for(app.create_user_with_roles(name, &[role]).await);
+        let prediction = app
+            .get("/api/query/predict_timeplan", Some(&cookie))
+            .await
+            .body;
+        assert_eq!(
+            predicted_custom(&prediction, "Jury-Besprechung").is_some(),
+            sees,
+            "{role}"
+        );
+        let list = app
+            .get("/api/query/list_timeplan", Some(&cookie))
+            .await
+            .body;
+        let listed = list
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e["label"] == "Jury-Besprechung");
+        assert_eq!(listed, sees, "{role}");
+    }
+
+    let csv = app.get("/api/query/get_startlist_csv", Some(&admin)).await;
+    assert!(!csv.body.as_str().unwrap().contains("Jury-Besprechung"));
+}
+
+#[sqlx::test]
+async fn start_blocks_cant_be_internal(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let admin = app.create_admin().await;
+    let response = app
+        .post(
+            "/api/command/add_timeplan_entry",
+            json!({
+                "earliest_start_time": null,
+                "duration_seconds": null,
+                "label": "Nachstarter",
+                "category": null,
+                "kind": "acts",
+                "internal": true,
+            }),
+            Some(&admin),
+        )
+        .await;
+    assert_ne!(response.status, StatusCode::OK, "{:?}", response.body);
+}

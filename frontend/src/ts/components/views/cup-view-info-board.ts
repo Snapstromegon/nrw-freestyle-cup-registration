@@ -347,7 +347,10 @@ export default class CupViewInfoBoard extends LitElement {
    * which also picks up late changes (e.g. to a group's members).
    */
   async refresh(signal?: AbortSignal) {
-    const timeplan = await unwrap(client.predictTimeplan({ signal }));
+    // A public screen: never the internal entries, whoever is logged in.
+    const timeplan = await unwrap(
+      client.predictTimeplan({ signal, query: { public: true } }),
+    );
     const shownActs = `${startActId(currentTimeplanAct(timeplan))}/${startActId(lastTimeplanAct(timeplan))}`;
     if (shownActs !== this.actsLoadedFor) {
       try {

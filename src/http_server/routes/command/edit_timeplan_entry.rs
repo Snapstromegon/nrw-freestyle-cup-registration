@@ -36,6 +36,10 @@ pub struct EditTimeplanEntryBody {
     /// Custom entries only: photos next to the clock on the info board.
     #[serde(default = "crate::utils::default_true")]
     show_photos: bool,
+    /// Custom entries only: an internal timeplan entry, only for the
+    /// organizer team.
+    #[serde(default)]
+    internal: bool,
 }
 
 /// Edit an existing timeplan entry.
@@ -68,8 +72,12 @@ pub async fn edit_timeplan_entry(
         body.duration_seconds,
         body.einfahrzeit_seconds,
     )
-    .map_err(|e| HttpError::ErrorMessages(e.to_string()))?
-    .with_photos(body.show_photos);
+    .and_then(|fields| {
+        fields
+            .with_photos(body.show_photos)
+            .with_internal(body.internal)
+    })
+    .map_err(|e| HttpError::ErrorMessages(e.to_string()))?;
     let db = db.get().await.clone();
     let mut tx = begin_write(&db).await?;
     if let Some(final_name) = &fields.final_name {
@@ -106,8 +114,9 @@ pub async fn edit_timeplan_entry(
             final_name = $5,
             kind = $6,
             einfahrzeit_seconds = $7,
-            show_photos = $8
-        WHERE id = $9
+            show_photos = $8,
+            internal = $9
+        WHERE id = $10
         "#,
         body.earliest_start_time,
         fields.duration_seconds,
@@ -117,6 +126,7 @@ pub async fn edit_timeplan_entry(
         fields.kind,
         fields.einfahrzeit_seconds,
         fields.show_photos,
+        fields.internal,
         body.id,
     )
     .execute(&mut *tx)

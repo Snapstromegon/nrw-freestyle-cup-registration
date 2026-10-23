@@ -1,10 +1,11 @@
-use axum::{Extension, Json};
+use axum::{Extension, Json, extract::Query};
 use tracing::instrument;
 use uuid::Uuid;
 
 use crate::{
-    http_server::{ClientError, HttpError},
+    http_server::{ClientError, HttpError, extractor::auth::Granted},
     reloadable_sqlite::ReloadableSqlite,
+    roles::permit,
     timeplan::{self, EntryKind, Slot},
 };
 
@@ -145,6 +146,8 @@ pub enum TimeplanEntry {
         duration_seconds: i64,
         /// Photos next to the clock on the info board.
         show_photos: bool,
+        /// Only the organizer team sees it (Interner Zeitplaneintrag).
+        internal: bool,
     },
 }
 
@@ -225,11 +228,35 @@ pub struct Timeplan {
     pub items: Vec<TimeplanItem>,
 }
 
+impl Timeplan {
+    /// Leaves out the internal timeplan entries. Their time stays, so every
+    /// other entry starts when it would with them.
+    #[must_use]
+    pub fn public(mut self) -> Self {
+        self.items.retain(|item| {
+            !matches!(
+                item.timeplan_entry,
+                TimeplanEntry::Custom { internal: true, .. }
+            )
+        });
+        self
+    }
+}
+
+#[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
+pub struct PredictTimeplanQuery {
+    /// Leave out the internal entries even for the organizer team, e.g. for
+    /// the info board.
+    #[serde(default)]
+    public: bool,
+}
+
 /// Predicts when each timeplan entry, act and break starts and ends.
 #[utoipa::path(
     get,
     tags=["query", "timeplan"],
     path="/predict_timeplan",
+    params(PredictTimeplanQuery),
     responses(
         (status=200, content_type="application/json", body=Timeplan),
         (status=404, content_type="application/json", body=ClientError),
@@ -239,9 +266,16 @@ pub struct Timeplan {
 #[instrument(skip(db))]
 pub async fn predict_timeplan(
     Extension(db): Extension<ReloadableSqlite>,
+    internal: Option<Granted<permit::ViewInternalEntries>>,
+    Query(query): Query<PredictTimeplanQuery>,
 ) -> Result<Json<Timeplan>, HttpError> {
     let db = db.get().await.clone();
-    Ok(Json(predict(&db).await?))
+    let timeplan = predict(&db).await?;
+    Ok(Json(if internal.is_some() && !query.public {
+        timeplan
+    } else {
+        timeplan.public()
+    }))
 }
 
 /// The prediction behind `predict_timeplan`, also used by the startlist CSV,
@@ -495,6 +529,7 @@ pub fn predict_from(
                         label,
                         duration_seconds: duration,
                         show_photos: entry.show_photos,
+                        internal: entry.internal,
                     }
                 }
                 _ => {

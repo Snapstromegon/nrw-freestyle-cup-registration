@@ -341,6 +341,11 @@ pub fn validate_timeplan(
     let mut planned_finals = HashSet::new();
     for (index, entry) in timeplan.iter().enumerate() {
         let position = index + 1;
+        if entry.internal && (entry.category.is_some() || entry.final_name.is_some()) {
+            return Err(format!(
+                "Timeplan entry {position}: only custom entries can be internal."
+            ));
+        }
         if let Some(final_name) = &entry.final_name {
             if entry.category.is_some() || entry.label.is_some() {
                 return Err(format!(
@@ -581,9 +586,9 @@ pub async fn seed(
                 r#"
                 INSERT INTO timeplan (
                     earliest_start_time, duration_seconds, label, category, final_name, kind,
-                    show_photos, position
+                    show_photos, internal, position
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 "#,
                 entry.earliest_start,
                 duration_seconds,
@@ -592,6 +597,7 @@ pub async fn seed(
                 entry.final_name,
                 kind,
                 entry.show_photos,
+                entry.internal,
                 position,
             )
             .execute(&mut *tx)
@@ -803,6 +809,10 @@ mod tests {
         let twice =
             validate("[[timeplan]]\nfinal = \"Finale 1\"\n[[timeplan]]\nfinal = \"Finale 1\"");
         assert!(twice.unwrap_err().contains("more than once"));
+        let internal = "[[timeplan]]\nlabel = \"Jury\"\nduration_minutes = 10\ninternal = true";
+        assert!(validate(internal).is_ok());
+        let internal_block = validate("[[timeplan]]\ncategory = \"NEM\"\ninternal = true");
+        assert!(internal_block.unwrap_err().contains("only custom entries"));
     }
 
     const CONFIG: &str = r#"

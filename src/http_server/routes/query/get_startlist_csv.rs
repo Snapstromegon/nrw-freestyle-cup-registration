@@ -50,7 +50,8 @@ pub async fn get_startlist_csv(
     Extension(db): Extension<ReloadableSqlite>,
 ) -> Result<String, HttpError> {
     let db = db.get().await.clone();
-    let timeplan = predict(&db).await?;
+    // A printed startlist is public: no internal entries.
+    let timeplan = predict(&db).await?.public();
     let details: HashMap<Uuid, _> = sqlx::query!(
         r#"
         SELECT

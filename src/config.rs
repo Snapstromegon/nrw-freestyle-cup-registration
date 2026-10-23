@@ -435,6 +435,10 @@ pub struct TimeplanEntryConfig {
     /// Custom entries: photos next to the clock on the info board.
     #[serde(default = "crate::utils::default_true")]
     pub show_photos: bool,
+    /// Custom entries: an internal timeplan entry, only for the organizer
+    /// team.
+    #[serde(default)]
+    pub internal: bool,
     #[serde(default, deserialize_with = "toml_datetime_option")]
     pub earliest_start: Option<OffsetDateTime>,
 }

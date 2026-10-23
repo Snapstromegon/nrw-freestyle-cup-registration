@@ -2,8 +2,9 @@ use axum::{Extension, Json};
 use tracing::instrument;
 
 use crate::{
-    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    http_server::{ClientError, HttpError, extractor::auth::Granted},
     reloadable_sqlite::ReloadableSqlite,
+    roles::permit,
     timeplan::EntryKind,
 };
 
@@ -23,6 +24,9 @@ pub struct TimeplanListEntry {
     einfahrzeit_seconds: Option<i64>,
     /// Custom entries: photos next to the clock on the info board.
     show_photos: bool,
+    /// Custom entries: only the organizer team sees it. Left out for
+    /// everyone else.
+    internal: bool,
     /// Start blocks only: the order was edited by hand (`set_block_order`),
     /// so the category's start order no longer applies to it.
     manually_ordered: bool,
@@ -46,9 +50,10 @@ pub struct TimeplanListEntry {
 #[instrument(skip(db))]
 pub async fn list_timeplan(
     Extension(db): Extension<ReloadableSqlite>,
-    auth: Option<Auth>,
+    internal: Option<Granted<permit::ViewInternalEntries>>,
 ) -> Result<Json<Vec<TimeplanListEntry>>, HttpError> {
     let db = db.get().await.clone();
+    let with_internal = internal.is_some();
     let timeplan_entries = sqlx::query_as!(
         TimeplanListEntry,
         r#"
@@ -62,13 +67,17 @@ pub async fn list_timeplan(
             final_name,
             einfahrzeit_seconds,
             show_photos,
+            internal,
             EXISTS (
                 SELECT 1 FROM timeplan_slots WHERE timeplan_slots.timeplan_id = timeplan.id
             ) as "manually_ordered!: bool",
             started_at,
             ended_at
-        FROM timeplan ORDER BY position, id
-        "#
+        FROM timeplan
+        WHERE ? OR NOT internal
+        ORDER BY position, id
+        "#,
+        with_internal,
     )
     .fetch_all(&db)
     .await?;

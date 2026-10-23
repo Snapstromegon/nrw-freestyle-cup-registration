@@ -121,6 +121,8 @@ permissions! {
     ControlMusic,
     /// The moderation screen.
     ViewModeration,
+    /// Internal timeplan entries (Interner Zeitplaneintrag).
+    ViewInternalEntries,
     /// Mark songs as checked.
     CheckSongs,
 }
@@ -131,11 +133,14 @@ impl Role {
         use Permission as P;
         match self {
             Role::Admin => Permission::ALL,
+            // The jury lead follows the event on the moderation screen.
             Role::JuryLead => &[
                 P::ViewClubs,
                 P::ViewClubContacts,
                 P::ManageJury,
                 P::ManageResults,
+                P::ViewModeration,
+                P::ViewInternalEntries,
             ],
             Role::Treasurer => &[
                 P::ManagePayments,
@@ -154,8 +159,13 @@ impl Role {
                 P::ViewMedals,
             ],
             // The music control checks in riders who show up at the start.
-            Role::MusicControl => &[P::CheckIn, P::ControlMusic, P::ViewModeration],
-            Role::Moderation => &[P::ViewModeration],
+            Role::MusicControl => &[
+                P::CheckIn,
+                P::ControlMusic,
+                P::ViewModeration,
+                P::ViewInternalEntries,
+            ],
+            Role::Moderation => &[P::ViewModeration, P::ViewInternalEntries],
             Role::MusicCheck => &[P::CheckSongs],
         }
     }
@@ -217,6 +227,8 @@ mod tests {
                     P::ViewClubContacts,
                     P::ManageJury,
                     P::ManageResults,
+                    P::ViewModeration,
+                    P::ViewInternalEntries,
                 ],
             ),
             (
@@ -242,9 +254,17 @@ mod tests {
             ),
             (
                 Role::MusicControl,
-                vec![P::CheckIn, P::ControlMusic, P::ViewModeration],
+                vec![
+                    P::CheckIn,
+                    P::ControlMusic,
+                    P::ViewModeration,
+                    P::ViewInternalEntries,
+                ],
             ),
-            (Role::Moderation, vec![P::ViewModeration]),
+            (
+                Role::Moderation,
+                vec![P::ViewModeration, P::ViewInternalEntries],
+            ),
             (Role::MusicCheck, vec![P::CheckSongs]),
         ];
         for (role, expected) in table {
@@ -279,7 +299,12 @@ mod tests {
     fn several_roles_grant_each_permission_once() {
         assert_eq!(
             permissions_of(&[Role::Moderation, Role::MusicControl]),
-            [P::CheckIn, P::ControlMusic, P::ViewModeration]
+            [
+                P::CheckIn,
+                P::ControlMusic,
+                P::ViewModeration,
+                P::ViewInternalEntries
+            ]
         );
     }
 }

@@ -74,9 +74,16 @@ describe("jury lead", () => {
       "view_club_contacts",
       "manage_jury",
       "manage_results",
+      "view_moderation",
+      "view_internal_entries",
     ];
     assert.equal(canOpen("/admin-categories", juryLead), true);
     assert.equal(canOpen("/admin-timeplan", juryLead), false);
+  });
+
+  test("follows the event on the moderation screen", () => {
+    const juryLead = ["manage_jury", "manage_results", "view_moderation"];
+    assert.equal(canOpen("/admin-moderation", juryLead), true);
   });
 });
 

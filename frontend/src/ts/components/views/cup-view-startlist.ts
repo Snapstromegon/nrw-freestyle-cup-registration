@@ -273,7 +273,11 @@ export default class CupViewStartlist extends LitElement {
       const [categories, acts, timeplan] = await Promise.all([
         unwrap(client.listCategories()),
         unwrap(client.startlist()),
-        client.predictTimeplan({ throwOnError: false }),
+        // Public: never the internal entries, whoever is logged in.
+        client.predictTimeplan({
+          query: { public: true },
+          throwOnError: false,
+        }),
       ]);
       // Without the timeplan the list still works, just without times.
       return buildStartlist(categories, acts, timeplan.data);

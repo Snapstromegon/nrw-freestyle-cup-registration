@@ -62,6 +62,8 @@ interface EntryDraft {
   einfahrzeit: string;
   /** Custom entries only: photos next to the clock on the info board. */
   showPhotos: boolean;
+  /** Custom entries only: an internal timeplan entry, for the orga team. */
+  internal: boolean;
 }
 
 interface Editing {
@@ -227,6 +229,7 @@ const applyCarryOver = async (carry: ReturnType<typeof carryOver>) => {
         kind: entry.kind,
         einfahrzeit_seconds: entry.einfahrzeit_seconds ?? null,
         show_photos: entry.show_photos,
+        internal: entry.internal,
       },
     }),
   );
@@ -251,7 +254,7 @@ export default class CupViewAdminTimeplan extends LitElement {
         width: 14em;
       }
 
-      label.photos {
+      label.flag {
         display: inline-flex;
         align-items: center;
         gap: 0.25em;
@@ -884,14 +887,25 @@ export default class CupViewAdminTimeplan extends LitElement {
 
   private renderEntry(data: Data, entry: Entry) {
     if (entry.kind === "custom") {
-      return entry.show_photos
-        ? (entry.label ?? "")
-        : html`${entry.label ?? ""}
-            <span
+      return html`${entry.label ?? ""}
+      ${
+        entry.internal
+          ? html`<span
+              class="chip info"
+              title="Interner Zeitplaneintrag: nur das Orga-Team sieht ihn, öffentliche Anzeigen zeigen eine Pause"
+              >intern</span
+            >`
+          : nothing
+      }
+      ${
+        entry.show_photos
+          ? nothing
+          : html`<span
               class="chip"
               title="Das Info-Board zeigt währenddessen nur die Uhr, ohne Fotos"
               >nur Uhr</span
-            >`;
+            >`
+      }`;
     }
     const block = blockOf(data.predictions.get(entry.id));
     const open = this.expanded.has(entry.id);
@@ -1623,15 +1637,28 @@ export default class CupViewAdminTimeplan extends LitElement {
           ${
             custom
               ? html`<label
-                  class="photos"
+                  class="flag"
                   title="Das Info-Board zeigt währenddessen neben der Uhr Fotos"
                 >
                   <input
                     type="checkbox"
+                    data-field="showPhotos"
                     .checked=${draft.showPhotos}
-                    @change=${this.onShowPhotosChange}
+                    @change=${this.onDraftToggle}
                   />
                   Fotos
+                </label>
+                <label
+                  class="flag"
+                  title="Interner Zeitplaneintrag: nur das Orga-Team sieht ihn; Info-Board und Startliste zeigen eine Pause"
+                >
+                  <input
+                    type="checkbox"
+                    data-field="internal"
+                    .checked=${draft.internal}
+                    @change=${this.onDraftToggle}
+                  />
+                  intern
                 </label>`
               : nothing
           }
@@ -1760,6 +1787,7 @@ export default class CupViewAdminTimeplan extends LitElement {
         duration: "",
         einfahrzeit: "",
         showPhotos: true,
+        internal: false,
       },
       earliestChanged: true,
     };
@@ -1803,6 +1831,7 @@ export default class CupViewAdminTimeplan extends LitElement {
             ? ""
             : formatDuration(entry.einfahrzeit_seconds),
         showPhotos: entry.show_photos,
+        internal: entry.internal,
       },
       earliestChanged: false,
     };
@@ -1827,14 +1856,16 @@ export default class CupViewAdminTimeplan extends LitElement {
     };
   }
 
-  private onShowPhotosChange(e: Event) {
+  /** The checkboxes of a custom entry: photos and internal. */
+  private onDraftToggle(e: Event) {
     if (!this.editing) {
       return;
     }
-    const showPhotos = (e.currentTarget as HTMLInputElement).checked;
+    const target = e.currentTarget as HTMLInputElement;
+    const field = target.dataset.field as "showPhotos" | "internal";
     this.editing = {
       ...this.editing,
-      draft: { ...this.editing.draft, showPhotos },
+      draft: { ...this.editing.draft, [field]: target.checked },
     };
   }
 
@@ -1897,6 +1928,7 @@ export default class CupViewAdminTimeplan extends LitElement {
           ? parseDuration(draft.einfahrzeit)
           : null,
       show_photos: !custom || draft.showPhotos,
+      internal: custom && draft.internal,
     };
     this.busy = true;
     this.error = "";

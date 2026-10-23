@@ -69,6 +69,9 @@ pub struct EntryFields {
     pub einfahrzeit_seconds: Option<i64>,
     /// Custom entries: photos next to the clock on the info board.
     pub show_photos: bool,
+    /// Custom entries: only the organizer team sees it (Interner
+    /// Zeitplaneintrag).
+    pub internal: bool,
 }
 
 impl EntryFields {
@@ -110,6 +113,7 @@ impl EntryFields {
                     duration_seconds: None,
                     einfahrzeit_seconds,
                     show_photos: true,
+                    internal: false,
                 })
             }
             EntryKind::Custom => {
@@ -127,6 +131,7 @@ impl EntryFields {
                     duration_seconds,
                     einfahrzeit_seconds: None,
                     show_photos: true,
+                    internal: false,
                 })
             }
         }
@@ -140,6 +145,15 @@ impl EntryFields {
             show_photos: show_photos || self.kind == EntryKind::Acts,
             ..self
         }
+    }
+
+    /// Custom entries: internal or public. Start blocks are always public:
+    /// their acts are on the public startlist.
+    pub fn with_internal(self, internal: bool) -> Result<Self, &'static str> {
+        if internal && self.kind == EntryKind::Acts {
+            return Err("Nur eigene Einträge können intern sein, keine Startblöcke.");
+        }
+        Ok(Self { internal, ..self })
     }
 }
 
@@ -323,6 +337,8 @@ pub struct Entry {
     pub einfahrzeit_override: Option<i64>,
     /// Custom entries: photos next to the clock on the info board.
     pub show_photos: bool,
+    /// Custom entries: only the organizer team sees it.
+    pub internal: bool,
     pub started_at: Option<OffsetDateTime>,
     pub ended_at: Option<OffsetDateTime>,
     /// Start blocks: what runs in them, in order (see the module docs).
@@ -585,6 +601,7 @@ pub async fn load(db: &mut SqliteConnection) -> sqlx::Result<Timeplan> {
             final_name,
             einfahrzeit_seconds,
             show_photos,
+            internal,
             started_at as "started_at: OffsetDateTime",
             ended_at as "ended_at: OffsetDateTime"
         FROM timeplan
@@ -691,6 +708,7 @@ pub async fn load(db: &mut SqliteConnection) -> sqlx::Result<Timeplan> {
             final_name: row.final_name.clone(),
             einfahrzeit_override: row.einfahrzeit_seconds,
             show_photos: row.show_photos,
+            internal: row.internal,
             started_at: row.started_at,
             ended_at: row.ended_at,
             slots,
@@ -1042,6 +1060,7 @@ mod tests {
                 duration_seconds: None,
                 einfahrzeit_seconds: Some(300),
                 show_photos: true,
+                internal: false,
             })
         );
         // Start blocks always keep their photos, custom entries can drop them.
