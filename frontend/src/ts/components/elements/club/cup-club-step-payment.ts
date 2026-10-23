@@ -134,7 +134,7 @@ export default class CupClubStepPayment extends LitElement {
     return html`<div class="step-intro">
         <h2>${this.number}. Startgeld</h2>
         <p>
-          Das Startgeld ergibt sich aus den Starts eurer Fahrer. Überweist den
+          Das Startgeld ergibt sich aus den Starts eurer FahrerInnen. Überweist den
           offenen Betrag am einfachsten per QR-Code mit eurer Banking-App.
         </p>
       </div>
@@ -310,13 +310,13 @@ export default class CupClubStepPayment extends LitElement {
       @toggle=${this.onDetailsToggle}
     >
       <summary>
-        <h3>Aufstellung pro Fahrer</h3>
+        <h3>Aufstellung pro FahrerIn</h3>
         <span class="hint"
           >${competition ? formatMoney(competition.fee_per_start) : ""} pro
           Start${
             max === null || max === undefined
               ? ""
-              : `, höchstens ${formatMoney(max)} pro Fahrer`
+              : `, höchstens ${formatMoney(max)} pro FahrerIn`
           }</span
         >
         <i class="material-icon chevron">expand_more</i>
@@ -327,7 +327,7 @@ export default class CupClubStepPayment extends LitElement {
           : html`<table>
               <thead>
                 <tr>
-                  <th>Fahrer</th>
+                  <th>FahrerIn</th>
                   <th class="num">Einzel</th>
                   <th class="num">Paar</th>
                   <th class="num">Gruppen</th>

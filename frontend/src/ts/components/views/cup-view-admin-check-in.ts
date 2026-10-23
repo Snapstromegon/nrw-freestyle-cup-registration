@@ -612,7 +612,7 @@ export default class CupViewAdminCheckIn extends LitElement {
         class="inline"
         type="search"
         placeholder="Name, Verein oder Gruppe  ( / )"
-        aria-label="Starter suchen"
+        aria-label="FahrerInnen suchen"
         title="Enter checkt den einzigen (oder den mit ↑/↓ gewählten) Treffer ein, Shift+Enter checkt aus, Esc leert die Suche"
         autocomplete="off"
         spellcheck="false"
@@ -814,17 +814,17 @@ export default class CupViewAdminCheckIn extends LitElement {
       return this.startersError
         ? html`<div class="error-banner" role="alert">
             <span
-              >Starter konnten nicht geladen werden:
+              >FahrerInnen konnten nicht geladen werden:
               ${this.startersError}</span
             >
             <button class="btn small" @click=${this.onReload}>
               Erneut versuchen
             </button>
           </div>`
-        : html`<p class="empty">Lade Starter …</p>`;
+        : html`<p class="empty">Lade FahrerInnen …</p>`;
     }
     if (this.starters.length === 0) {
-      return html`<p class="empty">Es sind keine Starter angemeldet.</p>`;
+      return html`<p class="empty">Es sind keine FahrerInnen angemeldet.</p>`;
     }
     const activeId = this.activeId ?? this.singleMatchId(visible);
     return html`<div class="table-wrap">
@@ -915,8 +915,8 @@ export default class CupViewAdminCheckIn extends LitElement {
                     ?disabled=${busy}
                     title=${
                       filtered
-                        ? `Die ${open} angezeigten, noch offenen Starter von ${club.name} einchecken`
-                        : `Alle ${open} noch offenen Starter von ${club.name} einchecken`
+                        ? `Die ${open} angezeigten, noch offenen FahrerInnen von ${club.name} einchecken`
+                        : `Alle ${open} noch offenen FahrerInnen von ${club.name} einchecken`
                     }
                     @click=${this.onClubBulk}
                   >
@@ -930,8 +930,8 @@ export default class CupViewAdminCheckIn extends LitElement {
                     ?disabled=${busy}
                     title=${
                       filtered
-                        ? `Die ${scope.length} angezeigten Starter von ${club.name} wieder auschecken`
-                        : `Alle Starter von ${club.name} wieder auschecken`
+                        ? `Die ${scope.length} angezeigten FahrerInnen von ${club.name} wieder auschecken`
+                        : `Alle FahrerInnen von ${club.name} wieder auschecken`
                     }
                     @click=${this.onClubBulk}
                   >
@@ -1163,7 +1163,7 @@ export default class CupViewAdminCheckIn extends LitElement {
               : " – ohne passende Kategorie"
       }`;
       lines.push(
-        `${regular.length} Fahrer${replacements ? ` + ${replacements} Ersatz` : ""} · ${actClubNames(act).join(", ")}`,
+        `${regular.length} FahrerInnen${replacements ? ` + ${replacements} Ersatz` : ""} · ${actClubNames(act).join(", ")}`,
       );
       if (start.replacement) {
         lines.push(`${row.starter.firstname} ist Ersatzfahrer:in`);
@@ -1700,8 +1700,8 @@ export default class CupViewAdminCheckIn extends LitElement {
       !checkedIn &&
       !confirm(
         visibleOnly
-          ? `Die ${rows.length} angezeigten Starter von „${club.name}“ auschecken?`
-          : `Alle ${rows.length} Starter von „${club.name}“ auschecken?`,
+          ? `Die ${rows.length} angezeigten FahrerInnen von „${club.name}“ auschecken?`
+          : `Alle ${rows.length} FahrerInnen von „${club.name}“ auschecken?`,
       )
     ) {
       return;
@@ -1714,17 +1714,17 @@ export default class CupViewAdminCheckIn extends LitElement {
     const changed = rows
       .filter((row) => this.isIn(row) !== checkedIn)
       .map((row) => row.starter.id);
-    const label = `${club.name} (${ids.length} Starter)`;
+    const label = `${club.name} (${ids.length} FahrerInnen)`;
     this.changeWithNotice(ids, checkedIn, label, {
       text: `${checkedIn ? "✓" : "○"} ${changed.length} ${
         visibleOnly ? "angezeigte " : ""
-      }Starter von ${club.name} ${checkedIn ? "eingecheckt" : "ausgecheckt"}`,
+      }FahrerInnen von ${club.name} ${checkedIn ? "eingecheckt" : "ausgecheckt"}`,
       tone: checkedIn ? "ok" : "warn",
       undo: changed.length
         ? {
             ids: changed,
             checkedIn: !checkedIn,
-            label: `${club.name} (${changed.length} Starter)`,
+            label: `${club.name} (${changed.length} FahrerInnen)`,
           }
         : undefined,
       createdAt: Date.now(),

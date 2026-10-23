@@ -317,7 +317,7 @@ export default class CupViewHome extends LitElement {
         <h2>1. Verein</h2>
         <p>
           Willkommen, ${this.user.name}! Legt zuerst euren Verein an; danach
-          tragt ihr eure Fahrer ein, legt die Küren an und überweist das
+          tragt ihr eure FahrerInnen ein, legt die Küren an und überweist das
           Startgeld.
         </p>
       </div>
@@ -408,8 +408,8 @@ export default class CupViewHome extends LitElement {
         <i class="material-icon">info</i>
         <span class="grow"
           ><strong>Ohne Verein?</strong> Wer nicht für einen Verein startet,
-          legt einen „Verein“ mit dem Namen des Fahrers an, den er anmelden
-          möchte, z. B. „Anna Muster“.</span
+          legt einen „Verein“ mit dem Namen der FahrerIn an, die angemeldet
+          werden soll, z. B. „Anna Muster“.</span
         >
       </p>
     </section>`;

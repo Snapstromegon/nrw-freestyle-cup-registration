@@ -62,18 +62,18 @@ const NEW_KINDS: {
   hint: string;
   icon: string;
 }[] = [
-  { kind: "single", label: "Einzelkür", hint: "1 Fahrer", icon: "person" },
-  { kind: "pair", label: "Paarkür", hint: "2 Fahrer", icon: "group" },
+  { kind: "single", label: "Einzelkür", hint: "1 FahrerIn", icon: "person" },
+  { kind: "pair", label: "Paarkür", hint: "2 FahrerInnen", icon: "group" },
   {
     kind: "group_small",
     label: "Kleingruppe",
-    hint: `${MIN_GROUP_SIZE}–${MAX_SMALL_GROUP_SIZE} Fahrer`,
+    hint: `${MIN_GROUP_SIZE}–${MAX_SMALL_GROUP_SIZE} FahrerInnen`,
     icon: "groups",
   },
   {
     kind: "group_large",
     label: "Großgruppe",
-    hint: `ab ${MAX_SMALL_GROUP_SIZE + 1} Fahrer`,
+    hint: `ab ${MAX_SMALL_GROUP_SIZE + 1} FahrerInnen`,
     icon: "diversity_3",
   },
 ];
@@ -499,9 +499,9 @@ export default class CupClubStepActs extends LitElement {
     return html`<div class="step-intro">
         <h2>3. Küren</h2>
         <p>
-          Legt eure Küren an und wählt ihre Fahrer: Klappt eine Kür auf, um ihre
-          Fahrer zu ändern. Jeder Fahrer kann eine Einzelkür, eine Paarkür, eine
-          Kleingruppe und eine Großgruppe fahren. Wechselt ihr den Fahrer einer
+          Legt eure Küren an und wählt ihre FahrerInnen: Klappt eine Kür auf, um ihre
+          FahrerInnen zu ändern. Jede FahrerIn kann eine Einzelkür, eine Paarkür, eine
+          Kleingruppe und eine Großgruppe fahren. Wechselt ihr die FahrerIn einer
           Einzel- oder Paarkür, bleiben Titel und Musik erhalten.
           ${
             this.canUpload
@@ -561,7 +561,7 @@ export default class CupClubStepActs extends LitElement {
                   >${
                     this.data.starters.length
                       ? "Legt oben eure erste Kür an."
-                      : "Legt zuerst Fahrer an."
+                      : "Legt zuerst FahrerInnen an."
                   }</span
                 >
                 ${
@@ -571,7 +571,7 @@ export default class CupClubStepActs extends LitElement {
                         class="btn"
                         @click=${this.goToRiders}
                       >
-                        Zu den Fahrern
+                        Zu den FahrerInnen
                       </button>`
                 }
               </div>`
@@ -657,7 +657,7 @@ export default class CupClubStepActs extends LitElement {
     return html`<p class="banner warn">
       <i class="material-icon">person_off</i>
       <span class="grow"
-        >${riders.length === 1 ? "Dieser Fahrer ist" : "Diese Fahrer sind"} noch
+        >${riders.length === 1 ? "Diese FahrerIn ist" : "Diese FahrerInnen sind"} noch
         in keiner Kür. Legt eine Kür für sie an oder fügt sie einer Kür hinzu.
         <span class="unassigned">${chips}</span></span
       >
@@ -891,12 +891,12 @@ export default class CupClubStepActs extends LitElement {
       return html`<div class="new-form">
         <p class="banner info">
           <i class="material-icon">info</i>
-          <span class="grow">Legt zuerst Fahrer an.</span>
+          <span class="grow">Legt zuerst FahrerInnen an.</span>
           <button
             class="btn small"
             @click=${this.goToRiders}
           >
-            Zu den Fahrern
+            Zu den FahrerInnen
           </button>
         </p>
       </div>`;
@@ -923,18 +923,20 @@ export default class CupClubStepActs extends LitElement {
       ).length;
       return this.renderNoRiders(
         withoutGender
-          ? `Kein Fahrer ist für eine Einzelkür frei: Alle anderen haben schon eine, bei ${
-              withoutGender === 1 ? "einem Fahrer" : `${withoutGender} Fahrern`
+          ? `Keine FahrerIn ist für eine Einzelkür frei: Alle anderen haben schon eine, bei ${
+              withoutGender === 1
+                ? "einer FahrerIn"
+                : `${withoutGender} FahrerInnen`
             } fehlt noch das Geschlecht.`
-          : "Kein Fahrer ist für eine Einzelkür frei: Alle haben schon eine Einzelkür.",
+          : "Keine FahrerIn ist für eine Einzelkür frei: Alle haben schon eine Einzelkür.",
       );
     }
     return html`<form class="new-form" @submit=${this.createSingle}>
       <div class="form-row">
         <label class="field"
-          ><span>Fahrer</span>
+          ><span>FahrerIn</span>
           <cup-rider-picker
-            label="Fahrer der Einzelkür"
+            label="FahrerIn der Einzelkür"
             .options=${riderOptions(this.data, riders, (r) =>
               r.gender ? genderLabels[r.gender] : "",
             )}
@@ -955,7 +957,7 @@ export default class CupClubStepActs extends LitElement {
         ${
           chosen?.gender
             ? `Wird als Einzel ${genderLabels[chosen.gender]} gewertet.`
-            : "Gewertet wird die Einzelkür nach dem Geschlecht des Fahrers."
+            : "Gewertet wird die Einzelkür nach dem Geschlecht der FahrerIn."
         }
       </p>
     </form>`;
@@ -967,10 +969,10 @@ export default class CupClubStepActs extends LitElement {
       <p class="banner info">
         <i class="material-icon">info</i>
         <span class="grow"
-          >${text} Legt einen neuen Fahrer an oder ändert die Küren unten.</span
+          >${text} Legt eine neue FahrerIn an oder ändert die Küren unten.</span
         >
         <button class="btn small" @click=${this.goToRiders}>
-          <i class="material-icon">person_add</i> Zu den Fahrern
+          <i class="material-icon">person_add</i> Zu den FahrerInnen
         </button>
       </p>
     </div>`;
@@ -985,7 +987,7 @@ export default class CupClubStepActs extends LitElement {
     );
     if (first.length === 0) {
       return this.renderNoRiders(
-        "Kein Fahrer ist für eine Paarkür frei: Alle fahren schon eine Paarkür oder warten auf ihren Partner.",
+        "Keine FahrerIn ist für eine Paarkür frei: Alle fahren schon eine Paarkür oder warten auf ihren Partner.",
       );
     }
     const otherClub = {
@@ -996,9 +998,9 @@ export default class CupClubStepActs extends LitElement {
     return html`<form class="new-form" @submit=${this.createPair}>
       <div class="form-row">
         <label class="field"
-          ><span>Fahrer 1</span>
+          ><span>FahrerIn 1</span>
           <cup-rider-picker
-            label="Fahrer 1 der Paarkür"
+            label="FahrerIn 1 der Paarkür"
             .options=${riderOptions(
               this.data,
               first.filter((r) => r.id !== this.newPartner),
@@ -1008,9 +1010,9 @@ export default class CupClubStepActs extends LitElement {
           ></cup-rider-picker>
         </label>
         <label class="field"
-          ><span>Fahrer 2</span>
+          ><span>FahrerIn 2</span>
           <cup-rider-picker
-            label="Fahrer 2 der Paarkür"
+            label="FahrerIn 2 der Paarkür"
             .options=${[
               ...riderOptions(this.data, second, (r) =>
                 r.partner_name ? `– nennt ${r.partner_name}` : "",
@@ -1055,7 +1057,7 @@ export default class CupClubStepActs extends LitElement {
           ? html`<p class="hint">
               Paare mit Partnern aus anderen Vereinen verbindet der Veranstalter.
               Bis dahin ist die Paarkür als „wartet auf Bestätigung“ markiert;
-              der andere Verein meldet seinen Fahrer ebenfalls mit eurem Fahrer
+              der andere Verein meldet seine FahrerIn ebenfalls mit eurer FahrerIn
               als Partner an.
             </p>`
           : nothing
@@ -1141,11 +1143,11 @@ export default class CupClubStepActs extends LitElement {
                     >„${action.group.group_name}“ gibt es schon:
                     ${actTypeLabels[action.group.act_type]} von
                     ${action.group.owner_club_name ?? "einem anderen Verein"}
-                    (${action.group.regular_count} Fahrer${
+                    (${action.group.regular_count} FahrerInnen${
                       action.group.replacement_count
                         ? ` + ${action.group.replacement_count} Ersatz`
                         : ""
-                    }). Wählt eure Fahrer, um der gemeinsamen Gruppe
+                    }). Wählt eure FahrerInnen, um der gemeinsamen Gruppe
                     beizutreten.</span
                   >
                 </p>
@@ -1364,7 +1366,7 @@ export default class CupClubStepActs extends LitElement {
     } else {
       if (isGroup && regular < MIN_GROUP_SIZE) {
         chips.push(
-          html`<span class="chip error">${regular}/${MIN_GROUP_SIZE} Fahrer</span>`,
+          html`<span class="chip error">${regular}/${MIN_GROUP_SIZE} FahrerInnen</span>`,
         );
       } else if (group?.conflict) {
         chips.push(html`<span class="chip error">Konflikt</span>`);
@@ -1407,9 +1409,9 @@ export default class CupClubStepActs extends LitElement {
         <span class="riders"
           >${
             isGroup
-              ? `${regular} Fahrer${replacements ? ` + ${replacements} Ersatz` : ""}${
+              ? `${regular} FahrerInnen${replacements ? ` + ${replacements} Ersatz` : ""}${
                   group?.category ? ` · ${group.category}` : ""
-                } – ${this.riderNames(act) || "noch keine Fahrer"}`
+                } – ${this.riderNames(act) || "noch keine FahrerInnen"}`
               : `${act.act_type === "single" ? `${this.singleLabel(act)}: ` : ""}${this.riderNames(act)}`
           }</span
         >
@@ -1423,7 +1425,7 @@ export default class CupClubStepActs extends LitElement {
     const isGroup = isGroupActType(act.act_type);
     return html`<div class="body">
       <div class="full">
-        <h4>Fahrer</h4>
+        <h4>FahrerInnen</h4>
         <cup-club-act-riders
           .data=${this.data}
           .act=${act}
@@ -1650,7 +1652,7 @@ export default class CupClubStepActs extends LitElement {
         }
         ${
           other
-            ? html`<small title="Ein Fahrer kann nur in einer ${actTypeLabels[type]} starten"
+            ? html`<small title="Eine FahrerIn kann nur in einer ${actTypeLabels[type]} starten"
                 >schon in „${other}“</small
               >`
             : nothing
@@ -1658,7 +1660,7 @@ export default class CupClubStepActs extends LitElement {
       </div>`;
     });
     return html`<p class="hint">
-        ${members.size} ausgewählt (${regular} Fahrer${
+        ${members.size} ausgewählt (${regular} FahrerInnen${
           members.size - regular ? `, ${members.size - regular} Ersatz` : ""
         })
       </p>
@@ -1718,10 +1720,10 @@ export default class CupClubStepActs extends LitElement {
           }
         >
           <option value="group_small" .selected=${draft.type === "group_small"}>
-            Kleingruppe (${MIN_GROUP_SIZE}–${MAX_SMALL_GROUP_SIZE} Fahrer)
+            Kleingruppe (${MIN_GROUP_SIZE}–${MAX_SMALL_GROUP_SIZE} FahrerInnen)
           </option>
           <option value="group_large" .selected=${draft.type === "group_large"}>
-            Großgruppe (ab ${MAX_SMALL_GROUP_SIZE + 1} Fahrer)
+            Großgruppe (ab ${MAX_SMALL_GROUP_SIZE + 1} FahrerInnen)
           </option>
         </select></label
       >
@@ -1833,7 +1835,7 @@ export default class CupClubStepActs extends LitElement {
   renderPendingBody(starter: ClubStarter) {
     return html`<div class="body">
       <div class="full">
-        <h4>Fahrer</h4>
+        <h4>FahrerInnen</h4>
         <cup-club-act-riders
           .data=${this.data}
           .pending=${starter}
@@ -1949,9 +1951,9 @@ export default class CupClubStepActs extends LitElement {
       !confirm(
         `Gruppe „${group.group_name}“ wirklich löschen?${
           others
-            ? "\nAuch die Fahrer der anderen Vereine verlieren die Gruppe."
+            ? "\nAuch die FahrerInnen der anderen Vereine verlieren die Gruppe."
             : ""
-        }\nDie Fahrer bleiben angemeldet.`,
+        }\nDie FahrerInnen bleiben angemeldet.`,
       )
     ) {
       return;
@@ -1970,7 +1972,7 @@ export default class CupClubStepActs extends LitElement {
   async leaveGroup(group: ClubGroup) {
     if (
       !confirm(
-        `Gruppe „${group.group_name}“ verlassen?\nAlle eure Fahrer werden aus der Gruppe entfernt.`,
+        `Gruppe „${group.group_name}“ verlassen?\nAlle eure FahrerInnen werden aus der Gruppe entfernt.`,
       )
     ) {
       return;

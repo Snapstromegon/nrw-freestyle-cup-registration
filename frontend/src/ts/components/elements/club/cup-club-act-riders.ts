@@ -192,7 +192,7 @@ export default class CupClubActRiders extends LitElement {
       slots = this.renderPendingSlots(this.pending);
       note = html`<p class="note warn">
         ⌛ Der Veranstalter verbindet das Paar, sobald der andere Verein
-        ${this.pending.partner_name || "den Partner"} mit eurem Fahrer als
+        ${this.pending.partner_name || "den Partner"} mit eurer FahrerIn als
         Partner angemeldet hat.
       </p>`;
     } else if (this.act?.act_type === "single") {
@@ -235,7 +235,7 @@ export default class CupClubActRiders extends LitElement {
     const { regular } = riderCounts(group.members);
     if (regular < MIN_GROUP_SIZE) {
       return html`<p class="note error">
-        Unvollständig: mindestens ${MIN_GROUP_SIZE} Fahrer (ohne Ersatz) nötig.
+        Unvollständig: mindestens ${MIN_GROUP_SIZE} FahrerInnen (ohne Ersatz) nötig.
       </p>`;
     }
     if (group.conflict) {
@@ -256,7 +256,7 @@ export default class CupClubActRiders extends LitElement {
       (r) => r.id === current?.id || (!hasSingle(r) && !!r.gender),
     );
     return html`<cup-rider-picker
-      label="Fahrer der Einzelkür ${act.name}"
+      label="FahrerIn der Einzelkür ${act.name}"
       .options=${riderOptions(this.data, riders, (r) =>
         r.gender ? genderLabels[r.gender] : "",
       )}
@@ -287,7 +287,7 @@ export default class CupClubActRiders extends LitElement {
           r.id === p.id || (r.id !== other?.id && !r.pair && !r.partner_id),
       );
       return html`<cup-rider-picker
-        label="Fahrer der Paarkür ${act.name}"
+        label="FahrerInnen der Paarkür ${act.name}"
         .options=${riderOptions(this.data, riders)}
         .value=${p.id}
         ?disabled=${!this.canRegister || act.withdrawn}
@@ -312,7 +312,7 @@ export default class CupClubActRiders extends LitElement {
         (r.club_id === this.data.club.id ? !r.pair : this.admin),
     );
     return html`<cup-rider-picker
-        label="Eigener Fahrer der Paarkür"
+        label="Eigene FahrerIn der Paarkür"
         .options=${riderOptions(this.data, own)}
         .value=${starter.id}
         ?disabled=${!this.canRegister}
@@ -338,8 +338,8 @@ export default class CupClubActRiders extends LitElement {
         this.canRegister && partners.length
           ? html`<cup-rider-picker
               class="add"
-              label=${this.admin ? "Partner verbinden" : "Stattdessen mit eigenem Fahrer paaren"}
-              placeholder=${this.admin ? "Partner verbinden…" : "Oder eigener Fahrer…"}
+              label=${this.admin ? "Partner verbinden" : "Stattdessen mit eigener FahrerIn paaren"}
+              placeholder=${this.admin ? "Partner verbinden…" : "Oder eigene FahrerIn…"}
               .options=${riderOptions(this.data, partners, (r) =>
                 r.partner_name ? `– nennt ${r.partner_name}` : "",
               )}
@@ -423,14 +423,14 @@ export default class CupClubActRiders extends LitElement {
     return html`${
       members.length
         ? members
-        : html`<span class="muted">Noch keine Fahrer.</span>`
+        : html`<span class="muted">Noch keine FahrerInnen.</span>`
     }
     ${
       this.canRegister && candidates.length
         ? html`<cup-rider-picker
             class="add"
-            label="Fahrer zu ${group.group_name} hinzufügen"
-            placeholder="+ Fahrer hinzufügen…"
+            label="FahrerIn zu ${group.group_name} hinzufügen"
+            placeholder="+ FahrerIn hinzufügen…"
             .options=${riderOptions(this.data, candidates, (r) => {
               const other = elsewhere.get(r.id);
               return other ? `– schon in „${other}“` : "";
@@ -541,7 +541,7 @@ export default class CupClubActRiders extends LitElement {
       clubId === this.data.club.id &&
       !group.is_owner &&
       !confirm(
-        `Das ist euer letzter Fahrer in „${group.group_name}“. Ohne eigene Fahrer verlasst ihr die Gruppe. Fortfahren?`,
+        `Das ist eure letzte FahrerIn in „${group.group_name}“. Ohne eigene FahrerInnen verlasst ihr die Gruppe. Fortfahren?`,
       )
     ) {
       return;

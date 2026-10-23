@@ -413,7 +413,7 @@ export default class CupViewAdminPayments extends LitElement {
                       ? nothing
                       : html`, max. ${formatMoney(
                           competition.max_fee_per_starter,
-                        )} je Starter`
+                        )} je FahrerIn`
                   }</span
                 >`
               : nothing
@@ -474,7 +474,7 @@ export default class CupViewAdminPayments extends LitElement {
         <button
           class="btn small"
           ?disabled=${this.data.status === TaskStatus.PENDING}
-          title="Vereine und Starter neu laden"
+          title="Vereine und FahrerInnen neu laden"
           @click=${this.onReloadClick}
         >
           <span class="material-icon">refresh</span>
@@ -503,7 +503,7 @@ export default class CupViewAdminPayments extends LitElement {
                 <tr>
                   ${this.renderSortHeader("name", "Verein")}
                   ${this.renderSortHeader("contact", "Kontakt")}
-                  ${this.renderSortHeader("starters", "Starter", "num")}
+                  ${this.renderSortHeader("starters", "FahrerInnen", "num")}
                   ${this.renderSortHeader(
                     "starts",
                     "Starts",

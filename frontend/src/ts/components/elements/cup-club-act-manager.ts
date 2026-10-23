@@ -429,7 +429,7 @@ export default class CupClubActManager extends LitElement {
       >${
         regular < MIN_GROUP_SIZE
           ? html`<br /><small class="warn"
-              >⌛ unvollständig – mindestens ${MIN_GROUP_SIZE} Fahrer</small
+              >⌛ unvollständig – mindestens ${MIN_GROUP_SIZE} FahrerInnen</small
             >`
           : sizeWarning
             ? html`<br /><small class="warn">⚠️ ${sizeWarning}</small>`
@@ -472,7 +472,7 @@ export default class CupClubActManager extends LitElement {
     const replacements = act.participants.length - regular;
     return html`<details>
       <summary>
-        ${regular} Fahrer${replacements ? ` + ${replacements} Ersatz` : ""}
+        ${regular} FahrerInnen${replacements ? ` + ${replacements} Ersatz` : ""}
       </summary>
       ${list}
     </details>`;

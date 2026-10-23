@@ -803,7 +803,7 @@ export default class CupViewAdmin extends LitElement {
         }</span
       >
       <a class="kpi" href="/admin-starters"
-        ><b>${data.starters.length}</b> Starter</a
+        ><b>${data.starters.length}</b> FahrerInnen</a
       >
       <span
         class="kpi"
@@ -951,7 +951,7 @@ export default class CupViewAdmin extends LitElement {
             value: s.id,
             label: nameOf(s),
             detail: detail(s),
-            group: "Alle Fahrer ohne Partner",
+            group: "Alle FahrerInnen ohne Partner",
           })),
       ];
       return html`<tr>
@@ -1014,7 +1014,7 @@ export default class CupViewAdmin extends LitElement {
         <table class="dense fit">
           <thead>
             <tr>
-              <th>Fahrer</th>
+              <th>FahrerIn</th>
               <th>Nennt als Partner</th>
               <th>Partner</th>
               <th class="actions"></th>
@@ -1113,16 +1113,16 @@ export default class CupViewAdmin extends LitElement {
         <tr>
           ${this.renderSortHeader("name", "Verein")}
           ${this.renderSortHeader("contact", "Kontakt")}
-          ${this.renderSortHeader("starters", "Starter", "num")}
+          ${this.renderSortHeader("starters", "FahrerInnen", "num")}
           ${this.renderSortHeader("em", "EM", "num", "Einzel männlich")}
           ${this.renderSortHeader("ew", "EW", "num", "Einzel weiblich")}
           ${this.renderSortHeader("p", "P", "num", "Paar")}
-          ${this.renderSortHeader("kg", "KG", "num", "Kleingruppe (Fahrer inkl. Ersatz)")}
-          ${this.renderSortHeader("gg", "GG", "num", "Großgruppe (Fahrer inkl. Ersatz)")}
-          ${this.renderSortHeader("acts", "Küren", "num", "Küren mit Fahrern des Vereins, vereinsübergreifende in jedem beteiligten Verein")}
+          ${this.renderSortHeader("kg", "KG", "num", "Kleingruppe (FahrerInnen inkl. Ersatz)")}
+          ${this.renderSortHeader("gg", "GG", "num", "Großgruppe (FahrerInnen inkl. Ersatz)")}
+          ${this.renderSortHeader("acts", "Küren", "num", "Küren mit FahrerInnen des Vereins, vereinsübergreifende in jedem beteiligten Verein")}
           ${this.renderSortHeader("music", "Musik", "num", "Küren mit Musik")}
           ${this.renderSortHeader("checked", "geprüft", "num", "Geprüfte Musik")}
-          ${this.renderSortHeader("checkedIn", "CI", "num", "Eingecheckte Starter")}
+          ${this.renderSortHeader("checkedIn", "CI", "num", "Eingecheckte FahrerInnen")}
           ${this.renderSortHeader("due", "Soll", "num")}
           ${this.renderSortHeader("paid", "Gezahlt", "num", "Gezahlt gesamt")}
           ${this.renderSortHeader("open", "Offen", "num")}
@@ -1258,7 +1258,7 @@ export default class CupViewAdmin extends LitElement {
           <a
             class="icon-btn"
             href=${href}
-            title="Verein öffnen: Fahrer, Küren und Startgeld"
+            title="Verein öffnen: FahrerInnen, Küren und Startgeld"
             aria-label="${club.name} öffnen"
           >
             chevron_right

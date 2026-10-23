@@ -625,12 +625,12 @@ describe("act types and groups", () => {
     }
     assert.equal(
       groupSizeWarning("group_small", 9),
-      "zu groß für eine Kleingruppe – höchstens 8 Fahrer",
+      "zu groß für eine Kleingruppe – höchstens 8 FahrerInnen",
     );
     for (const regular of [3, 8]) {
       assert.equal(
         groupSizeWarning("group_large", regular),
-        "zu klein für eine Großgruppe – mindestens 9 Fahrer",
+        "zu klein für eine Großgruppe – mindestens 9 FahrerInnen",
         regular,
       );
     }
@@ -647,7 +647,7 @@ describe("act types and groups", () => {
     ];
     assert.equal(
       actSizeWarning({ act_type: "group_large", participants: riders(5, 4) }),
-      "zu klein für eine Großgruppe – mindestens 9 Fahrer",
+      "zu klein für eine Großgruppe – mindestens 9 FahrerInnen",
     );
     assert.equal(
       actSizeWarning({ act_type: "group_small", participants: riders(8, 2) }),
@@ -662,33 +662,42 @@ describe("act types and groups", () => {
   test("describeGroup summarizes type, age group and riders", () => {
     assert.equal(
       describeGroup("group_small", 7, 1, true),
-      "KG Junior Expert · 7 Fahrer + 1 Ersatz",
+      "KG Junior Expert · 7 FahrerInnen + 1 Ersatz",
     );
     assert.equal(
       describeGroup("group_large", 9, 0, false),
-      "GG Expert · 9 Fahrer",
+      "GG Expert · 9 FahrerInnen",
     );
-    assert.equal(describeGroup("group_small", 3, 0, null), "KG · 3 Fahrer");
+    assert.equal(
+      describeGroup("group_small", 3, 0, null),
+      "KG · 3 FahrerInnen",
+    );
     // The chosen type, whatever the size.
-    assert.equal(describeGroup("group_large", 5, 0, null), "GG · 5 Fahrer");
-    assert.equal(describeGroup("group_small", 9, 0, null), "KG · 9 Fahrer");
+    assert.equal(
+      describeGroup("group_large", 5, 0, null),
+      "GG · 5 FahrerInnen",
+    );
+    assert.equal(
+      describeGroup("group_small", 9, 0, null),
+      "KG · 9 FahrerInnen",
+    );
   });
 
   test("describeGroup counts only regular riders for the size", () => {
     assert.equal(
       describeGroup("group_small", 8, 2, true),
-      "KG Junior Expert · 8 Fahrer + 2 Ersatz",
+      "KG Junior Expert · 8 FahrerInnen + 2 Ersatz",
     );
   });
 
   test("describeGroup flags incomplete groups", () => {
     assert.equal(
       describeGroup("group_small", 2, 3, true),
-      "unvollständig – mindestens 3 Fahrer",
+      "unvollständig – mindestens 3 FahrerInnen",
     );
     assert.equal(
       describeGroup("group_large", 0, 0, null),
-      "unvollständig – mindestens 3 Fahrer",
+      "unvollständig – mindestens 3 FahrerInnen",
     );
   });
 });

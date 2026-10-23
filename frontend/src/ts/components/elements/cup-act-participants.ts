@@ -21,7 +21,7 @@ import {
  *
  * - Singles and pairs: "Vorname Nachname (Verein)" joined with " & "
  *   (`list`: one participant per line).
- * - Groups: the group name, "n Fahrer (+m Ersatz)" and the clubs, then the
+ * - Groups: the group name, "n FahrerInnen (+m Ersatz)" and the clubs, then the
  *   members. `inline` shows them comma separated on one line, cut off at
  *   `--cup-participants-max-width` (default 36em) with all names in the
  *   tooltip; `list` shows one member per line in as many columns as fit.
@@ -219,13 +219,13 @@ export default class CupActParticipants extends LitElement {
     return html`<div class="head">
         <span class="gname">${act.group_name || "Gruppe"}</span>
         <span class="meta"
-          >${regular} Fahrer${
+          >${regular} FahrerInnen${
             replacements > 0 ? ` (+${replacements} Ersatz)` : nothing
           }</span
         >
         ${
           regular < MIN_GROUP_SIZE
-            ? html`<span class="incomplete" title="Mindestens ${MIN_GROUP_SIZE} Fahrer nötig"
+            ? html`<span class="incomplete" title="Mindestens ${MIN_GROUP_SIZE} FahrerInnen nötig"
               >unvollständig</span
             >`
             : sizeWarning

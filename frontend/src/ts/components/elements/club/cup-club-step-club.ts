@@ -147,7 +147,7 @@ export default class CupClubStepClub extends LitElement {
         <h2>1. Verein</h2>
         <p>
           Euer Verein ist angelegt. Hier findet ihr die wichtigsten Regeln der
-          Ausschreibung; danach geht es mit den Fahrern weiter.
+          Ausschreibung; danach geht es mit den FahrerInnen weiter.
         </p>
       </div>
 
@@ -233,16 +233,16 @@ export default class CupClubStepClub extends LitElement {
             ><span>Einmal pro Verein anlegen – erledigt.</span>
           </li>
           <li>
-            <strong>Fahrer</strong
+            <strong>FahrerInnen</strong
             ><span
-              >Alle Starter mit Namen, Geburtsdatum und Geschlecht
+              >Alle FahrerInnen mit Namen, Geburtsdatum und Geschlecht
               eintragen.</span
             >
           </li>
           <li>
             <strong>Küren</strong
             ><span
-              >Einzel-, Paarküren und Gruppen anlegen, ihre Fahrer wählen und
+              >Einzel-, Paarküren und Gruppen anlegen, ihre FahrerInnen wählen und
               Titel und Musik hinterlegen.</span
             >
           </li>
@@ -260,7 +260,7 @@ export default class CupClubStepClub extends LitElement {
           class="btn blue"
           @click=${this.goToRiders}
         >
-          Weiter: Fahrer anlegen <i class="material-icon">arrow_forward</i>
+          Weiter: FahrerInnen anlegen <i class="material-icon">arrow_forward</i>
         </button>
       </div>`;
   }
@@ -385,7 +385,7 @@ export default class CupClubStepClub extends LitElement {
             max === null || max === undefined
               ? nothing
               : html`, höchstens <strong>${formatMoney(max)}</strong> pro
-                  Fahrer`
+                  FahrerIn`
           }.
           Abmeldungen nach dem Meldeschluss werden nur bei Krankheit mit
           ärztlichem Attest erstattet.

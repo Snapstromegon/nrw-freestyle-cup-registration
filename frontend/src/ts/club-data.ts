@@ -42,7 +42,7 @@ export interface ClubData {
 /** The steps of the registration, in order. */
 export const STEPS = [
   { id: "verein", label: "Verein", icon: "groups" },
-  { id: "fahrer", label: "Fahrer", icon: "person_add" },
+  { id: "fahrer", label: "FahrerInnen", icon: "person_add" },
   { id: "kueren", label: "Küren", icon: "library_music" },
   { id: "jury", label: "Jury", icon: "gavel" },
   { id: "startgeld", label: "Startgeld", icon: "payments" },
@@ -162,7 +162,7 @@ export const clubIssues = (
     issues.push({
       level: "info",
       step: "fahrer",
-      text: "Noch keine Fahrer angelegt.",
+      text: "Noch keine FahrerInnen angelegt.",
     });
   }
   for (const starter of data.starters) {
@@ -196,7 +196,7 @@ export const clubIssues = (
       issues.push({
         level: "error",
         step: "kueren",
-        text: `Gruppe „${group.group_name}“ ist unvollständig (${regular}/${MIN_GROUP_SIZE} Fahrer).`,
+        text: `Gruppe „${group.group_name}“ ist unvollständig (${regular}/${MIN_GROUP_SIZE} FahrerInnen).`,
         target: group.id,
       });
     } else if (group.conflict) {
@@ -286,7 +286,7 @@ export const stepSummaries = (
     verein: { state: "done", summary: data.club.name },
     fahrer: {
       state: data.starters.length ? "done" : "todo",
-      summary: count(data.starters.length, "Fahrer", "Fahrer"),
+      summary: count(data.starters.length, "FahrerIn", "FahrerInnen"),
     },
     kueren: {
       state: acts === 0 ? "todo" : blocking("kueren") ? "open" : "done",

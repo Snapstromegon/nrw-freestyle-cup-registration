@@ -188,7 +188,7 @@ export default class CupViewAdminMedals extends LitElement {
       </div>
       <p class="muted small">
         Je Kategorie ein Aufkleber für jede Fahrerin und jeden Fahrer der
-        ${PODIUM} Starts mit den meisten Fahrern (Podest), ohne Ersatzfahrer.
+        ${PODIUM} Starts mit den meisten FahrerInnen (Podest), ohne Ersatzfahrer.
         Gruppenkategorien sind zugleich das Finale: Jeder Gruppenstart auf dem
         Podest bekommt zusätzlich einen Pokal.
         Gedruckt wird auf A4-Bögen mit 5 × 13 Aufklebern, ohne Seitenränder.
@@ -201,11 +201,11 @@ export default class CupViewAdminMedals extends LitElement {
             <th class="num">Starts</th>
             <th
               class="num"
-              title="Fahrer je Start (ohne Ersatzfahrer); bei Gruppen kleinster bis größter Start"
+              title="FahrerInnen je Start (ohne Ersatzfahrer); bei Gruppen kleinster bis größter Start"
             >
               Medaillen/Start
             </th>
-            <th class="num" title="Fahrer der 3 größten Starts">Summe</th>
+            <th class="num" title="FahrerInnen der 3 größten Starts">Summe</th>
             <th class="num" title="Ersatzfahrer, ohne Aufkleber">Ersatz</th>
             <th class="num" title="Ein Pokal je Gruppenstart auf dem Podest">
               Pokale

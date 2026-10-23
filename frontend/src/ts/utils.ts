@@ -429,10 +429,10 @@ export const groupSizeWarning = (
     return null;
   }
   if (type === "group_large" && regular <= MAX_SMALL_GROUP_SIZE) {
-    return `zu klein für eine Großgruppe – mindestens ${MAX_SMALL_GROUP_SIZE + 1} Fahrer`;
+    return `zu klein für eine Großgruppe – mindestens ${MAX_SMALL_GROUP_SIZE + 1} FahrerInnen`;
   }
   if (type === "group_small" && regular > MAX_SMALL_GROUP_SIZE) {
-    return `zu groß für eine Kleingruppe – höchstens ${MAX_SMALL_GROUP_SIZE} Fahrer`;
+    return `zu groß für eine Kleingruppe – höchstens ${MAX_SMALL_GROUP_SIZE} FahrerInnen`;
   }
   return null;
 };
@@ -448,7 +448,7 @@ export const actSizeWarning = (act: {
   );
 
 /**
- * One-line summary of a group, e.g. "KG Junior Expert · 7 Fahrer + 1 Ersatz".
+ * One-line summary of a group, e.g. "KG Junior Expert · 7 FahrerInnen + 1 Ersatz".
  * `isU15` is `null` when the age group is unknown (it is then left out).
  */
 export const describeGroup = (
@@ -458,11 +458,11 @@ export const describeGroup = (
   isU15: boolean | null,
 ) => {
   if (regular < MIN_GROUP_SIZE) {
-    return `unvollständig – mindestens ${MIN_GROUP_SIZE} Fahrer`;
+    return `unvollständig – mindestens ${MIN_GROUP_SIZE} FahrerInnen`;
   }
   const age = isU15 === null ? "" : isU15 ? " Junior Expert" : " Expert";
   const extra = replacements > 0 ? ` + ${replacements} Ersatz` : "";
-  return `${actTypeShort[type]}${age} · ${regular} Fahrer${extra}`;
+  return `${actTypeShort[type]}${age} · ${regular} FahrerInnen${extra}`;
 };
 
 /** A run of a final's reserved slots, e.g. 5 slots "U11–U15". */

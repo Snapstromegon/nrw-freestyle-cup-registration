@@ -740,12 +740,12 @@ export default class CupViewAdminActsOverview extends LitElement {
         >
         <span
           class="kpi"
-          title="Fahrer mit einem Start in einer Kategorie, Ersatzfahrer eingeschlossen"
-          >Fahrer eingecheckt <b>${ratio(riders.checkedIn, riders.total)}</b></span
+          title="FahrerInnen mit einem Start in einer Kategorie, Ersatzfahrer eingeschlossen"
+          >FahrerInnen eingecheckt <b>${ratio(riders.checkedIn, riders.total)}</b></span
         >
         <span
           class="kpi"
-          title="Küren einer Kategorie, deren Fahrer alle eingecheckt sind (Ersatzfahrer zählen nicht)"
+          title="Küren einer Kategorie, deren FahrerInnen alle eingecheckt sind (Ersatzfahrer zählen nicht)"
           >Küren vollständig eingecheckt
           <b>${ratio(complete, categorized.length)}</b></span
         >
@@ -762,7 +762,7 @@ export default class CupViewAdminActsOverview extends LitElement {
       <input
         class="inline"
         type="search"
-        placeholder="Suche: Kür, Gruppe, Fahrer, Verein, Song"
+        placeholder="Suche: Kür, Gruppe, FahrerInnen, Verein, Song"
         aria-label="Suche"
         .value=${this.search}
         @input=${this.onSearchInput}
@@ -845,7 +845,7 @@ export default class CupViewAdminActsOverview extends LitElement {
               <th class="num" title="Geprüfte Musik / hochgeladene Musik">
                 geprüft
               </th>
-              <th class="num" title="Eingecheckte Fahrer mit Start in einer Kategorie">
+              <th class="num" title="Eingecheckte FahrerInnen mit Start in einer Kategorie">
                 CI
               </th>
               <th>Status</th>
@@ -920,7 +920,7 @@ export default class CupViewAdminActsOverview extends LitElement {
             <th>Kürname</th>
             <th>Teilnehmer</th>
             <th>Verein(e)</th>
-            <th class="num" title="Alter des ältesten Fahrers">Alter</th>
+            <th class="num" title="Alter der Ältesten">Alter</th>
             <th class="c">Musik</th>
             <th class="c">geprüft</th>
             <th class="c" title="Eingecheckt">CI</th>
@@ -1106,7 +1106,7 @@ export default class CupViewAdminActsOverview extends LitElement {
               <th>Kürname</th>
               <th>Teilnehmer</th>
               <th>Verein(e)</th>
-              <th class="num" title="Alter des ältesten Fahrers">Alter</th>
+              <th class="num" title="Alter der Ältesten">Alter</th>
               <th class="c">Musik</th>
               <th class="c">geprüft</th>
               <th class="c" title="Eingecheckt">CI</th>
@@ -1207,7 +1207,7 @@ export default class CupViewAdminActsOverview extends LitElement {
           class="chip ${ci.tone}"
           title=${
             ci.total === 0
-              ? "Keine Fahrer"
+              ? "Keine FahrerInnen"
               : ci.missingNames.length
                 ? `Nicht eingecheckt: ${ci.missingNames.join(", ")}`
                 : "Alle eingecheckt"

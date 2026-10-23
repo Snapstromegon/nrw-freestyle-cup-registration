@@ -871,7 +871,7 @@ export default class CupTimeplan extends LitElement {
         warn: checkedIn < total && regularMissing === 0,
         bad: regularMissing > 0,
       })}
-      title="Eingecheckt: ${checkedIn} von ${total} Fahrern"
+      title="Eingecheckt: ${checkedIn} von ${total} FahrerInnen"
       >✓ ${checkedIn}/${total}</span
     >`;
   }

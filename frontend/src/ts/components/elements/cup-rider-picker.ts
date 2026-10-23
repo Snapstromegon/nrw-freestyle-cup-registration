@@ -137,7 +137,7 @@ export default class CupRiderPicker extends LitElement {
   @property({ attribute: false }) options: PickerOption[] = [];
   /** The selected value, `""` for none. */
   @property() value = "";
-  @property() placeholder = "Fahrer suchen…";
+  @property() placeholder = "FahrerIn suchen…";
   /** The accessible name. */
   @property() label = "";
   @property({ type: Boolean }) disabled = false;

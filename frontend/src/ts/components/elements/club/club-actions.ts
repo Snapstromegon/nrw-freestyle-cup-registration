@@ -118,7 +118,7 @@ export const singleFlags = (
 export const setSingle = (starter: StarterLike, single: boolean) => {
   if (single && !starter.gender) {
     throw new Error(
-      `Bitte gib zuerst das Geschlecht von ${starterName(starter)} an (Schritt Fahrer).`,
+      `Bitte gib zuerst das Geschlecht von ${starterName(starter)} an (Schritt FahrerInnen).`,
     );
   }
   return editStarter(starter, singleFlags(single, starter.gender));

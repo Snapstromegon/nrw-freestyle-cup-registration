@@ -255,9 +255,9 @@ export default class CupClubStepRiders extends LitElement {
   override render() {
     const starters = this.filtered();
     return html`<div class="step-intro">
-        <h2>2. Fahrer</h2>
+        <h2>2. FahrerInnen</h2>
         <p>
-          Tragt alle Fahrer mit Namen, Geburtsdatum und Geschlecht ein. Das
+          Tragt alle FahrerInnen mit Namen, Geburtsdatum und Geschlecht ein. Das
           Geschlecht entscheidet, ob eine Einzelkür weiblich oder männlich
           gewertet wird. In welchen Küren sie
           starten, legt ihr in den nächsten Schritten fest.
@@ -270,7 +270,7 @@ export default class CupClubStepRiders extends LitElement {
           : html`<p class="banner info">
               <i class="material-icon">lock</i>
               <span class="grow"
-                >Der Meldeschluss ist vorbei – Fahrer können nicht mehr geändert
+                >Der Meldeschluss ist vorbei – FahrerInnen können nicht mehr geändert
                 werden.</span
               >
             </p>`
@@ -297,14 +297,14 @@ export default class CupClubStepRiders extends LitElement {
         <header>
           <h3>
             ${this.data.starters.length}
-            ${this.data.starters.length === 1 ? "Fahrer" : "Fahrer"}
+            ${this.data.starters.length === 1 ? "FahrerIn" : "FahrerInnen"}
           </h3>
           ${
             this.data.starters.length > 8
               ? html`<input
                   type="search"
                   placeholder="Suchen…"
-                  aria-label="Fahrer suchen"
+                  aria-label="FahrerInnen suchen"
                   .value=${this.search}
                   @input=${this.onSearchInput}
                 />`
@@ -315,11 +315,11 @@ export default class CupClubStepRiders extends LitElement {
           this.data.starters.length === 0
             ? html`<div class="empty">
                 <i class="material-icon">person_add</i>
-                <strong>Noch keine Fahrer</strong>
-                <span>Fügt oben euren ersten Fahrer hinzu.</span>
+                <strong>Noch keine FahrerInnen</strong>
+                <span>Fügt oben eure erste FahrerIn hinzu.</span>
               </div>`
             : starters.length === 0
-              ? html`<p class="muted">Kein Fahrer passt zur Suche.</p>`
+              ? html`<p class="muted">Keine FahrerIn passt zur Suche.</p>`
               : html`<table>
                   <thead>
                     <tr>
@@ -426,7 +426,7 @@ export default class CupClubStepRiders extends LitElement {
 
   renderAddForm() {
     return html`<section class="card">
-      <header><h3>Fahrer hinzufügen</h3></header>
+      <header><h3>FahrerIn hinzufügen</h3></header>
       <form class="add-form" @submit=${this.add}>
         <label class="field"
           ><span>Vorname</span

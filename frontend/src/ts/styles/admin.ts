@@ -196,7 +196,7 @@ export const adminStyles = css`
     box-shadow: inset 0 0 0 100vmax color-mix(in srgb, var(--cup-blue) 7%, transparent);
   }
 
-  /* Sticky sub-header inside a tbody, e.g. "EM U15 · 12 Starter". */
+  /* Sticky sub-header inside a tbody, e.g. "EM U15 · 12 FahrerInnen". */
   .dense tbody tr.group-head > th {
     position: sticky;
     top: calc(var(--admin-sticky-top, 0px) + var(--dense-head-h));

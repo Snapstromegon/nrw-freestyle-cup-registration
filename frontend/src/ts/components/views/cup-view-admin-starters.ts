@@ -346,7 +346,7 @@ export default class CupViewAdminStarters extends LitElement {
   override render() {
     if (!this.loaded) {
       return html`<div class="page-pad">
-        <h1>Starter</h1>
+        <h1>FahrerInnen</h1>
         ${
           this.error
             ? html`<div class="error-banner">
@@ -397,9 +397,9 @@ export default class CupViewAdminStarters extends LitElement {
     const incompleteGroups = groups.filter((act) => !act.category).length;
 
     return html`<div class="head">
-      <h1>Starter</h1>
+      <h1>FahrerInnen</h1>
       <div class="kpis">
-        <span class="kpi"><b>${starters.length}</b> Starter</span>
+        <span class="kpi"><b>${starters.length}</b> FahrerInnen</span>
         <span class="kpi"><b>${clubs}</b> Vereine</span>
         <span class="kpi" title="Starts, Gruppen inklusive Ersatzfahrer"
           ><b>${starts}</b> Starts
@@ -422,14 +422,14 @@ export default class CupViewAdminStarters extends LitElement {
         >
         <span
           class="kpi ${checkedIn === starters.length ? "ok" : ""}"
-          title="Eingecheckte Starter"
+          title="Eingecheckte FahrerInnen"
           >Eingecheckt <b>${checkedIn}/${starters.length}</b></span
         >
         ${
           uncategorized
             ? html`<span
               class="kpi warn"
-              title="Einträge ohne Kategorie: unvollständige Gruppen, Alter außerhalb aller Kategorien, Paare ohne Partner, Starter ohne Starts"
+              title="Einträge ohne Kategorie: unvollständige Gruppen, Alter außerhalb aller Kategorien, Paare ohne Partner, FahrerInnen ohne Starts"
               >ohne Kategorie <b>${uncategorized}</b></span
             >`
             : nothing
@@ -538,7 +538,7 @@ export default class CupViewAdminStarters extends LitElement {
         </p>`
         : nothing;
     if (visible.length === 0) {
-      return html`<p class="empty">Keine Starter für diesen Filter.</p>
+      return html`<p class="empty">Keine FahrerInnen für diesen Filter.</p>
         ${emptyLine}`;
     }
     return html`<div class="table-wrap">
@@ -602,8 +602,8 @@ export default class CupViewAdminStarters extends LitElement {
               : acts === 1
                 ? "Paar"
                 : "Paare"
-          } · ${all.length} Fahrer`
-        : `${all.length} Starter`;
+          } · ${all.length} FahrerInnen`
+        : `${all.length} FahrerInnen`;
     return html`<tr class="group-head">
       <th colspan="8">
         ${
@@ -806,9 +806,9 @@ export default class CupViewAdminStarters extends LitElement {
                     <th>Gruppe</th>
                     <th>Typ</th>
                     <th>Kategorie</th>
-                    <th class="num">Fahrer</th>
+                    <th class="num">FahrerInnen</th>
                     <th>Vereine</th>
-                    <th class="num" title="Alter des ältesten Fahrers (inkl. Ersatz)">
+                    <th class="num" title="Alter der Ältesten (inkl. Ersatz)">
                       ältester
                     </th>
                     <th class="c">Musik</th>
@@ -851,7 +851,7 @@ export default class CupViewAdminStarters extends LitElement {
             ? "bad"
             : "warn";
     return html`<tr class=${act.category ? "" : "warn"}>
-      <td class="trunc" title=${members || "Keine Fahrer"}>
+      <td class="trunc" title=${members || "Keine FahrerInnen"}>
         <b>${act.group_name}</b>
       </td>
       <td>
@@ -912,7 +912,7 @@ export default class CupViewAdminStarters extends LitElement {
               ? `Nicht eingecheckt: ${stats.missingNames.join(", ")}`
               : stats.total
                 ? "Alle eingecheckt"
-                : "Keine Fahrer"
+                : "Keine FahrerInnen"
           }
           >${stats.checkedIn}/${stats.total}</span
         >

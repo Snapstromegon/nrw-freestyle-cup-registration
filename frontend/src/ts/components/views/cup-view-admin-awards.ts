@@ -291,7 +291,7 @@ export default class CupViewAdminAwards extends LitElement {
       <input
         class="inline"
         type="search"
-        placeholder="Kür, Fahrer, Verein, Kategorie oder Song"
+        placeholder="Kür, FahrerInnen, Verein, Kategorie oder Song"
         aria-label="Song suchen"
         .value=${this.search}
         @input=${this.onSearch}
