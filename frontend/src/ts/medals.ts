@@ -2,7 +2,7 @@
 // stickers for the podium of each category and trophies for the finals. Pure
 // helpers, so the unit tests can import them without a DOM.
 import type { schemas } from "./apiClient";
-import type { ActType } from "./utils";
+import { type ActType, isGroupActType } from "./utils";
 
 /** Stickers on one A4 sheet: 5 columns × 13 rows. */
 export const STICKERS_PER_SHEET = 65;
@@ -21,6 +21,12 @@ export interface MedalCategory {
   medals: number;
   /** Replacement riders in the category; they get no sticker. */
   replacements: number;
+  /**
+   * Group categories have no separate final, they are the final: each start
+   * on the podium also gets a trophy. Singles and pairs get theirs in the
+   * finals (see `finalTrophies`).
+   */
+  trophies: number;
   /** Sheets (1-based) the category's stickers are printed on. */
   firstSheet: number;
   lastSheet: number;
@@ -31,7 +37,7 @@ const labelOf = (item: { name: string; description?: string | null }) =>
   item.description || item.name;
 
 export const summarizeMedals = (
-  categories: Pick<schemas.Category, "name" | "description">[],
+  categories: Pick<schemas.Category, "name" | "description" | "act_type">[],
   acts: Pick<schemas.StartlistAct, "category" | "participants">[],
 ) => {
   const actsByCategory = new Map<string, typeof acts>();
@@ -51,6 +57,9 @@ export const summarizeMedals = (
     ),
   ];
   const labels = new Map(categories.map((c) => [c.name, labelOf(c)]));
+  const groupCategories = new Set(
+    categories.filter((c) => isGroupActType(c.act_type)).map((c) => c.name),
+  );
 
   let printed = 0;
   return names.map((name): MedalCategory => {
@@ -74,6 +83,9 @@ export const summarizeMedals = (
           sum + act.participants.filter((p) => p.is_replacement).length,
         0,
       ),
+      trophies: groupCategories.has(name)
+        ? Math.min(PODIUM, categoryActs.length)
+        : 0,
       firstSheet: Math.floor(first / STICKERS_PER_SHEET) + 1,
       lastSheet: Math.floor((printed - 1) / STICKERS_PER_SHEET) + 1,
     };
@@ -93,15 +105,10 @@ export const sheetsOf = (categories: MedalCategory[]) => {
 };
 
 /**
- * Trophies per start of a final: one per rider. A group gets one trophy, as
- * its size isn't known before the finalists are placed.
+ * Trophies per start of a final: one per rider. Finals are for singles and
+ * pairs; groups get theirs in their category (see `MedalCategory.trophies`).
  */
-const TROPHIES_PER_START: Record<ActType, number> = {
-  single: 1,
-  pair: 2,
-  group_small: 1,
-  group_large: 1,
-};
+const trophiesPerStart = (actType: ActType) => (actType === "pair" ? 2 : 1);
 
 export interface FinalTrophies {
   name: string;
@@ -114,7 +121,7 @@ export interface FinalTrophies {
 
 /**
  * Finals get trophies instead of medal stickers: one for every rider of the
- * first three places, one per group. A final with several slot groups (e.g.
+ * first three places. A final with several slot groups (e.g.
  * U17–U21 and U23+) is one ranking. The slots are reserved before the event, so this is
  * known in advance.
  */
@@ -131,6 +138,6 @@ export const finalTrophies = (
       name: final.name,
       label: labelOf(final),
       places,
-      trophies: places * TROPHIES_PER_START[final.act_type],
+      trophies: places * trophiesPerStart(final.act_type),
     };
   });

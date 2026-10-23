@@ -151,18 +151,19 @@ export default class CupViewAdminMedals extends LitElement {
     sheetCount: number,
     trophies: FinalTrophies[],
   ) {
-    const total = (key: "starts" | "medals" | "replacements") =>
+    const total = (key: "starts" | "medals" | "replacements" | "trophies") =>
       summary.reduce((sum, c) => sum + c[key], 0);
     const medals = total("medals");
-    const trophyCount = trophies.reduce((sum, f) => sum + f.trophies, 0);
+    const finalTrophyCount = trophies.reduce((sum, f) => sum + f.trophies, 0);
+    const trophyCount = total("trophies") + finalTrophyCount;
     return html`<div class="page-pad no-print">
       <div class="toolbar">
         <h1>Medaillen</h1>
         <div class="kpis">
           <span class="kpi"><b>${medals}</b> Medaillen</span>
           ${
-            trophies.length
-              ? html`<span class="kpi" title="Für die Plätze 1–${PODIUM} der Finals"
+            trophyCount
+              ? html`<span class="kpi" title="Für die Plätze 1–${PODIUM} der Finals und der Gruppenkategorien"
                   ><b>${trophyCount}</b> Pokale</span
                 >`
               : nothing
@@ -188,6 +189,8 @@ export default class CupViewAdminMedals extends LitElement {
       <p class="muted small">
         Je Kategorie ein Aufkleber für jede Fahrerin und jeden Fahrer der
         ${PODIUM} Starts mit den meisten Fahrern (Podest), ohne Ersatzfahrer.
+        Gruppenkategorien sind zugleich das Finale: Jeder Gruppenstart auf dem
+        Podest bekommt zusätzlich einen Pokal.
         Gedruckt wird auf A4-Bögen mit 5 × 13 Aufklebern, ohne Seitenränder.
       </p>
       <table class="dense fit">
@@ -204,6 +207,9 @@ export default class CupViewAdminMedals extends LitElement {
             </th>
             <th class="num" title="Fahrer der 3 größten Starts">Summe</th>
             <th class="num" title="Ersatzfahrer, ohne Aufkleber">Ersatz</th>
+            <th class="num" title="Ein Pokal je Gruppenstart auf dem Podest">
+              Pokale
+            </th>
             <th class="num">Bogen</th>
           </tr>
         </thead>
@@ -225,6 +231,7 @@ export default class CupViewAdminMedals extends LitElement {
                 </td>
                 <td class="num">${c.medals}</td>
                 <td class="num">${c.replacements || ""}</td>
+                <td class="num">${c.trophies || ""}</td>
                 <td class="num">
                   ${
                     c.medals === 0
@@ -244,6 +251,7 @@ export default class CupViewAdminMedals extends LitElement {
             <td></td>
             <td class="num">${medals}</td>
             <td class="num">${total("replacements")}</td>
+            <td class="num">${total("trophies")}</td>
             <td class="num">${sheetCount}</td>
           </tr>
         </tfoot>
@@ -264,16 +272,17 @@ export default class CupViewAdminMedals extends LitElement {
           ? html`<p class="empty">Noch keine Starts mit Kategorie.</p>`
           : nothing
       }
-      ${trophies.length ? this.renderTrophies(trophies, trophyCount) : nothing}
+      ${trophies.length ? this.renderTrophies(trophies, finalTrophyCount) : nothing}
     </div>`;
   }
 
   private renderTrophies(trophies: FinalTrophies[], trophyCount: number) {
-    return html`<h2>Pokale</h2>
+    // Per final; the group categories' trophies are in the table above.
+    return html`<h2>Pokale der Finals</h2>
       <p class="muted small">
-        Finals bekommen statt Medaillen Pokale: einen für jede Fahrerin und
-        jeden Fahrer der Plätze 1–${PODIUM}, im Paarfinale also zwei je Platz;
-        eine Gruppe bekommt einen Pokal.
+        Die Einzel- und Paarfinals bekommen statt Medaillen Pokale: einen für
+        jede Fahrerin und jeden Fahrer der Plätze 1–${PODIUM}, im Paarfinale
+        also zwei je Platz.
       </p>
       <table class="dense fit">
         <thead>
