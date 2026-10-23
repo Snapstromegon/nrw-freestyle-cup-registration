@@ -182,3 +182,12 @@ Implementation calls (mine) for the item "Finals planning" (RE-2).
 | ID | Question | Decision | Status |
 |---|---|---|---|
 | BL-1 | Owner club can't remove other clubs' riders or hand a group over; the same person registered by two clubs isn't detected | Both are fine as they are; admins handle such cases. | done (no change) |
+
+## Jury registration (JR), answered 2026-10-23
+
+The design decisions of the jury registration are in #225; these came up afterwards.
+
+| ID | Question | Decision | Status |
+|---|---|---|---|
+| JR-1 | Do incomplete groups (no category yet) count as Küren for the jury obligation? | Yes, for the owner club, like they pay start fees (from one regular rider on). | done |
+| JR-2 | Publish the Juryplan only after the judge deadline? | Yes; before it, clubs can still change their judges. | done |

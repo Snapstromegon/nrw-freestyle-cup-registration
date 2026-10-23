@@ -12,6 +12,7 @@ import {
 import {
   ageOnStart,
   coverage,
+  judgeRegistrationEnd,
   neededFor,
   planWarnings,
   ROLES,
@@ -246,6 +247,9 @@ export default class CupViewAdminJudges extends LitElement {
           </table>`,
     );
     const published = plan.published_at;
+    // Clubs can change their judges until the judge deadline.
+    const end = judgeRegistrationEnd(this.systemStatus?.competition);
+    const tooEarly = !published && !!end && Date.now() <= Date.parse(end);
     return html`<section class="plan-section">
       <div class="toolbar">
         <h2>Juryplan</h2>
@@ -270,7 +274,12 @@ export default class CupViewAdminJudges extends LitElement {
         </button>
         <button
           class="btn small no-print ${published ? "" : "primary"}"
-          ?disabled=${this.saving}
+          title=${
+            tooEarly && end
+              ? `Erst nach dem Ende der Jury-Anmeldung (${formatDate(end)})`
+              : ""
+          }
+          ?disabled=${this.saving || tooEarly}
           @click=${this.onPublishClick}
         >
           ${published ? "Zurückziehen" : "Juryplan veröffentlichen"}
@@ -279,7 +288,10 @@ export default class CupViewAdminJudges extends LitElement {
       <p class="muted small no-print">
         Vorgeschlagen werden die JurorInnen, die sich für die Jury-Kategorie
         und Rolle gemeldet haben; mit „alle zeigen“ auch alle anderen.
-        Veröffentlicht sieht jeder Verein die Einteilung seiner JurorInnen.
+        Veröffentlicht sieht jeder Verein die Einteilung seiner JurorInnen; das
+        geht erst nach dem Ende der Jury-Anmeldung${
+          end ? ` (${formatDate(end)})` : ""
+        }.
       </p>
       ${groups}
     </section>`;

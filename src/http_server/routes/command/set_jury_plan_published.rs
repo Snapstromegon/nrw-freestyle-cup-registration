@@ -4,6 +4,7 @@ use tracing::{info, instrument};
 use utoipa::ToSchema;
 
 use crate::{
+    competition::Competition,
     http_server::{ClientError, HttpError, extractor::auth::Auth},
     jury::JuryEnabled,
     reloadable_sqlite::{ReloadableSqlite, begin_write},
@@ -18,7 +19,9 @@ pub struct SetJuryPlanPublishedBody {
 }
 
 /// Publish the Juryplan to the clubs, or take it back. Each club then sees
-/// its own judges' assignments. Admin only.
+/// its own judges' assignments. Publishing waits for the end of the judge
+/// registration, so clubs can't change their judges under the plan. Admin
+/// only.
 #[utoipa::path(
     post,
     tags=["command", "jury"],
@@ -44,7 +47,20 @@ pub async fn set_jury_plan_published(
     }
     let db = db.get().await.clone();
     let mut transaction = begin_write(&db).await?;
-    let published_at = body.published.then(time::OffsetDateTime::now_utc);
+    let now = time::OffsetDateTime::now_utc();
+    if body.published
+        && let Some(competition) = Competition::current(&mut *transaction).await?
+        && now <= competition.judge_registration_end()
+    {
+        let end = competition.judge_registration_end();
+        return Err(HttpError::ErrorMessages(format!(
+            "Der Juryplan kann erst nach dem Ende der Jury-Anmeldung ({:02}.{:02}.{}) veröffentlicht werden.",
+            end.day(),
+            u8::from(end.month()),
+            end.year()
+        )));
+    }
+    let published_at = body.published.then_some(now);
     info!("Juryplan published: {}", body.published);
     sqlx::query!(
         "UPDATE competition SET jury_plan_published_at = ?",

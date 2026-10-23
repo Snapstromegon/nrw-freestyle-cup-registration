@@ -644,12 +644,15 @@ async fn kueren_count_like_the_start_fee(db: SqlitePool) {
     let app = TestApp::new(db).await;
     let (owner, club_id) = club_with_singles(&app, 2).await;
     let admin = app.create_admin().await;
-    // An incomplete group (2 regular riders) has no category and doesn't count.
-    let riders = app.add_riders(&owner, club_id, "Gruppe", 2).await;
+    // An empty group costs nothing and doesn't count …
     let group = app.create_group(&owner, club_id, "Klein").await;
+    assert_eq!(club(&app, &owner).await["jury"]["acts"], 2);
+    // … an incomplete one (2 regular riders, no category) pays start fees
+    // and counts for its owner (decided 2026-10-23).
+    let riders = app.add_riders(&owner, club_id, "Gruppe", 2).await;
     app.set_group_members(&owner, club_id, group, &riders, &[])
         .await;
-    assert_eq!(club(&app, &owner).await["jury"]["acts"], 2);
+    assert_eq!(club(&app, &owner).await["jury"]["acts"], 3);
 
     // A withdrawn act counts unless its fee is waived.
     let single: Value = sqlx::query_scalar::<_, Uuid>(
@@ -660,7 +663,7 @@ async fn kueren_count_like_the_start_fee(db: SqlitePool) {
     .unwrap()
     .to_string()
     .into();
-    for (fee_waived, acts) in [(false, 2), (true, 1)] {
+    for (fee_waived, acts) in [(false, 3), (true, 2)] {
         let response = app
             .post(
                 "/api/command/set_act_withdrawn",
@@ -773,6 +776,16 @@ async fn admins_assign_judges_and_publish_the_plan(db: SqlitePool) {
     // Clubs see nothing before publishing, then only their own judges.
     let own = plan(&app, &owner, Some(club_id)).await;
     assert_eq!(own.body["assignments"], json!([]));
+    // The plan is published once the judges are fixed (decided 2026-10-23).
+    let early = app
+        .post(
+            "/api/command/set_jury_plan_published",
+            json!({ "published": true }),
+            Some(&admin),
+        )
+        .await;
+    assert!(!early.status.is_success(), "{:?}", early.body);
+    app.close_registration().await;
     let published = app
         .post(
             "/api/command/set_jury_plan_published",

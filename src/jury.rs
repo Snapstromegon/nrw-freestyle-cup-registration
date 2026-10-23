@@ -529,8 +529,9 @@ pub struct JuryObligation {
 
 /// The jury obligation of every club, or only of `club_id`.
 ///
-/// An act counts when it's charged a start fee: it has a category, or it was
-/// withdrawn without the fee being waived. It counts for its owner club: the
+/// An act counts when it's charged a start fee: it has a category, it's a
+/// group with regular riders (also an incomplete one), or it was withdrawn
+/// without the fee being waived. It counts for its owner club: the
 /// group's creator, or the club of a single's or pair's riders. A trained
 /// judge counts the deployments of every jury category they registered for
 /// (once per category, whatever the roles), at most `max_deployments`.
@@ -546,7 +547,13 @@ pub async fn obligations(
             clubs.jury_deployments_override,
             (
                 SELECT COUNT(*) FROM view_act AS a
-                WHERE (a.category IS NOT NULL OR (a.withdrawn_at IS NOT NULL AND NOT a.fee_waived))
+                WHERE NOT (a.withdrawn_at IS NOT NULL AND a.fee_waived)
+                    AND (
+                        a.category IS NOT NULL
+                        OR a.withdrawn_at IS NOT NULL
+                        -- Incomplete groups pay start fees, too.
+                        OR (a.act_type IN ('group_small', 'group_large') AND a.regular_count > 0)
+                    )
                     AND COALESCE(
                         a.owner_club_id,
                         (

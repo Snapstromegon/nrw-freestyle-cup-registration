@@ -147,6 +147,15 @@ impl Competition {
         }))
     }
 
+    /// End of the judge registration: the jury's own deadline, or the
+    /// registration's end.
+    pub fn judge_registration_end(&self) -> OffsetDateTime {
+        self.jury
+            .as_ref()
+            .and_then(|jury| jury.registration_end)
+            .unwrap_or(self.registration_end)
+    }
+
     pub fn status_options(&self) -> StatusOptions {
         StatusOptions {
             start_register_date: self.registration_start,
