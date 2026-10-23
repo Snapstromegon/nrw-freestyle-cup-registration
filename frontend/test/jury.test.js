@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "vite-plus/test";
 import {
   ageOnStart,
+  countDeployments,
   coverage,
   deploymentNote,
   planWarnings,
@@ -147,5 +148,38 @@ describe("jury", () => {
       deploymentNote(judge(false, 2, 0)),
       "zählt nicht (nicht geschult)",
     );
+  });
+
+  test("countDeployments counts each ticked category once, capped", () => {
+    const categories = [
+      { id: "vorlauf", deployments: 2 },
+      { id: "finale", deployments: 1 },
+      { id: "gruppe", deployments: 2 },
+    ];
+    // Two roles in the heat count once.
+    const ticked = [
+      "vorlauf:technical",
+      "vorlauf:performance",
+      "finale:technical",
+    ];
+    assert.deepEqual(countDeployments(categories, ticked, true, null), {
+      registered: 3,
+      counted: 3,
+    });
+    assert.deepEqual(countDeployments(categories, ticked, true, 2), {
+      registered: 3,
+      counted: 2,
+    });
+    assert.deepEqual(
+      countDeployments(categories, ["gruppe:dismounts"], false, null),
+      {
+        registered: 2,
+        counted: 0,
+      },
+    );
+    assert.deepEqual(countDeployments(categories, [], true, null), {
+      registered: 0,
+      counted: 0,
+    });
   });
 });

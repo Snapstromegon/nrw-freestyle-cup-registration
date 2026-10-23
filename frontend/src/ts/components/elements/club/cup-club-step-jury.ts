@@ -12,6 +12,7 @@ import {
 } from "../../../club-data";
 import {
   ageOnStart,
+  countDeployments,
   deploymentNote,
   ROLES,
   roleLabels,
@@ -19,7 +20,12 @@ import {
 } from "../../../jury";
 import { iconStyles, resetStyles } from "../../../styles/base";
 import { clubPortalStyles } from "../../../styles/club-portal";
-import { type Competition, formatDate, formatMoney } from "../../../utils";
+import {
+  type Competition,
+  dateInputValue,
+  formatDate,
+  formatMoney,
+} from "../../../utils";
 import { dataChanged, navigateTo } from "./events";
 
 type JudgeRole = schemas.JudgeRole;
@@ -53,7 +59,7 @@ const key = (categoryId: string, role: JudgeRole) => `${categoryId}:${role}`;
 const draftOf = (judge: ClubJudge): Draft => ({
   firstname: judge.firstname,
   lastname: judge.lastname,
-  birthdate: judge.birthdate.slice(0, 10),
+  birthdate: dateInputValue(judge.birthdate),
   is_trained: judge.is_trained,
   max_deployments: judge.max_deployments?.toString() ?? "",
   note: judge.note ?? "",
@@ -186,6 +192,28 @@ export default class CupClubStepJury extends LitElement {
 
       table.grid td.category {
         padding: 0.5rem 0.75rem;
+      }
+
+      table.grid th.count,
+      table.grid td.count {
+        width: 5rem;
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+      }
+
+      table.grid td.count {
+        color: var(--cup-muted);
+      }
+
+      table.grid tfoot td {
+        border-top: 2px solid var(--cup-border);
+        background: var(--cup-surface-2);
+        font-weight: 600;
+      }
+
+      table.grid tfoot td.count {
+        color: var(--cup-blue);
+        font-size: 1.1rem;
       }
 
       table.grid td.category small {
@@ -668,6 +696,9 @@ export default class CupClubStepJury extends LitElement {
         <thead>
           <tr>
             <th scope="col">Wofür kann die JurorIn werten?</th>
+            <th class="count" scope="col" title="Juryeinsätze, für die die Kategorie zählt">
+              Einsätze
+            </th>
             ${headers}
           </tr>
         </thead>
@@ -678,6 +709,7 @@ export default class CupClubStepJury extends LitElement {
             (category) => this.renderGridRow(category),
           )}
         </tbody>
+        ${this.renderGridTotal()}
       </table>
     </div>`;
   }
@@ -706,8 +738,37 @@ export default class CupClubStepJury extends LitElement {
         ${category.name}
         ${category.day ? html`<small>${formatDate(category.day)}</small>` : nothing}
       </td>
+      <td class="count">${category.deployments}</td>
       ${cells}
     </tr>`;
+  }
+
+  /** What the current selection is worth for the club, while editing. */
+  private renderGridTotal() {
+    const draft = this.draft;
+    const max = draft.max_deployments ? Number(draft.max_deployments) : null;
+    const { registered, counted } = countDeployments(
+      this.categories,
+      draft.registrations,
+      draft.is_trained,
+      max,
+    );
+    const note = deploymentNote({
+      is_trained: draft.is_trained,
+      registered_deployments: registered,
+      counted_deployments: counted,
+      max_deployments: max,
+    });
+    return html`<tfoot>
+      <tr>
+        <td class="category">
+          Zählt für euren Verein
+          ${note ? html`<small>${note}</small>` : nothing}
+        </td>
+        <td class="count"><strong>${counted}</strong></td>
+        <td colspan=${ROLES.length}></td>
+      </tr>
+    </tfoot>`;
   }
 
   private onTextInput(e: InputEvent) {

@@ -189,3 +189,27 @@ export const deploymentNote = (judge: {
   }
   return "";
 };
+
+/**
+ * What a judge's selection is worth while it's being edited: every ticked
+ * jury category once, whatever the roles (`ticked` holds "categoryId:role"),
+ * and what of it counts for the club. The same rule as the server's
+ * `counted_deployments`, for a live preview.
+ */
+export const countDeployments = (
+  categories: { id: string; deployments: number }[],
+  ticked: Iterable<string>,
+  isTrained: boolean,
+  maxDeployments: number | null,
+) => {
+  const ids = new Set([...ticked].map((key) => key.split(":")[0]));
+  const registered = categories
+    .filter((category) => ids.has(category.id))
+    .reduce((sum, category) => sum + category.deployments, 0);
+  const counted = !isTrained
+    ? 0
+    : maxDeployments === null
+      ? registered
+      : Math.min(registered, maxDeployments);
+  return { registered, counted };
+};
