@@ -71,9 +71,6 @@ export default class CupClubActManager extends LitElement {
 
   @property({ type: Boolean, attribute: "admin-mode" }) adminMode = false;
 
-  /** Bumped by cup-club-manager to reload after changes in other managers. */
-  @property({ attribute: false }) refresh = 0;
-
   acts = new Task(this, {
     task: async ([clubId]): Promise<Act[]> => {
       if (!clubId) {
@@ -85,7 +82,7 @@ export default class CupClubActManager extends LitElement {
         }),
       );
     },
-    args: () => [this.club?.id, this.refresh],
+    args: () => [this.club?.id],
   });
 
   @state() actEdits = new Map<string, Act>();
@@ -587,9 +584,8 @@ export default class CupClubActManager extends LitElement {
   }
 
   /**
-   * Reloads after a successful change. Inside cup-club-manager, the club
-   * manager cancels the event and reloads all managers; standalone (the acts
-   * page), only this manager reloads.
+   * Reloads after a successful change, unless a surrounding element cancels
+   * the event to reload everything itself.
    */
   dataChanged() {
     const event = new Event("club-data-changed", {
