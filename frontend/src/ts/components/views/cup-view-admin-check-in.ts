@@ -24,7 +24,6 @@ import {
   formatDateTime,
   formatMoney,
   formatTime,
-  getStarterPrice,
   isGroupActType,
   MIN_GROUP_SIZE,
   participantName,
@@ -86,8 +85,6 @@ interface ClubBlock {
   name: string;
   /** All starters of the club, by name. */
   rows: Row[];
-  /** Registration fees of all its starters. */
-  fees: number;
 }
 
 /** What the status line reports about the last change, with an undo. */
@@ -939,16 +936,20 @@ export default class CupViewAdminCheckIn extends LitElement {
     if (!this.clubInfos) {
       return nothing;
     }
-    const payment =
-      this.clubInfos.find((info) => info.id === club.id)?.payment ?? 0;
-    const open = Math.round((club.fees - payment) * 100) / 100;
-    const title = `Gebühr ${formatMoney(club.fees)}, bezahlt ${formatMoney(payment)}`;
+    const info = this.clubInfos.find((info) => info.id === club.id);
+    const payment = info?.payment ?? 0;
+    const due = info?.amount_due.total ?? 0;
+    const open = Math.round((due - payment) * 100) / 100;
+    const breakdown = info?.amount_due.jury_fee
+      ? ` (Startgeld ${formatMoney(info.amount_due.start_fees)}, Jurygebühr ${formatMoney(info.amount_due.jury_fee)})`
+      : "";
+    const title = `Gebühr ${formatMoney(due)}${breakdown}, bezahlt ${formatMoney(payment)}`;
     if (open > 0) {
       return html`<span class="chip bad" title=${title}
         >offen ${formatMoney(open)}</span
       >`;
     }
-    if (club.fees === 0 && payment === 0) {
+    if (due === 0 && payment === 0) {
       return html`<span class="chip muted">keine Gebühr</span>`;
     }
     return html`<span
@@ -1196,7 +1197,6 @@ export default class CupViewAdminCheckIn extends LitElement {
         }
       }
     }
-    const competition = this.systemStatus?.competition;
     const clubs = new Map<string, ClubBlock>();
     for (const starter of this.starters) {
       const starts = this.acts
@@ -1262,12 +1262,10 @@ export default class CupViewAdminCheckIn extends LitElement {
           id: starter.club_id,
           name: starter.club_name,
           rows: [],
-          fees: 0,
         };
         clubs.set(starter.club_id, club);
       }
       club.rows.push(row);
-      club.fees += getStarterPrice(starter, competition);
     }
     const result = [...clubs.values()].sort((a, b) => byName(a.name, b.name));
     for (const club of result) {

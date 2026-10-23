@@ -873,3 +873,232 @@ async fn add_club_starter_requires_a_gender(db: SqlitePool) {
     );
     assert!(list_starters(&app, &cookie, club_id).await.is_empty());
 }
+
+#[sqlx::test]
+async fn responsible_person_defaults_to_owner_and_can_be_changed(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let (cookie, club_id) = app.create_club_owner("Owner", "RSV Test").await;
+
+    let club = app.get("/api/query/get_club", Some(&cookie)).await;
+    assert_eq!(club.body["responsible_name"], "Owner");
+    assert_eq!(club.body["responsible_email"], "owner@cup.test");
+
+    let response = app
+        .post(
+            "/api/command/set_club_responsible",
+            json!({ "club_id": club_id, "name": "Berta Trainer", "email": "berta@verein.test" }),
+            Some(&cookie),
+        )
+        .await;
+    assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+
+    let club = app.get("/api/query/get_club", Some(&cookie)).await;
+    assert_eq!(club.body["responsible_name"], "Berta Trainer");
+    assert_eq!(club.body["responsible_email"], "berta@verein.test");
+
+    // Clearing both goes back to the owner.
+    let response = app
+        .post(
+            "/api/command/set_club_responsible",
+            json!({ "club_id": club_id, "name": null, "email": null }),
+            Some(&cookie),
+        )
+        .await;
+    assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+    let club = app.get("/api/query/get_club", Some(&cookie)).await;
+    assert_eq!(club.body["responsible_name"], "Owner");
+}
+
+#[sqlx::test]
+async fn responsible_person_is_only_set_by_the_club_or_admins(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let (owner, club_id) = app.create_club_owner("Owner", "RSV Test").await;
+    let (other, _) = app.create_club_owner("Other", "RSV Andere").await;
+    let body = json!({ "club_id": club_id, "name": "Berta", "email": "berta@verein.test" });
+
+    let response = app
+        .post(
+            "/api/command/set_club_responsible",
+            body.clone(),
+            Some(&other),
+        )
+        .await;
+    assert_eq!(response.status, StatusCode::FORBIDDEN);
+    let response = app
+        .post("/api/command/set_club_responsible", body.clone(), None)
+        .await;
+    assert_eq!(response.status, StatusCode::UNAUTHORIZED);
+
+    let admin = app.create_admin().await;
+    let response = app
+        .post("/api/command/set_club_responsible", body, Some(&admin))
+        .await;
+    assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+
+    // Other clubs and anonymous visitors don't see the contact.
+    let url = format!("/api/query/get_club?club_id={club_id}");
+    for cookie in [Some(other.as_str()), None] {
+        let club = app.get(&url, cookie).await;
+        assert_eq!(club.body["responsible_name"], Value::Null);
+        assert_eq!(club.body["responsible_email"], Value::Null);
+    }
+    let club = app.get(&url, Some(&owner)).await;
+    assert_eq!(club.body["responsible_name"], "Berta");
+
+    let clubs = app.get("/api/query/list_clubs", Some(&admin)).await;
+    let listed = clubs
+        .body
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|club| club["id"] == club_id.to_string())
+        .unwrap();
+    assert_eq!(listed["responsible_name"], "Berta");
+    assert_eq!(listed["responsible_email"], "berta@verein.test");
+}
+
+#[sqlx::test]
+async fn responsible_person_needs_name_and_a_valid_email(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let (cookie, club_id) = app.create_club_owner("Owner", "RSV Test").await;
+
+    for (name, email) in [
+        ("Berta", "keine-adresse"),
+        ("Berta", "berta@verein"),
+        ("Berta", "berta @verein.test"),
+        ("", "berta@verein.test"),
+        ("Berta", ""),
+    ] {
+        let response = app
+            .post(
+                "/api/command/set_club_responsible",
+                json!({ "club_id": club_id, "name": name, "email": email }),
+                Some(&cookie),
+            )
+            .await;
+        // Validation messages come back as a generic error, as elsewhere.
+        assert!(
+            !response.status.is_success(),
+            "{name:?} {email:?}: {:?}",
+            response.status
+        );
+    }
+    let club = app.get("/api/query/get_club", Some(&cookie)).await;
+    assert_eq!(club.body["responsible_name"], "Owner");
+}
+
+#[sqlx::test]
+async fn responsible_person_is_fixed_after_the_registration_for_clubs(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let (cookie, club_id) = app.create_club_owner("Owner", "RSV Test").await;
+    app.close_registration().await;
+
+    let response = app
+        .post(
+            "/api/command/set_club_responsible",
+            json!({ "club_id": club_id, "name": "Berta", "email": "berta@verein.test" }),
+            Some(&cookie),
+        )
+        .await;
+    assert_eq!(response.status, StatusCode::FORBIDDEN);
+}
+
+#[sqlx::test]
+async fn amount_due_lists_start_fees_jury_fee_and_total(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let (cookie, club_id) = app.create_club_owner("Owner", "RSV Test").await;
+    let (other, other_club) = app.create_club_owner("Other", "RSV Andere").await;
+
+    let club = app.get("/api/query/get_club", Some(&cookie)).await;
+    assert_eq!(
+        club.body["amount_due"],
+        json!({ "start_fees": 0.0, "jury_fee": 0.0, "total": 0.0 })
+    );
+
+    app.add_starter(&cookie, starter_body(club_id, "Anna", true, false))
+        .await;
+    app.add_starter(&cookie, starter_body(club_id, "Carla", true, true))
+        .await;
+    let dora = app
+        .add_starter(&cookie, starter_body(club_id, "Dora", true, true))
+        .await;
+    let riders = app.add_riders(&cookie, club_id, "Rider", 2).await;
+    let members = [dora, riders[0], riders[1]];
+    let small = app.create_group(&cookie, club_id, "Klein").await;
+    let large = app.create_large_group(&cookie, club_id, "Groß").await;
+    for group in [small, large] {
+        let response = app
+            .set_group_members(&cookie, club_id, group, &members, &[])
+            .await;
+        assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+    }
+    app.add_starter(&other, starter_body(other_club, "Olga", true, false))
+        .await;
+
+    // Anna 15, Carla 30, Dora 4 starts capped at 45, both riders 2 × 15.
+    let expected = json!({ "start_fees": 150.0, "jury_fee": 0.0, "total": 150.0 });
+    let club = app.get("/api/query/get_club", Some(&cookie)).await;
+    assert_eq!(club.body["amount_due"], expected);
+
+    let admin = app.create_admin().await;
+    let clubs = app.get("/api/query/list_clubs", Some(&admin)).await;
+    let amounts: Vec<(String, Value)> = clubs
+        .body
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|club| {
+            (
+                club["name"].as_str().unwrap().to_string(),
+                club["amount_due"].clone(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        amounts,
+        vec![
+            (
+                "RSV Andere".to_string(),
+                json!({ "start_fees": 15.0, "jury_fee": 0.0, "total": 15.0 })
+            ),
+            ("RSV Test".to_string(), expected),
+        ]
+    );
+
+    // Like the contact, the amount is only for the club itself and admins.
+    let club = app
+        .get(
+            &format!("/api/query/get_club?club_id={club_id}"),
+            Some(&other),
+        )
+        .await;
+    assert_eq!(club.body["amount_due"], Value::Null);
+}
+
+#[sqlx::test]
+async fn amount_due_keeps_withdrawn_starts_unless_the_fee_is_waived(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let (cookie, club_id) = app.create_club_owner("Owner", "RSV Test").await;
+    let admin = app.create_admin().await;
+    let anna = app
+        .add_starter(&cookie, starter_body(club_id, "Anna", true, true))
+        .await;
+    let single = app.act_of_type(anna, "single").await;
+    let start_fees = async || {
+        let club = app.get("/api/query/get_club", Some(&cookie)).await;
+        club.body["amount_due"]["start_fees"].clone()
+    };
+    assert_eq!(start_fees().await, 30.0);
+
+    for (fee_waived, expected) in [(false, 30.0), (true, 15.0)] {
+        let response = app
+            .post(
+                "/api/command/set_act_withdrawn",
+                json!({ "act_id": single, "withdrawn": true, "fee_waived": fee_waived }),
+                Some(&admin),
+            )
+            .await;
+        assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+        assert_eq!(start_fees().await, expected, "fee_waived: {fee_waived}");
+    }
+}

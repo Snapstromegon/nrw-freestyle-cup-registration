@@ -44,6 +44,15 @@ pub struct Competition {
 }
 
 impl Competition {
+    /// The name mails and pages use for the event: the current competition's
+    /// name, or a neutral fallback before one is configured.
+    pub async fn event_name(db: impl sqlx::SqliteExecutor<'_>) -> sqlx::Result<String> {
+        Ok(Self::current(db).await?.map_or_else(
+            || "Einrad-Anmeldung".to_string(),
+            |competition| competition.name,
+        ))
+    }
+
     /// Loads the current competition: the one with the latest start date.
     pub async fn current(db: impl sqlx::SqliteExecutor<'_>) -> sqlx::Result<Option<Competition>> {
         sqlx::query_as!(

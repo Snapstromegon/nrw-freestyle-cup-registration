@@ -2,6 +2,7 @@ pub mod act_type;
 pub mod competition;
 pub mod config;
 pub mod demo;
+pub mod fees;
 pub mod finals;
 pub mod gender;
 pub mod groups;

@@ -38,8 +38,14 @@ async fn register_creates_unverified_user_logs_in_and_sends_mail(db: SqlitePool)
     let mail = app.single_mail().await;
     assert_eq!(mail.from, FROM_ADDRESS);
     assert_eq!(mail.to, vec![email_for("Alex")]);
-    assert_eq!(mail.subject, "Freestyle Cup NRW - Email bestätigen");
+    assert_eq!(mail.subject, "Einradevent 2027 (Demo) - Email bestätigen");
     assert!(mail.text.starts_with("Hallo Alex,"), "{}", mail.text);
+    assert!(
+        mail.text.contains("Dein Einradevent 2027 (Demo) Team")
+            && !mail.text.contains("Freestyle Cup"),
+        "{}",
+        mail.text
+    );
     assert!(
         mail.link()
             .starts_with(&format!("{BASE_URL}/verify_email?token=")),
@@ -207,7 +213,10 @@ async fn resend_mail_validation_replaces_the_previous_token(db: SqlitePool) {
     let mails = app.mails().await;
     assert_eq!(mails.len(), 2);
     assert_eq!(mails[1].to, vec![email_for("Alex")]);
-    assert_eq!(mails[1].subject, "Freestyle Cup NRW - Email bestätigen");
+    assert_eq!(
+        mails[1].subject,
+        "Einradevent 2027 (Demo) - Email bestätigen"
+    );
     let (old_token, new_token) = (mails[0].token(), mails[1].token());
     assert_ne!(old_token, new_token);
 
@@ -335,8 +344,17 @@ async fn password_reset_flow_replaces_password(db: SqlitePool) {
     assert_eq!(request.status, StatusCode::OK, "{:?}", request.body);
     let mail = app.single_mail().await;
     assert_eq!(mail.to, vec![email_for("Alex")]);
-    assert_eq!(mail.subject, "Freestyle Cup NRW - Passwort zurücksetzen");
+    assert_eq!(
+        mail.subject,
+        "Einradevent 2027 (Demo) - Passwort zurücksetzen"
+    );
     assert!(mail.text.starts_with("Hallo Alex,"), "{}", mail.text);
+    assert!(
+        mail.text.contains("Dein Einradevent 2027 (Demo) Team")
+            && !mail.text.contains("Freestyle Cup"),
+        "{}",
+        mail.text
+    );
     assert!(
         mail.link()
             .starts_with(&format!("{BASE_URL}/reset_password?token=")),

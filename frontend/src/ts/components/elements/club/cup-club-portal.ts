@@ -594,12 +594,7 @@ export default class CupClubPortal extends LitElement {
       this.lastData = data;
       // Without a step in the URL, start where something is left to do.
       if (!this.stepChosen) {
-        const competition = this.systemStatus?.competition;
-        const summaries = stepSummaries(
-          data,
-          competition,
-          clubIssues(data, competition),
-        );
+        const summaries = stepSummaries(data, clubIssues(data));
         this.step =
           STEPS.find((step) => summaries[step.id].state !== "done")?.id ??
           "kueren";
@@ -626,8 +621,8 @@ export default class CupClubPortal extends LitElement {
     const competition = this.systemStatus?.competition;
     const musicOpen =
       isMusicUploadOpen(competition) || !!this.systemStatus?.can_upload_music;
-    const issues = clubIssues(data, competition, { musicOpen });
-    const summaries = stepSummaries(data, competition, issues);
+    const issues = clubIssues(data, { musicOpen });
+    const summaries = stepSummaries(data, issues);
     return html`<div class="layout">
       <aside>
         ${this.renderHead(
@@ -756,7 +751,7 @@ export default class CupClubPortal extends LitElement {
   }
 
   renderAmount(data: ClubData) {
-    const { amount, open } = paymentState(data, this.systemStatus?.competition);
+    const { amount, open } = paymentState(data);
     const paid = amount > 0 && open < 0.01;
     return html`<a
       href="#startgeld"

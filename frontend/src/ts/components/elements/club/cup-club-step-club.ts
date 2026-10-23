@@ -2,7 +2,7 @@ import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { errorMessage, unwrap } from "../../../api";
 import { client } from "../../../apiClient";
-import type { ClubData } from "../../../club-data";
+import { type ClubData, responsibleIsContact } from "../../../club-data";
 import { iconStyles, resetStyles } from "../../../styles/base";
 import { clubPortalStyles } from "../../../styles/club-portal";
 import { type Competition, formatDate, formatMoney } from "../../../utils";
@@ -131,6 +131,11 @@ export default class CupClubStepClub extends LitElement {
   @state() name = "";
   @state() saving = false;
   @state() error: string | null = null;
+  @state() editingResponsible = false;
+  @state() responsibleName = "";
+  @state() responsibleEmail = "";
+  @state() savingResponsible = false;
+  @state() responsibleError: string | null = null;
   @state() rulesOpen = loadPref("club.rulesOpen", true);
   @state() howOpen = loadPref<boolean | null>("club.howOpen", null);
 
@@ -211,6 +216,8 @@ export default class CupClubStepClub extends LitElement {
         }
       </section>
 
+      ${this.renderResponsible()}
+
       <details
         class="card"
         ?open=${howOpen}
@@ -256,6 +263,103 @@ export default class CupClubStepClub extends LitElement {
           Weiter: Fahrer anlegen <i class="material-icon">arrow_forward</i>
         </button>
       </div>`;
+  }
+
+  /**
+   * The Vereinsverantwortliche/r files objections at the event (Konzept
+   * Gemeinsame Wettkämpfe 5.2); the contact who registered the club unless
+   * the club names someone else.
+   */
+  renderResponsible() {
+    const club = this.data.club;
+    if (!club.responsible_name) {
+      return nothing;
+    }
+    const isContact = responsibleIsContact(club);
+    return html`<section class="card">
+      <header>
+        <h3>Vereinsverantwortliche/r</h3>
+        ${
+          this.canRegister && !this.editingResponsible
+            ? html`<button class="btn small" @click=${this.startEditResponsible}>
+                <i class="material-icon">edit</i> Ändern
+              </button>`
+            : nothing
+        }
+      </header>
+      <p class="hint">
+        Nur die/der Vereinsverantwortliche kann bei der Juryleitung Einspruch
+        einlegen.
+      </p>
+      ${
+        this.responsibleError
+          ? html`<p class="banner error" role="alert">${this.responsibleError}</p>`
+          : nothing
+      }
+      ${
+        this.editingResponsible
+          ? html`<form class="club-form" @submit=${this.saveResponsible}>
+              <label class="field"
+                ><span>Name</span
+                ><input
+                  type="text"
+                  required
+                  autocomplete="name"
+                  .value=${this.responsibleName}
+                  @input=${this.onResponsibleNameInput}
+              /></label>
+              <label class="field"
+                ><span>E-Mail</span
+                ><input
+                  type="email"
+                  required
+                  autocomplete="email"
+                  .value=${this.responsibleEmail}
+                  @input=${this.onResponsibleEmailInput}
+              /></label>
+              <div class="actions">
+                <button class="btn primary" ?disabled=${this.savingResponsible}>
+                  <i class="material-icon">save</i> Speichern
+                </button>
+                ${
+                  isContact
+                    ? nothing
+                    : html`<button
+                        type="button"
+                        class="btn"
+                        ?disabled=${this.savingResponsible}
+                        @click=${this.resetResponsible}
+                      >
+                        Kontakt übernehmen
+                      </button>`
+                }
+                <button
+                  type="button"
+                  class="btn"
+                  @click=${this.cancelEditResponsible}
+                >
+                  Abbrechen
+                </button>
+              </div>
+            </form>`
+          : html`<dl class="club">
+              <dt>Name</dt>
+              <dd>
+                ${club.responsible_name}${
+                  isContact
+                    ? html` <span class="hint">(Kontakt der Anmeldung)</span>`
+                    : nothing
+                }
+              </dd>
+              <dt>E-Mail</dt>
+              <dd>
+                <a class="mail" href="mailto:${club.responsible_email}"
+                  >${club.responsible_email}</a
+                >
+              </dd>
+            </dl>`
+      }
+    </section>`;
   }
 
   renderRules(competition: Competition) {
@@ -341,6 +445,56 @@ export default class CupClubStepClub extends LitElement {
   onRulesToggle(e: Event) {
     this.rulesOpen = (e.target as HTMLDetailsElement).open;
     savePref("club.rulesOpen", this.rulesOpen);
+  }
+
+  onResponsibleNameInput(e: InputEvent) {
+    this.responsibleName = (e.target as HTMLInputElement).value;
+  }
+
+  onResponsibleEmailInput(e: InputEvent) {
+    this.responsibleEmail = (e.target as HTMLInputElement).value;
+  }
+
+  startEditResponsible() {
+    this.responsibleName = this.data.club.responsible_name ?? "";
+    this.responsibleEmail = this.data.club.responsible_email ?? "";
+    this.editingResponsible = true;
+  }
+
+  cancelEditResponsible() {
+    this.editingResponsible = false;
+    this.responsibleError = null;
+  }
+
+  saveResponsible(e: SubmitEvent) {
+    e.preventDefault();
+    return this.setResponsible(
+      this.responsibleName.trim(),
+      this.responsibleEmail.trim(),
+    );
+  }
+
+  /** Back to the contact who registered the club. */
+  resetResponsible() {
+    return this.setResponsible(null, null);
+  }
+
+  async setResponsible(name: string | null, email: string | null) {
+    this.savingResponsible = true;
+    try {
+      await unwrap(
+        client.setClubResponsible({
+          body: { club_id: this.data.club.id, name, email },
+        }),
+      );
+      this.responsibleError = null;
+      this.editingResponsible = false;
+      dataChanged(this);
+    } catch (error) {
+      this.responsibleError = `Speichern fehlgeschlagen: ${errorMessage(error)}`;
+    } finally {
+      this.savingResponsible = false;
+    }
   }
 
   goToRiders() {

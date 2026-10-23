@@ -5,7 +5,6 @@ import type { schemas } from "./apiClient";
 import {
   type ActType,
   type Competition,
-  getStarterPrice,
   groupSizeWarning,
   isGroupActType,
   MIN_GROUP_SIZE,
@@ -99,19 +98,32 @@ export const riderCounts = (participants: { is_replacement: boolean }[]) => {
   return { regular, replacements: participants.length - regular };
 };
 
-/** Amount, paid and open amount (negative when overpaid), in euros. */
-export const paymentState = (
-  data: Pick<ClubData, "club" | "starters">,
-  competition: Competition | null | undefined,
-) => {
-  const amount = data.starters.reduce(
-    (sum, starter) => sum + getStarterPrice(starter, competition),
-    0,
-  );
+/**
+ * What the club owes (start fees, jury fee and their sum, as calculated by
+ * the server), paid and the open amount (negative when overpaid), in euros.
+ */
+export const paymentState = (data: Pick<ClubData, "club">) => {
+  const due = data.club.amount_due;
+  const startFees = due?.start_fees ?? 0;
+  const juryFee = due?.jury_fee ?? 0;
+  const amount = due?.total ?? 0;
   const paid = data.club.payment ?? 0;
   const open = Math.round((amount - paid) * 100) / 100;
-  return { amount, paid, open };
+  return { startFees, juryFee, amount, paid, open };
 };
+
+/**
+ * Whether the club's Vereinsverantwortliche/r is still the contact who
+ * registered the club (the server falls back to the owner).
+ */
+export const responsibleIsContact = (
+  club: Pick<
+    Club,
+    "owner_name" | "owner_email" | "responsible_name" | "responsible_email"
+  >,
+) =>
+  club.responsible_name === club.owner_name &&
+  club.responsible_email === club.owner_email;
 
 export type IssueLevel = "error" | "warn" | "info";
 
@@ -130,7 +142,6 @@ export interface Issue {
  */
 export const clubIssues = (
   data: ClubData,
-  competition: Competition | null | undefined,
   { musicOpen = true }: { musicOpen?: boolean } = {},
 ): Issue[] => {
   const issues: Issue[] = [];
@@ -221,7 +232,7 @@ export const clubIssues = (
       target: withoutTitle.length === 1 ? withoutTitle[0].id : undefined,
     });
   }
-  const { open } = paymentState(data, competition);
+  const { open } = paymentState(data);
   if (open >= 0.01) {
     issues.push({
       level: "warn",
@@ -248,14 +259,13 @@ export type StepState = "done" | "open" | "todo";
 /** The state of each step and a short summary for the step list. */
 export const stepSummaries = (
   data: ClubData,
-  competition: Competition | null | undefined,
   issues: Issue[],
 ): Record<StepId, { state: StepState; summary: string }> => {
   const count = (n: number, one: string, many: string) =>
     `${n} ${n === 1 ? one : many}`;
   const blocking = (step: StepId) =>
     issues.some((issue) => issue.step === step && issue.level !== "info");
-  const { amount, open } = paymentState(data, competition);
+  const { amount, open } = paymentState(data);
   // A pair with an unconfirmed partner has no act yet, but counts as one.
   const acts = data.acts.length + data.starters.filter(isPendingPair).length;
   return {

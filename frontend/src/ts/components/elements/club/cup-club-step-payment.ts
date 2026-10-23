@@ -177,7 +177,7 @@ export default class CupClubStepPayment extends LitElement {
 
   override render() {
     const competition = this.competition;
-    const { amount, paid, open } = paymentState(this.data, competition);
+    const { startFees, juryFee, amount, paid, open } = paymentState(this.data);
     const contact = competition?.contact_email;
     return html`<div class="step-intro">
         <h2>4. Startgeld</h2>
@@ -189,7 +189,17 @@ export default class CupClubStepPayment extends LitElement {
 
       <div class="tiles">
         <div class="tile">
-          <span>Startgeld gesamt</span><strong>${formatMoney(amount)}</strong>
+          <span>Startgeld</span><strong>${formatMoney(startFees)}</strong>
+        </div>
+        ${
+          juryFee > 0
+            ? html`<div class="tile">
+                <span>Jurygebühr</span><strong>${formatMoney(juryFee)}</strong>
+              </div>`
+            : nothing
+        }
+        <div class="tile">
+          <span>Gesamt</span><strong>${formatMoney(amount)}</strong>
         </div>
         <div class="tile">
           <span>Bezahlt</span><strong>${formatMoney(paid)}</strong>
@@ -236,7 +246,7 @@ export default class CupClubStepPayment extends LitElement {
         >
       </p>
 
-      ${this.renderBreakdown(amount)}`;
+      ${this.renderBreakdown(startFees)}`;
   }
 
   renderTransfer(open: number) {

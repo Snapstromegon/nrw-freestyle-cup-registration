@@ -40,6 +40,7 @@ mod set_block_order;
 mod set_checked_in;
 mod set_club_group_members;
 mod set_club_group_type;
+mod set_club_responsible;
 mod set_final_placement;
 mod set_final_published;
 mod set_payment;
@@ -80,6 +81,7 @@ pub fn get_command_router() -> OpenApiRouter {
         .routes(routes!(create_club_group::create_club_group))
         .routes(routes!(set_club_group_members::set_club_group_members))
         .routes(routes!(set_club_group_type::set_club_group_type))
+        .routes(routes!(set_club_responsible::set_club_responsible))
         .routes(routes!(rename_club_group::rename_club_group))
         .routes(routes!(delete_club_group::delete_club_group))
         .routes(routes!(edit_club_act::edit_club_act))

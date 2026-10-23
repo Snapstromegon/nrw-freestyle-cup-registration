@@ -11,12 +11,7 @@ import {
 } from "../../contexts/systemStatus";
 import { adminStyles } from "../../styles/admin";
 import { iconStyles, resetStyles } from "../../styles/base";
-import {
-  countStarts,
-  formatDate,
-  formatMoney,
-  getStarterPrice,
-} from "../../utils";
+import { countStarts, formatDate, formatMoney } from "../../utils";
 
 type ClubOverview = schemas.ClubOverview;
 type Starter = schemas.Starter;
@@ -44,6 +39,11 @@ interface PaymentRow {
   ew: number;
   p: number;
   groups: number;
+  /** Start fees, as the server calculates them. */
+  startFees: number;
+  /** Fee for missing jury deployments. */
+  juryFee: number;
+  /** What the club owes: start fees plus jury fee. */
   due: number;
   paid: number;
   open: number;
@@ -305,7 +305,6 @@ export default class CupViewAdminPayments extends LitElement {
   }
 
   buildRows(clubs: ClubOverview[], starters: Starter[]): PaymentRow[] {
-    const competition = this.systemStatus?.competition;
     const rows = new Map<string, PaymentRow>(
       clubs.map((club) => [
         club.id,
@@ -317,7 +316,9 @@ export default class CupViewAdminPayments extends LitElement {
           ew: 0,
           p: 0,
           groups: 0,
-          due: 0,
+          startFees: club.amount_due.start_fees,
+          juryFee: club.amount_due.jury_fee,
+          due: club.amount_due.total,
           paid: club.payment ?? 0,
           open: 0,
         },
@@ -334,7 +335,6 @@ export default class CupViewAdminPayments extends LitElement {
       row.ew += Number(starter.single_female);
       row.p += Number(starter.pair);
       row.groups += starter.group_count;
-      row.due += getStarterPrice(starter, competition);
     }
     for (const row of rows.values()) {
       row.open = row.due - row.paid;
@@ -509,7 +509,12 @@ export default class CupViewAdminPayments extends LitElement {
                     "num",
                     "Einzel, Paar und Gruppen (inkl. Ersatz)",
                   )}
-                  ${this.renderSortHeader("due", "Soll", "num")}
+                  ${this.renderSortHeader(
+                    "due",
+                    "Soll",
+                    "num",
+                    "Startgeld plus Jurygebühr für fehlende Juryeinsätze",
+                  )}
                   ${this.renderSortHeader(
                     "paid",
                     "Gezahlt gesamt",
@@ -601,11 +606,21 @@ export default class CupViewAdminPayments extends LitElement {
       >
         ${row.starts || html`<span class="zero">0</span>`}
       </td>
-      <td class="num">
+      <td
+        class="num"
+        title="Startgeld ${formatMoney(row.startFees)} · Jurygebühr ${formatMoney(row.juryFee)}"
+      >
         ${
           row.due
             ? formatMoney(row.due)
             : html`<span class="zero">${formatMoney(0)}</span>`
+        }${
+          row.juryFee
+            ? html`<br /><small class="muted"
+                  >${formatMoney(row.startFees)} + Jury
+                  ${formatMoney(row.juryFee)}</small
+                >`
+            : nothing
         }
       </td>
       <td class="num paid">

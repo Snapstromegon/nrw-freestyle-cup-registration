@@ -12,6 +12,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
+    competition::Competition,
     http_server::{ClientError, HttpError, HttpServerOptions},
     jwt::JWTConfig,
     mailer::Mailer,
@@ -102,11 +103,13 @@ pub async fn register(
         .expect("Invalid URL")
         .to_string();
 
+    let event_name = Competition::event_name(&db).await?;
     mailer
         .send_text(
             &body.email,
-            "Freestyle Cup NRW - Email bestätigen",
+            &format!("{event_name} - Email bestätigen"),
             &VerifyMail {
+                event_name: &event_name,
                 name: &body.name,
                 verify_link: &verify_link,
             }

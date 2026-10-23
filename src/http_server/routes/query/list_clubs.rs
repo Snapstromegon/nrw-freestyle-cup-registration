@@ -3,6 +3,8 @@ use tracing::instrument;
 use uuid::Uuid;
 
 use crate::{
+    competition::Competition,
+    fees::{AmountDue, amount_due_by_club},
     http_server::{ClientError, HttpError, extractor::auth::Auth},
     reloadable_sqlite::ReloadableSqlite,
     utils::club_code,
@@ -18,9 +20,15 @@ pub struct ClubOverview {
     owner_name: String,
     owner_email: String,
     owner_email_verified: bool,
+    /// The Vereinsverantwortliche/r; the owner unless the club named someone
+    /// else.
+    responsible_name: String,
+    responsible_email: String,
     /// Short code for the transfer reference, e.g. "EV-K7Q3"; stays the
     /// same when the club is renamed.
     code: String,
+    /// What the club owes.
+    amount_due: AmountDue,
 }
 
 /// List all clubs with their owners. Admin only.
@@ -43,8 +51,7 @@ pub async fn list_clubs(
         return Err(HttpError::InvalidCredentials);
     }
     let db = db.get().await.clone();
-    let mut clubs = sqlx::query_as!(
-        ClubOverview,
+    let rows = sqlx::query!(
         r#"
         SELECT
             clubs.id as "id!: Uuid",
@@ -54,7 +61,8 @@ pub async fn list_clubs(
             users.name as owner_name,
             users.email as owner_email,
             users.email_verified as owner_email_verified,
-            '' as "code!"
+            COALESCE(clubs.responsible_name, users.name) as "responsible_name!: String",
+            COALESCE(clubs.responsible_email, users.email) as "responsible_email!: String"
         FROM clubs
         JOIN users ON users.id = clubs.owner_id
         ORDER BY clubs.name
@@ -62,8 +70,23 @@ pub async fn list_clubs(
     )
     .fetch_all(&db)
     .await?;
-    for club in &mut clubs {
-        club.code = club_code(&club.id);
-    }
+    let competition = Competition::current(&db).await?;
+    let mut amounts = amount_due_by_club(&db, competition.as_ref()).await?;
+    let clubs = rows
+        .into_iter()
+        .map(|row| ClubOverview {
+            code: club_code(&row.id),
+            amount_due: amounts.remove(&row.id).unwrap_or_default(),
+            id: row.id,
+            name: row.name,
+            payment: row.payment,
+            owner_id: row.owner_id,
+            owner_name: row.owner_name,
+            owner_email: row.owner_email,
+            owner_email_verified: row.owner_email_verified,
+            responsible_name: row.responsible_name,
+            responsible_email: row.responsible_email,
+        })
+        .collect();
     Ok(Json(clubs))
 }

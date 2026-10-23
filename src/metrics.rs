@@ -33,6 +33,7 @@ use tracing::error;
 
 use crate::{
     competition::Competition,
+    fees,
     http_server::{HttpServerOptions, routes::query::predict_timeplan::predict},
     reloadable_sqlite::ReloadableSqlite,
 };
@@ -185,7 +186,7 @@ impl Metrics {
         );
         registry.register(
             "fees_due_euros",
-            "Sum of the start fees of all starters",
+            "Sum of what all clubs owe (start fees and jury fee)",
             m.fees_due.clone(),
         );
         registry.register(
@@ -432,7 +433,13 @@ impl Metrics {
                 .fetch_one(db)
                 .await?;
         self.payments_received.set(paid);
-        self.fees_due.set(fees_due(db, competition.as_ref()).await?);
+        self.fees_due.set(
+            fees::amount_due_by_club(db, competition.as_ref())
+                .await?
+                .values()
+                .map(|amount| amount.total)
+                .sum(),
+        );
 
         let performed = sqlx::query_scalar!(
             r#"SELECT COUNT(*) as "count!: i64" FROM acts WHERE ended_at IS NOT NULL"#
@@ -478,51 +485,6 @@ impl Metrics {
         }
         Ok(())
     }
-}
-
-/// The start fees of all starters: `fee_per_start` per start, capped at
-/// `max_fee_per_starter`; withdrawn starts with a waived fee are free. The
-/// same rule as `getStarterPrice` in the frontend.
-async fn fees_due(
-    db: &sqlx::SqlitePool,
-    competition: Option<&Competition>,
-) -> Result<f64, sqlx::Error> {
-    let Some(competition) = competition else {
-        return Ok(0.0);
-    };
-    let starts = sqlx::query_scalar!(
-        r#"
-        SELECT
-            MAX(
-                0,
-                starter.single_male + starter.single_female + starter.pair
-                + (
-                    SELECT COUNT(*) FROM act_participants
-                    JOIN acts ON acts.id = act_participants.act_id
-                    WHERE act_participants.starter_id = starter.id
-                        AND acts.act_type IN ('group_small', 'group_large')
-                )
-                - (
-                    SELECT COUNT(*) FROM act_participants
-                    JOIN acts ON acts.id = act_participants.act_id
-                    WHERE act_participants.starter_id = starter.id
-                        AND acts.withdrawn_at IS NOT NULL AND acts.fee_waived
-                )
-            ) as "starts!: i64"
-        FROM starter
-        "#
-    )
-    .fetch_all(db)
-    .await?;
-    Ok(starts
-        .into_iter()
-        .map(|starts| {
-            let fee = starts as f64 * competition.fee_per_start;
-            competition
-                .max_fee_per_starter
-                .map_or(fee, |max| fee.min(max))
-        })
-        .sum())
 }
 
 static METRICS: LazyLock<Metrics> = LazyLock::new(Metrics::new);

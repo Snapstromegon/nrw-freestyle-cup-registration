@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
+    competition::Competition,
     http_server::{ClientError, HttpError, HttpServerOptions, extractor::auth::Auth},
     mailer::Mailer,
     reloadable_sqlite::ReloadableSqlite,
@@ -72,11 +73,13 @@ pub async fn resend_mail_validation(
         .join(&format!("/verify_email?token={}", email_token))
         .expect("Invalid URL")
         .to_string();
+    let event_name = Competition::event_name(&db).await?;
     mailer
         .send_text(
             &auth.email,
-            "Freestyle Cup NRW - Email bestätigen",
+            &format!("{event_name} - Email bestätigen"),
             &VerifyMail {
+                event_name: &event_name,
                 name: &auth.name,
                 verify_link: &verify_link,
             }

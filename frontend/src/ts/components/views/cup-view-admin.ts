@@ -6,6 +6,7 @@ import { ifDefined } from "lit/directives/if-defined.js";
 import { repeat } from "lit/directives/repeat.js";
 import { errorMessage, PollController, unwrap } from "../../api";
 import { client, type schemas } from "../../apiClient";
+import { responsibleIsContact } from "../../club-data";
 import {
   type SystemStatus,
   systemStatusContext,
@@ -29,7 +30,6 @@ import {
   formatDate,
   formatDateTime,
   formatMoney,
-  getStarterPrice,
   isGroupActType,
   MIN_GROUP_SIZE,
   participantName,
@@ -135,7 +135,6 @@ const actLabel = (act: Act) => {
 const buildClubRows = (
   data: DashboardData,
   checkIns: CheckInMap | null,
-  competition: Competition | null | undefined,
 ): ClubRow[] => {
   const rows = new Map<string, ClubRow>(
     data.clubs.map((club) => [
@@ -152,7 +151,7 @@ const buildClubRows = (
         music: 0,
         checked: 0,
         checkedIn: 0,
-        due: 0,
+        due: club.amount_due.total,
         paid: club.payment ?? 0,
         open: 0,
       },
@@ -167,7 +166,6 @@ const buildClubRows = (
     row.em += Number(starter.single_male);
     row.ew += Number(starter.single_female);
     row.p += Number(starter.pair);
-    row.due += getStarterPrice(starter, competition);
     if (checkIns ? checkIns.get(starter.id) : starter.checked_in_at) {
       row.checkedIn += 1;
     }
@@ -642,7 +640,7 @@ export default class CupViewAdmin extends LitElement {
 
   renderDashboard(data: DashboardData, pending: boolean) {
     const competition = this.systemStatus?.competition;
-    const rows = buildClubRows(data, this.checkIns, competition);
+    const rows = buildClubRows(data, this.checkIns);
     const issues = buildIssues(data, rows, competition);
     const adminCount = data.users.filter((user) => user.is_admin).length;
     return html`
@@ -1035,9 +1033,13 @@ export default class CupViewAdmin extends LitElement {
     const needle = this.search.trim().toLowerCase();
     const rows = needle
       ? allRows.filter((row) =>
-          [row.club.name, row.club.owner_name, row.club.owner_email].some(
-            (text) => text.toLowerCase().includes(needle),
-          ),
+          [
+            row.club.name,
+            row.club.owner_name,
+            row.club.owner_email,
+            row.club.responsible_name,
+            row.club.responsible_email,
+          ].some((text) => text.toLowerCase().includes(needle)),
         )
       : [...allRows];
     const { key, desc } = this.sort;
@@ -1171,6 +1173,18 @@ export default class CupViewAdmin extends LitElement {
               ? nothing
               : html`<span class="chip warn">unverifiziert</span>`
           }
+          ${
+            responsibleIsContact(club)
+              ? nothing
+              : html`<br /><small
+                    class="muted"
+                    title=${`Vereinsverantwortliche/r: ${club.responsible_name} <${club.responsible_email}>`}
+                    >Verantwortlich: ${club.responsible_name}
+                    <a class="email" href="mailto:${club.responsible_email}"
+                      >${club.responsible_email}</a
+                    ></small
+                  >`
+          }
         </td>
         <td class="num">${count(row.starters.length)}</td>
         <td class="num">${count(row.em)}</td>
@@ -1185,7 +1199,15 @@ export default class CupViewAdmin extends LitElement {
           ${fraction(row.checkedIn, row.starters.length, "", "text-ok")}
         </td>
         <td class="num">
-          ${row.due ? formatMoney(row.due) : html`<span class="zero">${formatMoney(0)}</span>`}
+          ${row.due ? formatMoney(row.due) : html`<span class="zero">${formatMoney(0)}</span>`}${
+            club.amount_due.jury_fee
+              ? html`<br /><small
+                    class="muted"
+                    title="Startgeld ${formatMoney(club.amount_due.start_fees)} · Jurygebühr ${formatMoney(club.amount_due.jury_fee)}"
+                    >davon Jury ${formatMoney(club.amount_due.jury_fee)}</small
+                  >`
+              : nothing
+          }
         </td>
         <td class="num">
           ${

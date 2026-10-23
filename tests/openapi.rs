@@ -42,6 +42,7 @@ const COMMANDS: &[&str] = &[
     "set_checked_in",
     "set_club_group_members",
     "set_club_group_type",
+    "set_club_responsible",
     "set_final_placement",
     "set_final_published",
     "set_payment",

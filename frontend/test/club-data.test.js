@@ -9,6 +9,7 @@ import {
   isPendingPair,
   isStepId,
   paymentState,
+  responsibleIsContact,
   stepSummaries,
 } from "../src/ts/club-data.ts";
 
@@ -76,8 +77,18 @@ const group = (id, members, fields = {}) => ({
   ...fields,
 });
 
+/** A club that paid `payment` and owes `due` (start fees only). */
+const club = (payment, due = 0) => ({
+  id: CLUB,
+  name: "RSV",
+  code: "RS-1",
+  owner_id: "u",
+  payment,
+  amount_due: { start_fees: due, jury_fee: 0, total: due },
+});
+
 const data = (fields = {}) => ({
-  club: { id: CLUB, name: "RSV", code: "RS-1", owner_id: "u", payment: 0 },
+  club: club(0),
   starters: [],
   acts: [],
   groups: [],
@@ -106,28 +117,59 @@ describe("club data", () => {
     assert.equal(actOfType(acts, "a", "pair"), undefined);
   });
 
-  test("paymentState caps fees and subtracts payments", () => {
+  test("paymentState takes the amount due from the server", () => {
     const d = data({
-      club: { id: CLUB, name: "RSV", code: "X", owner_id: "u", payment: 20 },
-      starters: [
-        starter("a", { single_female: true, pair: true, group_count: 2 }),
-        starter("b", { single_male: true }),
-      ],
+      club: {
+        ...club(20),
+        amount_due: { start_fees: 60, jury_fee: 14, total: 74 },
+      },
+      starters: [starter("b", { single_male: true })],
     });
-    assert.deepEqual(paymentState(d, competition), {
-      amount: 60,
+    assert.deepEqual(paymentState(d), {
+      startFees: 60,
+      juryFee: 14,
+      amount: 74,
       paid: 20,
-      open: 40,
+      open: 54,
+    });
+  });
+
+  test("responsibleIsContact compares name and email with the owner", () => {
+    const contact = {
+      owner_name: "Anna",
+      owner_email: "anna@verein.test",
+      responsible_name: "Anna",
+      responsible_email: "anna@verein.test",
+    };
+    assert.ok(responsibleIsContact(contact));
+    assert.ok(!responsibleIsContact({ ...contact, responsible_name: "Berta" }));
+    assert.ok(
+      !responsibleIsContact({
+        ...contact,
+        responsible_email: "berta@verein.test",
+      }),
+    );
+  });
+
+  test("paymentState without an amount due owes nothing", () => {
+    const { amount_due: _, ...withoutAmount } = club(15);
+    assert.deepEqual(paymentState(data({ club: withoutAmount })), {
+      startFees: 0,
+      juryFee: 0,
+      amount: 0,
+      paid: 15,
+      open: -15,
     });
   });
 
   test("clubIssues reports riders without act, incomplete groups and missing music", () => {
     const d = data({
+      club: club(0, 15),
       starters: [starter("a", { group_count: 1 }), starter("b")],
       acts: [act("g", "group_small", [participant("a")], { song_file: null })],
       groups: [group("g", ["a"])],
     });
-    const issues = clubIssues(d, competition);
+    const issues = clubIssues(d);
     assert.equal(issues[0].level, "error");
     assert.match(issues[0].text, /unvollständig/);
     assert.ok(issues.some((i) => i.target === "b" && i.step === "kueren"));
@@ -141,15 +183,13 @@ describe("club data", () => {
       acts: [act("s", "single", [participant("a")], { song_file: null })],
     });
     assert.ok(
-      !clubIssues(d, competition, { musicOpen: false }).some((i) =>
-        /Musik/.test(i.text),
-      ),
+      !clubIssues(d, { musicOpen: false }).some((i) => /Musik/.test(i.text)),
     );
   });
 
   test("clubIssues ignores music of other clubs' groups", () => {
     const d = data({
-      club: { id: CLUB, name: "RSV", code: "X", owner_id: "u", payment: 15 },
+      club: club(15, 15),
       starters: [starter("a", { group_count: 1 })],
       acts: [
         act("g", "group_small", [participant("a")], {
@@ -159,16 +199,16 @@ describe("club data", () => {
       ],
       groups: [group("g", ["a", "x", "y"], { is_owner: false })],
     });
-    assert.deepEqual(clubIssues(d, competition), []);
+    assert.deepEqual(clubIssues(d), []);
   });
 
   test("stepSummaries marks finished steps", () => {
     const d = data({
-      club: { id: CLUB, name: "RSV", code: "X", owner_id: "u", payment: 15 },
+      club: club(15, 15),
       starters: [starter("a", { single_female: true })],
       acts: [act("s", "single", [participant("a")])],
     });
-    const summaries = stepSummaries(d, competition, clubIssues(d, competition));
+    const summaries = stepSummaries(d, clubIssues(d));
     assert.equal(summaries.fahrer.state, "done");
     assert.equal(summaries.kueren.state, "done");
     assert.equal(summaries.startgeld.state, "done");
@@ -181,7 +221,7 @@ describe("club data", () => {
       acts: [act("g", "group_small", [participant("a")])],
       groups: [group("g", ["a"])],
     });
-    const summaries = stepSummaries(d, competition, clubIssues(d, competition));
+    const summaries = stepSummaries(d, clubIssues(d));
     assert.equal(summaries.kueren.state, "open");
     assert.equal(summaries.kueren.summary, "1 Kür · 2 offen");
   });
@@ -190,7 +230,7 @@ describe("club data", () => {
     const d = data({
       starters: [starter("a", { pair: true, partner_name: "X Y" })],
     });
-    const summaries = stepSummaries(d, competition, clubIssues(d, competition));
+    const summaries = stepSummaries(d, clubIssues(d));
     assert.equal(summaries.kueren.summary, "1 Kür");
   });
 
