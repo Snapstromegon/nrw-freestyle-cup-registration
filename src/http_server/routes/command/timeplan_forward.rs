@@ -1,14 +1,15 @@
 use std::sync::Arc;
 
-use axum::{Extension, Json, http::StatusCode};
+use axum::{Extension, Json};
 use serde::Serialize;
 use tracing::{info, instrument, warn};
 use utoipa::ToSchema;
 
 use crate::{
-    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    http_server::{ClientError, HttpError, extractor::auth::Granted},
     player::PlayerHub,
     reloadable_sqlite::{ReloadableSqlite, begin_write},
+    roles::permit,
     timeplan::{Entry, EntryKind, Slot, end_slot, load, now, start_slot},
 };
 
@@ -37,12 +38,8 @@ pub struct SetTimeplanForwardResponse {}
 pub async fn timeplan_forward(
     Extension(db): Extension<ReloadableSqlite>,
     Extension(player_hub): Extension<Arc<PlayerHub>>,
-    auth: Auth,
+    _: Granted<permit::ControlMusic>,
 ) -> Result<Json<SetTimeplanForwardResponse>, HttpError> {
-    if !auth.is_admin() {
-        return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
-    }
-
     info!("Forwarding timeplan");
     let db = db.get().await.clone();
     // One write transaction, so two operators pressing at the same moment

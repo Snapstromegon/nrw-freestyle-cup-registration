@@ -10,6 +10,7 @@ use crate::{
     http_server::{ClientError, HttpError, HttpServerOptions, extractor::auth::Auth},
     jury::JuryObligation,
     reloadable_sqlite::ReloadableSqlite,
+    roles::Permission,
     utils::club_code,
 };
 
@@ -23,17 +24,17 @@ pub struct Club {
     /// same when the club is renamed.
     code: String,
     /// The user who registered the club. Only for the club itself and
-    /// admins.
+    /// the organizer.
     owner_name: Option<String>,
     owner_email: Option<String>,
     /// The Vereinsverantwortliche/r, who files objections; the owner unless
-    /// the club named someone else. Only for the club itself and admins.
+    /// the club named someone else. Only for the club itself and the organizer.
     responsible_name: Option<String>,
     responsible_email: Option<String>,
-    /// What the club owes. Only for the club itself and admins.
+    /// What the club owes. Only for the club itself and the organizer.
     amount_due: Option<AmountDue>,
     /// The club's jury obligation, while the jury registration is on. Only
-    /// for the club itself and admins.
+    /// for the club itself and the organizer.
     jury: Option<JuryObligation>,
 }
 
@@ -43,7 +44,7 @@ pub struct GetClubQuery {
 }
 
 /// Get information about a club. The owner's and the Vereinsverantwortliche's
-/// name and email address are only included for the club itself and admins.
+/// name and email address are only included for the club itself and the organizer.
 #[utoipa::path(
     get,
     tags=["query", "club"],
@@ -88,9 +89,9 @@ pub async fn get_club(
         )
         .fetch_one(&db)
         .await?;
-        let may_see_owner = auth
-            .as_ref()
-            .is_some_and(|auth| auth.is_admin() || auth.club_id == Some(row.id));
+        let may_see_owner = auth.as_ref().is_some_and(|auth| {
+            auth.can(Permission::ManageRegistrations) || auth.club_id == Some(row.id)
+        });
         let mut club = Club {
             id: row.id,
             name: row.name,

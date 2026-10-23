@@ -10,6 +10,7 @@ use tracing::error;
 use uuid::Uuid;
 
 use crate::{
+    http_server::HttpError,
     jwt::{JWTClaims, JWTConfig},
     reloadable_sqlite::ReloadableSqlite,
     roles::{self, Permission, Permit, Role},
@@ -27,12 +28,10 @@ pub struct Auth {
 }
 
 impl Auth {
-    pub fn is_admin(&self) -> bool {
-        self.roles.contains(&Role::Admin)
-    }
-
     pub fn can(&self, permission: Permission) -> bool {
-        self.roles.iter().any(|r| r.permissions().contains(&permission))
+        self.roles
+            .iter()
+            .any(|r| r.permissions().contains(&permission))
     }
 
     /// Sorted.
@@ -192,6 +191,10 @@ pub enum Error {
 
 impl IntoResponse for Error {
     fn into_response(self) -> axum::response::Response<axum::body::Body> {
+        if let Error::PermissionMissing = self {
+            // The same body as other 403s of the API.
+            return HttpError::StatusCode(StatusCode::FORBIDDEN).into_response();
+        }
         let status = match self {
             Error::PermissionMissing => StatusCode::FORBIDDEN,
             Error::CookiesMissing | Error::JwtInvalid | Error::JwtMissing | Error::UserNotFound => {

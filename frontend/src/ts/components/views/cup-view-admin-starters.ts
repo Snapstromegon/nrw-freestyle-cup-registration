@@ -324,7 +324,10 @@ export default class CupViewAdminStarters extends LitElement {
         case "club":
           return compareText(a.starter.club_name, b.starter.club_name);
         case "age":
-          return a.starter.age_on_competition - b.starter.age_on_competition;
+          return (
+            (a.starter.age_on_competition ?? 0) -
+            (b.starter.age_on_competition ?? 0)
+          );
       }
     };
     return [...rows].sort(
@@ -630,7 +633,7 @@ export default class CupViewAdminStarters extends LitElement {
       <td class="num muted">${i + 1}</td>
       <td>${s.lastname}, ${s.firstname}</td>
       <td class="trunc" title=${s.club_name}>${s.club_name}</td>
-      <td class="num">${formatDate(s.birthdate)}</td>
+      <td class="num">${s.birthdate ? formatDate(s.birthdate) : "–"}</td>
       <td class="num">${formatAge(s.age_on_competition)}</td>
       <td>${this.renderStarts(s, row.act, actsByStarter.get(s.id) ?? [])}</td>
       <td class="trunc">${this.renderPartner(row)}</td>

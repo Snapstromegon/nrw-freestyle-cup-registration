@@ -4,7 +4,7 @@ use tracing::error;
 
 use crate::{
     competition::Competition, http_server::extractor::auth::Auth,
-    reloadable_sqlite::ReloadableSqlite,
+    reloadable_sqlite::ReloadableSqlite, roles::Permission,
 };
 
 #[derive(Debug, Clone, Copy, serde::Serialize, utoipa::ToSchema)]
@@ -81,7 +81,7 @@ impl Capabilities {
     };
 }
 
-/// Admins can always do everything. For everyone else the dates of the
+/// Who manages registrations can always do everything. For everyone else the dates of the
 /// current competition decide.
 impl<S> FromRequestParts<S> for Capabilities
 where
@@ -90,7 +90,7 @@ where
     type Rejection = ();
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         if let Ok(auth) = Auth::from_request_parts(parts, state).await
-            && auth.is_admin()
+            && auth.can(Permission::ManageRegistrations)
         {
             return Ok(Capabilities {
                 can_register: true,

@@ -5,8 +5,9 @@ use utoipa::ToSchema;
 
 use crate::{
     finals,
-    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    http_server::{ClientError, HttpError, extractor::auth::Granted},
     reloadable_sqlite::{ReloadableSqlite, begin_write},
+    roles::permit,
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -36,12 +37,9 @@ pub struct DeleteFinalBody {
 #[axum::debug_handler]
 pub async fn delete_final(
     Extension(db): Extension<ReloadableSqlite>,
-    auth: Auth,
+    _: Granted<permit::PlanCompetition>,
     Json(body): Json<DeleteFinalBody>,
 ) -> Result<Json<DeleteFinalResponse>, HttpError> {
-    if !auth.is_admin() {
-        return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
-    }
     let db = db.get().await.clone();
     let mut tx = begin_write(&db).await?;
 

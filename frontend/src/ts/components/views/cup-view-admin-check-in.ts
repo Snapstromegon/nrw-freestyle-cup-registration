@@ -938,9 +938,9 @@ export default class CupViewAdminCheckIn extends LitElement {
     }
     const info = this.clubInfos.find((info) => info.id === club.id);
     const payment = info?.payment ?? 0;
-    const due = info?.amount_due.total ?? 0;
+    const due = info?.amount_due?.total ?? 0;
     const open = Math.round((due - payment) * 100) / 100;
-    const breakdown = info?.amount_due.jury_fee
+    const breakdown = info?.amount_due?.jury_fee
       ? ` (Startgeld ${formatMoney(info.amount_due.start_fees)}, Jurygebühr ${formatMoney(info.amount_due.jury_fee)})`
       : "";
     const title = `Gebühr ${formatMoney(due)}${breakdown}, bezahlt ${formatMoney(payment)}`;
@@ -999,7 +999,7 @@ export default class CupViewAdminCheckIn extends LitElement {
       </td>
       <td class="last">${starter.lastname}</td>
       <td>${starter.firstname}</td>
-      <td class="num opt">${formatDate(starter.birthdate)}</td>
+      <td class="num opt">${starter.birthdate ? formatDate(starter.birthdate) : "–"}</td>
       <td class="num opt">${formatAge(starter.age_on_competition)}</td>
       <td class="wrap">
         <span class="chips"

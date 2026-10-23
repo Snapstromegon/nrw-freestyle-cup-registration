@@ -4,16 +4,17 @@ use tracing::{info, instrument};
 use utoipa::ToSchema;
 
 use crate::{
-    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    http_server::{ClientError, HttpError, extractor::auth::Granted},
     jury::{self, JudgeTask, JuryAssignment, JuryEnabled},
     reloadable_sqlite::{ReloadableSqlite, begin_write},
+    roles::permit,
 };
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct AssignJudgeResponse {}
 
 /// Assign a judge a task in a jury category of the Juryplan. Untrained
-/// people only count dismounts; one task per judge and category. Admin only.
+/// people only count dismounts; one task per judge and category. Jury lead.
 #[utoipa::path(
     post,
     tags=["command", "jury"],
@@ -31,12 +32,9 @@ pub struct AssignJudgeResponse {}
 pub async fn assign_judge(
     _jury: JuryEnabled,
     Extension(db): Extension<ReloadableSqlite>,
-    auth: Auth,
+    _: Granted<permit::ManageJury>,
     Json(body): Json<JuryAssignment>,
 ) -> Result<Json<AssignJudgeResponse>, HttpError> {
-    if !auth.is_admin() {
-        return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
-    }
     let db = db.get().await.clone();
     let mut transaction = begin_write(&db).await?;
     let is_trained =

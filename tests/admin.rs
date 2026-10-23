@@ -157,11 +157,13 @@ async fn last_admin_cannot_be_demoted(db: SqlitePool) {
         .await;
     assert_eq!(response.status, StatusCode::FORBIDDEN);
 
-    let is_admin: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM user_roles WHERE user_id = ? AND role = 'admin')")
-        .bind(admin_id)
-        .fetch_one(&app.db)
-        .await
-        .unwrap();
+    let is_admin: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM user_roles WHERE user_id = ? AND role = 'admin')",
+    )
+    .bind(admin_id)
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
     assert!(is_admin);
 }
 
@@ -181,11 +183,13 @@ async fn admin_cannot_demote_themselves_even_when_another_admin_exists(db: Sqlit
         .await;
     assert_eq!(response.status, StatusCode::FORBIDDEN);
 
-    let is_admin: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM user_roles WHERE user_id = ? AND role = 'admin')")
-        .bind(admin_id)
-        .fetch_one(&app.db)
-        .await
-        .unwrap();
+    let is_admin: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM user_roles WHERE user_id = ? AND role = 'admin')",
+    )
+    .bind(admin_id)
+    .fetch_one(&app.db)
+    .await
+    .unwrap();
     assert!(is_admin);
 }
 
@@ -205,7 +209,7 @@ async fn list_starters_is_admin_only(db: SqlitePool) {
         app.get("/api/query/list_starters", Some(&user))
             .await
             .status,
-        StatusCode::UNAUTHORIZED
+        StatusCode::FORBIDDEN
     );
     assert_eq!(
         app.get("/api/query/list_starters", None).await.status,

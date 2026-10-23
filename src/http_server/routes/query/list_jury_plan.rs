@@ -8,17 +8,18 @@ use crate::{
     http_server::{ClientError, HttpError, extractor::auth::Auth},
     jury::{JudgeTask, JuryAssignment, JuryEnabled},
     reloadable_sqlite::ReloadableSqlite,
+    roles::Permission,
 };
 
 #[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
 pub struct ListJuryPlanQuery {
-    /// Only this club's judges. Required for everyone but admins.
+    /// Only this club's judges. Required for everyone but the jury lead.
     club_id: Option<Uuid>,
 }
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct JuryPlan {
-    /// When the plan was published; `None` while only admins see it.
+    /// When the plan was published; `None` while only the jury lead sees it.
     #[serde(with = "time::serde::rfc3339::option")]
     published_at: Option<OffsetDateTime>,
     assignments: Vec<JuryAssignment>,
@@ -50,7 +51,7 @@ pub async fn list_jury_plan(
     let mut conn = db.acquire().await?;
     match query.club_id {
         Some(club_id) => ensure_club_access(&mut conn, &auth, club_id).await?,
-        None if auth.is_admin() => {}
+        None if auth.can(Permission::ManageJury) => {}
         None => return Err(HttpError::StatusCode(StatusCode::FORBIDDEN)),
     }
     let published_at = sqlx::query_scalar!(
@@ -59,7 +60,7 @@ pub async fn list_jury_plan(
     .fetch_optional(&mut *conn)
     .await?
     .flatten();
-    if published_at.is_none() && !auth.is_admin() {
+    if published_at.is_none() && !auth.can(Permission::ManageJury) {
         return Ok(Json(JuryPlan {
             published_at,
             assignments: vec![],

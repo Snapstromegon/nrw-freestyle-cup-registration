@@ -94,20 +94,24 @@ permissions! {
     ManageUsers,
     /// Categories, the timeplan, finals and the order of acts.
     PlanCompetition,
-    /// Every club's registration, also after the Meldeschluss: riders with
-    /// their birthdates, acts, withdrawals, pairs across clubs.
+    /// Every club's registration, also after the Meldeschluss: riders'
+    /// birthdates and ages, withdrawals, pairs across clubs, replacing riders.
     ManageRegistrations,
-    /// Record payments and waive fees.
+    /// Record payments.
     ManagePayments,
-    /// Every club's amount due with the starts and acts behind it.
-    ViewAmountsDue,
+    /// The list of clubs.
+    ViewClubs,
     /// Every club's balance: amount due, paid, open or overpaid.
     ViewClubBalances,
+    /// The club contacts and club representatives with their emails.
+    ViewClubContacts,
+    /// Every rider with their club and starts, without birthdates.
+    ViewRiders,
     /// Jury categories, judges, the Juryplan and credited deployments.
     ManageJury,
     /// Finals placements and publishing them.
     ManageResults,
-    /// Check riders in.
+    /// Check riders in and see who is.
     CheckIn,
     /// The medals and trophies to prepare.
     ViewMedals,
@@ -136,10 +140,28 @@ impl Role {
         use Permission as P;
         match self {
             Role::Admin => Permission::ALL,
-            Role::JuryLead => &[P::ManageJury, P::ManageResults],
-            Role::Treasurer => &[P::ManagePayments, P::ViewAmountsDue, P::ViewClubBalances],
-            Role::CheckIn => &[P::CheckIn, P::ViewClubBalances, P::ViewMedals],
-            Role::MusicControl => &[P::ControlMusic, P::ViewModeration],
+            Role::JuryLead => &[
+                P::ViewClubs,
+                P::ViewClubContacts,
+                P::ManageJury,
+                P::ManageResults,
+            ],
+            Role::Treasurer => &[
+                P::ManagePayments,
+                P::ViewClubs,
+                P::ViewClubBalances,
+                P::ViewClubContacts,
+                P::ViewRiders,
+            ],
+            Role::CheckIn => &[
+                P::ViewClubs,
+                P::ViewClubBalances,
+                P::ViewRiders,
+                P::CheckIn,
+                P::ViewMedals,
+            ],
+            // The music control checks in riders who show up at the start.
+            Role::MusicControl => &[P::CheckIn, P::ControlMusic, P::ViewModeration],
             Role::Moderation => &[P::ViewModeration],
             Role::MusicCheck => &[P::CheckSongs],
         }
@@ -149,7 +171,11 @@ impl Role {
 /// The permissions `roles` grant together, sorted.
 #[must_use]
 pub fn permissions_of(roles: &[Role]) -> Vec<Permission> {
-    let mut permissions: Vec<_> = roles.iter().flat_map(|r| r.permissions()).copied().collect();
+    let mut permissions: Vec<_> = roles
+        .iter()
+        .flat_map(|r| r.permissions())
+        .copied()
+        .collect();
     permissions.sort_unstable();
     permissions.dedup();
     permissions
@@ -169,11 +195,10 @@ pub async fn roles_of(db: &SqlitePool, user_id: Uuid) -> sqlx::Result<Vec<Role>>
 
 /// Every user's roles, sorted; users without roles are missing.
 pub async fn all_roles(db: &SqlitePool) -> sqlx::Result<HashMap<Uuid, Vec<Role>>> {
-    let rows = sqlx::query!(
-        r#"SELECT user_id as "user_id: Uuid", role as "role: Role" FROM user_roles"#
-    )
-    .fetch_all(db)
-    .await?;
+    let rows =
+        sqlx::query!(r#"SELECT user_id as "user_id: Uuid", role as "role: Role" FROM user_roles"#)
+            .fetch_all(db)
+            .await?;
     let mut roles: HashMap<Uuid, Vec<Role>> = HashMap::new();
     for row in rows {
         roles.entry(row.user_id).or_default().push(row.role);
@@ -192,13 +217,39 @@ mod tests {
     #[test]
     fn each_role_grants_what_the_role_table_says() {
         let table = [
-            (Role::JuryLead, vec![P::ManageJury, P::ManageResults]),
+            (
+                Role::JuryLead,
+                vec![
+                    P::ViewClubs,
+                    P::ViewClubContacts,
+                    P::ManageJury,
+                    P::ManageResults,
+                ],
+            ),
             (
                 Role::Treasurer,
-                vec![P::ManagePayments, P::ViewAmountsDue, P::ViewClubBalances],
+                vec![
+                    P::ManagePayments,
+                    P::ViewClubs,
+                    P::ViewClubBalances,
+                    P::ViewClubContacts,
+                    P::ViewRiders,
+                ],
             ),
-            (Role::CheckIn, vec![P::ViewClubBalances, P::CheckIn, P::ViewMedals]),
-            (Role::MusicControl, vec![P::ControlMusic, P::ViewModeration]),
+            (
+                Role::CheckIn,
+                vec![
+                    P::ViewClubs,
+                    P::ViewClubBalances,
+                    P::ViewRiders,
+                    P::CheckIn,
+                    P::ViewMedals,
+                ],
+            ),
+            (
+                Role::MusicControl,
+                vec![P::CheckIn, P::ControlMusic, P::ViewModeration],
+            ),
             (Role::Moderation, vec![P::ViewModeration]),
             (Role::MusicCheck, vec![P::CheckSongs]),
         ];
@@ -225,7 +276,7 @@ mod tests {
     fn several_roles_grant_each_permission_once() {
         assert_eq!(
             permissions_of(&[Role::Moderation, Role::MusicControl]),
-            [P::ControlMusic, P::ViewModeration]
+            [P::CheckIn, P::ControlMusic, P::ViewModeration]
         );
     }
 }

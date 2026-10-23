@@ -1,4 +1,4 @@
-use axum::{Extension, Json, http::StatusCode};
+use axum::{Extension, Json};
 use serde::Serialize;
 use tracing::{info, instrument};
 use utoipa::ToSchema;
@@ -6,9 +6,10 @@ use uuid::Uuid;
 
 use crate::{
     competition::Competition,
-    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    http_server::{ClientError, HttpError, extractor::auth::Granted},
     jury::{self, JuryCategoryFields, JuryEnabled},
     reloadable_sqlite::{ReloadableSqlite, begin_write},
+    roles::permit,
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -16,7 +17,7 @@ pub struct AddJuryCategoryResponse {
     id: Uuid,
 }
 
-/// Add a jury category at the end of the order. Admin only.
+/// Add a jury category at the end of the order. Jury lead.
 #[utoipa::path(
     post,
     tags=["command", "jury"],
@@ -34,12 +35,9 @@ pub struct AddJuryCategoryResponse {
 pub async fn add_jury_category(
     _jury: JuryEnabled,
     Extension(db): Extension<ReloadableSqlite>,
-    auth: Auth,
+    _: Granted<permit::ManageJury>,
     Json(body): Json<JuryCategoryFields>,
 ) -> Result<Json<AddJuryCategoryResponse>, HttpError> {
-    if !auth.is_admin() {
-        return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
-    }
     let db = db.get().await.clone();
     let mut transaction = begin_write(&db).await?;
     let competition = Competition::current(&mut *transaction).await?;

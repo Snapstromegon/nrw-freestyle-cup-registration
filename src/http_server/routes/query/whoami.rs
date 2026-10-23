@@ -9,6 +9,7 @@ use crate::{
         routes::http_types::{CurrentUser, User},
     },
     reloadable_sqlite::ReloadableSqlite,
+    roles::Role,
 };
 
 /// Get information about the currently authenticated user.
@@ -40,7 +41,7 @@ pub async fn whoami(
             name: user.name,
             email: user.email,
             email_verified: user.email_verified,
-            is_admin: auth.is_admin(),
+            is_admin: auth.roles.contains(&Role::Admin),
             roles: auth.roles.clone(),
             club_id: user.club_id,
         },

@@ -6,11 +6,12 @@ use crate::{
     act_type::ActType,
     http_server::{
         ClientError, HttpError,
-        extractor::auth::Auth,
+        extractor::auth::Granted,
         routes::http_types::{Act, ActParticipant, DBAct},
     },
     normalize::NormalizationStatus,
     reloadable_sqlite::ReloadableSqlite,
+    roles::permit,
 };
 
 /// List all acts.
@@ -30,7 +31,7 @@ use crate::{
 #[instrument(skip(db))]
 pub async fn list_acts(
     Extension(db): Extension<ReloadableSqlite>,
-    auth: Option<Auth>,
+    registrations: Option<Granted<permit::ManageRegistrations>>,
 ) -> Result<Json<Vec<Act>>, HttpError> {
     let db = db.get().await.clone();
     let acts = sqlx::query_as!(
@@ -71,10 +72,9 @@ pub async fn list_acts(
     )
     .fetch_all(&db)
     .await?;
-    let is_admin = auth.is_some_and(|auth| auth.is_admin());
     Ok(Json(
         acts.into_iter()
-            .map(|act| Act::from(act).for_viewer(is_admin))
+            .map(|act| Act::from(act).for_viewer(registrations.is_some()))
             .collect(),
     ))
 }

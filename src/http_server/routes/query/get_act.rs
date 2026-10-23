@@ -6,11 +6,12 @@ use crate::{
     act_type::ActType,
     http_server::{
         ClientError, HttpError,
-        extractor::auth::Auth,
+        extractor::auth::Granted,
         routes::http_types::{Act, ActParticipant, DBAct},
     },
     normalize::NormalizationStatus,
     reloadable_sqlite::ReloadableSqlite,
+    roles::permit,
 };
 
 #[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
@@ -36,7 +37,7 @@ pub struct GetActQuery {
 pub async fn get_act(
     Extension(db): Extension<ReloadableSqlite>,
     Query(query): Query<GetActQuery>,
-    auth: Option<Auth>,
+    registrations: Option<Granted<permit::ManageRegistrations>>,
 ) -> Result<Json<Act>, HttpError> {
     let db = db.get().await.clone();
     let act = sqlx::query_as!(
@@ -78,6 +79,5 @@ pub async fn get_act(
     )
     .fetch_one(&db)
     .await?;
-    let is_admin = auth.is_some_and(|auth| auth.is_admin());
-    Ok(Json(Act::from(act).for_viewer(is_admin)))
+    Ok(Json(Act::from(act).for_viewer(registrations.is_some())))
 }

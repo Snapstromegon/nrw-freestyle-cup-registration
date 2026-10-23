@@ -10,6 +10,7 @@ use crate::{
     groups::ensure_starter_access,
     http_server::{ClientError, HttpError, extractor::auth::Auth},
     reloadable_sqlite::{ReloadableSqlite, begin_write},
+    roles::Permission,
     system_status::Capabilities,
 };
 
@@ -82,7 +83,7 @@ pub async fn replace_act_rider(
 
     let club_id = ensure_starter_access(&mut transaction, &auth, body.starter_id).await?;
     let new_club_id = ensure_starter_access(&mut transaction, &auth, body.new_starter_id).await?;
-    if club_id != new_club_id && !auth.is_admin() {
+    if club_id != new_club_id && !auth.can(Permission::ManageRegistrations) {
         return Err(HttpError::ErrorMessages(
             "Der neue Fahrer muss aus demselben Verein sein.".to_string(),
         ));

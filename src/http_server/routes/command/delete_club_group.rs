@@ -8,6 +8,7 @@ use crate::{
     groups::{ensure_group_owner, get_group},
     http_server::{ClientError, HttpError, extractor::auth::Auth},
     reloadable_sqlite::{ReloadableSqlite, begin_write},
+    roles::Permission,
     system_status::Capabilities,
 };
 
@@ -52,7 +53,7 @@ pub async fn delete_club_group(
     let group = get_group(&mut transaction, body.act_id).await?;
     ensure_group_owner(&mut transaction, &auth, &group).await?;
 
-    if !auth.is_admin() {
+    if !auth.can(Permission::ManageRegistrations) {
         let other_club_riders = sqlx::query_scalar!(
             r#"
             SELECT COUNT(*) as "count!: i64"

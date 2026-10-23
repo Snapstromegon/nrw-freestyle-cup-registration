@@ -7,8 +7,9 @@ use uuid::Uuid;
 use crate::{
     act_type::ActType,
     finals::{self, SlotGroup},
-    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    http_server::{ClientError, HttpError, extractor::auth::Granted},
     reloadable_sqlite::ReloadableSqlite,
+    roles::permit,
 };
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
@@ -43,7 +44,8 @@ pub struct FinalSlot {
     group_label: String,
     /// Counts within the group.
     number: i64,
-    /// The placed act. Only admins see it before the placement is published.
+    /// The placed act. Before the placement is published, only for who
+    /// manages results.
     act_id: Option<Uuid>,
     started: bool,
 }
@@ -61,9 +63,8 @@ pub struct FinalSlot {
 #[instrument(skip(db))]
 pub async fn list_finals(
     Extension(db): Extension<ReloadableSqlite>,
-    auth: Option<Auth>,
+    results: Option<Granted<permit::ManageResults>>,
 ) -> Result<Json<Vec<Final>>, HttpError> {
-    let is_admin = auth.is_some_and(|auth| auth.is_admin());
     let db = db.get().await.clone();
     // One read transaction, so the finals and their slots match.
     let mut tx = db.begin().await?;
@@ -91,7 +92,9 @@ pub async fn list_finals(
             label: finals::finalist_label(row.number, &row.group_label),
             group_label: row.group_label,
             number: row.number,
-            act_id: row.act_id.filter(|_| is_admin || row.placement_published),
+            act_id: row
+                .act_id
+                .filter(|_| results.is_some() || row.placement_published),
             started: row.started,
         });
     }

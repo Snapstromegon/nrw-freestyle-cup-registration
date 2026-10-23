@@ -7,6 +7,7 @@ use uuid::Uuid;
 use crate::{
     http_server::{HttpError, extractor::auth::Auth},
     reloadable_sqlite::ReloadableSqlite,
+    roles::Permission,
     system_status::Capabilities,
 };
 
@@ -45,7 +46,7 @@ pub async fn rename_club(
         return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
     }
     let db = db.get().await.clone();
-    if auth.is_admin() {
+    if auth.can(Permission::ManageRegistrations) {
         sqlx::query!(
             r#"
             UPDATE clubs SET name = ? WHERE id = ?

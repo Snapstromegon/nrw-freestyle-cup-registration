@@ -1,12 +1,13 @@
-use axum::{Extension, Json, http::StatusCode};
+use axum::{Extension, Json};
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 use utoipa::ToSchema;
 
 use crate::{
     act_type::ActType,
-    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    http_server::{ClientError, HttpError, extractor::auth::Granted},
     reloadable_sqlite::ReloadableSqlite,
+    roles::permit,
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -43,12 +44,9 @@ pub struct AddCategoryBody {
 #[axum::debug_handler]
 pub async fn add_category(
     Extension(db): Extension<ReloadableSqlite>,
-    auth: Auth,
+    _: Granted<permit::PlanCompetition>,
     Json(body): Json<AddCategoryBody>,
 ) -> Result<Json<AddCategoryResponse>, HttpError> {
-    if !auth.is_admin() {
-        return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
-    }
     let db = db.get().await.clone();
 
     sqlx::query!(

@@ -6,9 +6,10 @@ use tracing::{info, instrument, warn};
 use utoipa::ToSchema;
 
 use crate::{
-    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    http_server::{ClientError, HttpError, extractor::auth::Granted},
     player::PlayerHub,
     reloadable_sqlite::{ReloadableSqlite, begin_write},
+    roles::permit,
     timeplan::{Slot, load},
 };
 
@@ -43,12 +44,9 @@ pub struct ResetBlockOrderBody {
 pub async fn reset_block_order(
     Extension(db): Extension<ReloadableSqlite>,
     Extension(player_hub): Extension<Arc<PlayerHub>>,
-    auth: Auth,
+    _: Granted<permit::PlanCompetition>,
     Json(body): Json<ResetBlockOrderBody>,
 ) -> Result<Json<ResetBlockOrderResponse>, HttpError> {
-    if !auth.is_admin() {
-        return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
-    }
     let db = db.get().await.clone();
     let mut tx = begin_write(&db).await?;
     let timeplan = load(&mut tx).await?;

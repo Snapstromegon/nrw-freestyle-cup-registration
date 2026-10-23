@@ -1,12 +1,13 @@
-use axum::{Extension, Json, http::StatusCode};
+use axum::{Extension, Json};
 use serde::{Deserialize, Serialize};
 use tracing::{info, instrument};
 use utoipa::ToSchema;
 
 use crate::{
     finals::{self, FinalFields},
-    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    http_server::{ClientError, HttpError, extractor::auth::Granted},
     reloadable_sqlite::{ReloadableSqlite, begin_write},
+    roles::permit,
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -38,12 +39,9 @@ pub struct AddFinalBody {
 #[axum::debug_handler]
 pub async fn add_final(
     Extension(db): Extension<ReloadableSqlite>,
-    auth: Auth,
+    _: Granted<permit::PlanCompetition>,
     Json(body): Json<AddFinalBody>,
 ) -> Result<Json<AddFinalResponse>, HttpError> {
-    if !auth.is_admin() {
-        return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
-    }
     let name = finals::normalize_name(&body.name).map_err(HttpError::ErrorMessages)?;
     let fields = body.fields.normalize().map_err(HttpError::ErrorMessages)?;
     let db = db.get().await.clone();

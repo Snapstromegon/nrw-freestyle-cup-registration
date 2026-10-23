@@ -4,8 +4,9 @@ use tracing::instrument;
 use utoipa::ToSchema;
 
 use crate::{
-    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    http_server::{ClientError, HttpError, extractor::auth::Granted},
     reloadable_sqlite::{ReloadableSqlite, begin_write},
+    roles::permit,
     timeplan::swap_with_neighbour,
 };
 
@@ -35,12 +36,9 @@ pub struct MoveTimeplanDownBody {
 #[axum::debug_handler]
 pub async fn move_timeplan_down(
     Extension(db): Extension<ReloadableSqlite>,
-    auth: Auth,
+    _: Granted<permit::PlanCompetition>,
     Json(body): Json<MoveTimeplanDownBody>,
 ) -> Result<Json<MoveTimeplanDownResponse>, HttpError> {
-    if !auth.is_admin() {
-        return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
-    }
     let db = db.get().await.clone();
 
     let mut tx = begin_write(&db).await?;

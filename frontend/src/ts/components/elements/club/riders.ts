@@ -36,7 +36,8 @@ export const ridersOf = (data: ClubData, admin: boolean): Rider[] => {
       club_name: s.club_name,
       firstname: s.firstname,
       lastname: s.lastname,
-      birthdate: s.birthdate,
+      // Only for who manages registrations, like this list.
+      birthdate: s.birthdate ?? "",
       gender: s.gender,
       single_male: s.single_male,
       single_female: s.single_female,

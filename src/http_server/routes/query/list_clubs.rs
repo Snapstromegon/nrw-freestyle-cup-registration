@@ -7,9 +7,10 @@ use uuid::Uuid;
 use crate::{
     competition::Competition,
     fees::{AmountDue, fees_by_club},
-    http_server::{ClientError, HttpError, HttpServerOptions, extractor::auth::Auth},
+    http_server::{ClientError, HttpError, HttpServerOptions, extractor::auth::Granted},
     jury::JuryObligation,
     reloadable_sqlite::ReloadableSqlite,
+    roles::permit,
     utils::club_code,
 };
 
@@ -17,26 +18,29 @@ use crate::{
 pub struct ClubOverview {
     id: Uuid,
     name: String,
-    /// The amount the club has paid so far.
+    /// The amount the club has paid so far; only with club balances.
     payment: Option<f64>,
     owner_id: Uuid,
-    owner_name: String,
-    owner_email: String,
-    owner_email_verified: bool,
+    /// The club contact; only with club contacts.
+    owner_name: Option<String>,
+    owner_email: Option<String>,
+    owner_email_verified: Option<bool>,
     /// The Vereinsverantwortliche/r; the owner unless the club named someone
-    /// else.
-    responsible_name: String,
-    responsible_email: String,
+    /// else. Only with club contacts.
+    responsible_name: Option<String>,
+    responsible_email: Option<String>,
     /// Short code for the transfer reference, e.g. "EV-K7Q3"; stays the
     /// same when the club is renamed.
     code: String,
-    /// What the club owes.
-    amount_due: AmountDue,
-    /// The club's jury obligation, while the jury registration is on.
+    /// What the club owes; only with club balances.
+    amount_due: Option<AmountDue>,
+    /// The club's jury obligation, while the jury registration is on; only
+    /// with club balances or for the jury lead.
     jury: Option<JuryObligation>,
 }
 
-/// List all clubs with their owners. Admin only.
+/// List all clubs; their balances and contacts only with the permission to
+/// see them.
 #[utoipa::path(
     get,
     tags=["query", "club"],
@@ -44,6 +48,7 @@ pub struct ClubOverview {
     responses(
         (status=200, content_type="application/json", body=Vec<ClubOverview>),
         (status=401, content_type="application/json", body=ClientError),
+        (status=403, content_type="application/json", body=ClientError),
         (status=500, content_type="application/json", body=ClientError),
     ),
 )]
@@ -51,11 +56,13 @@ pub struct ClubOverview {
 pub async fn list_clubs(
     Extension(db): Extension<ReloadableSqlite>,
     Extension(http_options): Extension<Arc<HttpServerOptions>>,
-    auth: Auth,
+    _: Granted<permit::ViewClubs>,
+    balances: Option<Granted<permit::ViewClubBalances>>,
+    contacts: Option<Granted<permit::ViewClubContacts>>,
+    jury: Option<Granted<permit::ManageJury>>,
 ) -> Result<Json<Vec<ClubOverview>>, HttpError> {
-    if !auth.is_admin() {
-        return Err(HttpError::InvalidCredentials);
-    }
+    let (balances, contacts) = (balances.is_some(), contacts.is_some());
+    let jury = balances || jury.is_some();
     let db = db.get().await.clone();
     let rows = sqlx::query!(
         r#"
@@ -84,17 +91,17 @@ pub async fn list_clubs(
             let club_fees = fees.remove(&row.id).unwrap_or_default();
             ClubOverview {
                 code: club_code(&row.id),
-                amount_due: club_fees.amount_due,
-                jury: club_fees.jury,
+                amount_due: Some(club_fees.amount_due).filter(|_| balances),
+                jury: club_fees.jury.filter(|_| jury),
                 id: row.id,
                 name: row.name,
-                payment: row.payment,
+                payment: row.payment.filter(|_| balances),
                 owner_id: row.owner_id,
-                owner_name: row.owner_name,
-                owner_email: row.owner_email,
-                owner_email_verified: row.owner_email_verified,
-                responsible_name: row.responsible_name,
-                responsible_email: row.responsible_email,
+                owner_name: Some(row.owner_name).filter(|_| contacts),
+                owner_email: Some(row.owner_email).filter(|_| contacts),
+                owner_email_verified: Some(row.owner_email_verified).filter(|_| contacts),
+                responsible_name: Some(row.responsible_name).filter(|_| contacts),
+                responsible_email: Some(row.responsible_email).filter(|_| contacts),
             }
         })
         .collect();

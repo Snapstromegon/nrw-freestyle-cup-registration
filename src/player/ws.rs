@@ -1,6 +1,6 @@
 //! `GET /api/ws/player?mode=controller|player&kind=web|cli&name=…&id=…`: the
-//! websocket of remote playback. Both modes need an admin login; the sound
-//! desk logs in as an admin, too.
+//! websocket of remote playback. Both modes need the permission to control
+//! the music; the sound desk logs in with the Music control role, too.
 //!
 //! The server pings both modes every [`PING_EVERY`](super::PING_EVERY) and
 //! closes a connection that sent nothing for
@@ -17,8 +17,7 @@ use axum::{
         Query, WebSocketUpgrade,
         ws::{CloseFrame, Message, Utf8Bytes, WebSocket},
     },
-    http::StatusCode,
-    response::{IntoResponse, Response},
+    response::Response,
 };
 use serde::{Deserialize, Serialize};
 use tokio::{
@@ -32,7 +31,7 @@ use super::{
     ControllerMessage, PlayerConnection, PlayerHub, PlayerKind, PlayerMessage, Timing,
     ToController, ToPlayer,
 };
-use crate::http_server::extractor::auth::Auth;
+use crate::{http_server::extractor::auth::Granted, roles::permit};
 
 /// The close code of a player connection that a newer connection of the
 /// same player took over, e.g. the same page open twice.
@@ -78,13 +77,10 @@ pub struct PlayerQuery {
 
 pub async fn player_ws(
     upgrade: WebSocketUpgrade,
-    auth: Auth,
+    _: Granted<permit::ControlMusic>,
     Query(query): Query<PlayerQuery>,
     Extension(hub): Extension<Arc<PlayerHub>>,
 ) -> Response {
-    if !auth.is_admin() {
-        return StatusCode::FORBIDDEN.into_response();
-    }
     upgrade.on_upgrade(move |socket| async move {
         match query.mode {
             Mode::Controller => controller(socket, hub).await,

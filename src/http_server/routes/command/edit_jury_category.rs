@@ -6,9 +6,10 @@ use uuid::Uuid;
 
 use crate::{
     competition::Competition,
-    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    http_server::{ClientError, HttpError, extractor::auth::Granted},
     jury::{self, JuryCategoryFields, JuryEnabled},
     reloadable_sqlite::{ReloadableSqlite, begin_write},
+    roles::permit,
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -22,7 +23,7 @@ pub struct EditJuryCategoryBody {
 }
 
 /// Change a jury category. Changing its deployments changes every club's
-/// registered deployments. Admin only.
+/// registered deployments. Jury lead.
 #[utoipa::path(
     post,
     tags=["command", "jury"],
@@ -40,12 +41,9 @@ pub struct EditJuryCategoryBody {
 pub async fn edit_jury_category(
     _jury: JuryEnabled,
     Extension(db): Extension<ReloadableSqlite>,
-    auth: Auth,
+    _: Granted<permit::ManageJury>,
     Json(body): Json<EditJuryCategoryBody>,
 ) -> Result<Json<EditJuryCategoryResponse>, HttpError> {
-    if !auth.is_admin() {
-        return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
-    }
     let db = db.get().await.clone();
     let mut transaction = begin_write(&db).await?;
     let competition = Competition::current(&mut *transaction).await?;

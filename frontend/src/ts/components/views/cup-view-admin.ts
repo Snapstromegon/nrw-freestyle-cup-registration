@@ -100,7 +100,7 @@ const sortValue = (row: ClubRow, key: SortKey): number | string => {
     case "name":
       return row.club.name;
     case "contact":
-      return row.club.owner_name;
+      return row.club.owner_name ?? "";
     case "starters":
       return row.starters.length;
     case "acts":
@@ -151,7 +151,7 @@ const buildClubRows = (
         music: 0,
         checked: 0,
         checkedIn: 0,
-        due: club.amount_due.total,
+        due: club.amount_due?.total ?? 0,
         paid: club.payment ?? 0,
         open: 0,
       },
@@ -1070,7 +1070,7 @@ export default class CupViewAdmin extends LitElement {
             row.club.owner_email,
             row.club.responsible_name,
             row.club.responsible_email,
-          ].some((text) => text.toLowerCase().includes(needle)),
+          ].some((text) => text?.toLowerCase().includes(needle)),
         )
       : [...allRows];
     const { key, desc } = this.sort;
@@ -1231,7 +1231,7 @@ export default class CupViewAdmin extends LitElement {
         </td>
         <td class="num">
           ${row.due ? formatMoney(row.due) : html`<span class="zero">${formatMoney(0)}</span>`}${
-            club.amount_due.jury_fee
+            club.amount_due?.jury_fee
               ? html`<br /><small
                     class="muted"
                     title="Startgeld ${formatMoney(club.amount_due.start_fees)} · Jurygebühr ${formatMoney(club.amount_due.jury_fee)}"

@@ -4,7 +4,7 @@
 mod common;
 
 use axum::http::StatusCode;
-use common::{TestApp, email_for};
+use common::{TestApp, email_for, starter_body};
 use serde_json::{Value, json};
 use sqlx::SqlitePool;
 use uuid::Uuid;
@@ -44,11 +44,15 @@ async fn admins_from_before_roles_become_admins(db: SqlitePool) {
     migrator.run(&db).await.unwrap();
     let app = TestApp::new(db).await;
 
-    let admin = app.get("/api/query/whoami", Some(&app.cookie_for(admin))).await;
+    let admin = app
+        .get("/api/query/whoami", Some(&app.cookie_for(admin)))
+        .await;
     assert_eq!(admin.status, StatusCode::OK, "{:?}", admin.body);
     assert_eq!(strings(&admin.body["roles"]), ["admin"]);
 
-    let user = app.get("/api/query/whoami", Some(&app.cookie_for(user))).await;
+    let user = app
+        .get("/api/query/whoami", Some(&app.cookie_for(user)))
+        .await;
     assert_eq!(strings(&user.body["roles"]), Vec::<&str>::new());
 }
 
@@ -59,7 +63,9 @@ async fn whoami_lists_roles_and_their_permissions(db: SqlitePool) {
         .create_user_with_roles("Kim", &["treasurer", "music_check"])
         .await;
 
-    let response = app.get("/api/query/whoami", Some(&app.cookie_for(id))).await;
+    let response = app
+        .get("/api/query/whoami", Some(&app.cookie_for(id)))
+        .await;
 
     assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
     assert_eq!(
@@ -71,8 +77,10 @@ async fn whoami_lists_roles_and_their_permissions(db: SqlitePool) {
         [
             "check_songs",
             "manage_payments",
-            "view_amounts_due",
-            "view_club_balances"
+            "view_club_balances",
+            "view_club_contacts",
+            "view_clubs",
+            "view_riders"
         ]
     );
     assert_eq!(response.body["is_admin"], false);
@@ -85,7 +93,9 @@ async fn admins_hold_every_permission(db: SqlitePool) {
     let kim = app.create_user_with_roles("Kim", &["jury_lead"]).await;
 
     let response = app.get("/api/query/whoami", Some(&admin)).await;
-    let jury_lead = app.get("/api/query/whoami", Some(&app.cookie_for(kim))).await;
+    let jury_lead = app
+        .get("/api/query/whoami", Some(&app.cookie_for(kim)))
+        .await;
 
     assert_eq!(response.body["is_admin"], true);
     let permissions = strings(&response.body["permissions"]);
@@ -127,6 +137,227 @@ async fn making_a_user_admin_keeps_their_other_roles(db: SqlitePool) {
         .await;
     assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
 
-    let whoami = app.get("/api/query/whoami", Some(&app.cookie_for(kim))).await;
+    let whoami = app
+        .get("/api/query/whoami", Some(&app.cookie_for(kim)))
+        .await;
     assert_eq!(strings(&whoami.body["roles"]), ["admin", "treasurer"]);
+}
+
+/// A user holding `roles`, with their cookie.
+async fn member(app: &TestApp, name: &str, roles: &[&str]) -> String {
+    app.cookie_for(app.create_user_with_roles(name, roles).await)
+}
+
+async fn status(app: &TestApp, uri: &str, body: Value, cookie: &str) -> StatusCode {
+    app.post(uri, body, Some(cookie)).await.status
+}
+
+#[sqlx::test]
+async fn each_role_reaches_its_own_commands_only(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let (owner, club_id) = app.create_club_owner("Clara", "SSV").await;
+    let rider = app
+        .add_starter(&owner, starter_body(club_id, "Anna", true, false))
+        .await;
+    let act_id = app.act_of(rider).await;
+    let payment = || json!({ "club_id": club_id, "amount": 20.0 });
+    let check_in = || json!({ "starter_ids": [rider], "checked_in": true });
+    let song = || json!({ "act_id": act_id, "checked": true });
+    let order = || json!({ "act_id": act_id, "order": 1 });
+
+    let treasurer = member(&app, "Kasse", &["treasurer"]).await;
+    assert_eq!(
+        status(&app, "/api/command/set_payment", payment(), &treasurer).await,
+        StatusCode::OK
+    );
+    assert_eq!(
+        status(&app, "/api/command/set_checked_in", check_in(), &treasurer).await,
+        StatusCode::FORBIDDEN
+    );
+
+    let desk = member(&app, "Desk", &["check_in"]).await;
+    assert_eq!(
+        status(&app, "/api/command/set_checked_in", check_in(), &desk).await,
+        StatusCode::OK
+    );
+    assert_eq!(
+        status(&app, "/api/command/set_payment", payment(), &desk).await,
+        StatusCode::FORBIDDEN
+    );
+
+    let music = member(&app, "Musik", &["music_control"]).await;
+    assert_eq!(
+        status(&app, "/api/command/timeplan_forward", json!(null), &music).await,
+        StatusCode::OK
+    );
+    assert_eq!(
+        status(&app, "/api/command/set_checked_in", check_in(), &music).await,
+        StatusCode::OK
+    );
+    assert_eq!(
+        status(&app, "/api/command/set_payment", payment(), &music).await,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        status(&app, "/api/command/set_act_order", order(), &music).await,
+        StatusCode::FORBIDDEN
+    );
+
+    let checker = member(&app, "Prüfer", &["music_check"]).await;
+    assert_eq!(
+        status(&app, "/api/command/set_song_checked", song(), &checker).await,
+        StatusCode::OK
+    );
+    assert_eq!(
+        status(&app, "/api/command/set_act_order", order(), &checker).await,
+        StatusCode::FORBIDDEN
+    );
+
+    let moderation = member(&app, "Moderation", &["moderation"]).await;
+    assert_eq!(
+        status(
+            &app,
+            "/api/command/timeplan_forward",
+            json!(null),
+            &moderation
+        )
+        .await,
+        StatusCode::FORBIDDEN
+    );
+
+    let jury_lead = member(&app, "Jury", &["jury_lead"]).await;
+    assert_eq!(
+        app.get("/api/query/list_judges", Some(&jury_lead))
+            .await
+            .status,
+        StatusCode::OK
+    );
+    assert_eq!(
+        status(&app, "/api/command/set_payment", payment(), &jury_lead).await,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        app.get("/api/query/list_starters", Some(&jury_lead))
+            .await
+            .status,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        app.get("/api/query/list_judges", Some(&treasurer))
+            .await
+            .status,
+        StatusCode::FORBIDDEN
+    );
+
+    let admin = app.create_admin().await;
+    assert_eq!(
+        status(&app, "/api/command/set_act_order", order(), &admin).await,
+        StatusCode::OK
+    );
+}
+
+#[sqlx::test]
+async fn only_registration_managers_see_birthdates(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let (owner, club_id) = app.create_club_owner("Clara", "SSV").await;
+    app.add_starter(&owner, starter_body(club_id, "Anna", true, false))
+        .await;
+
+    let desk = member(&app, "Desk", &["check_in"]).await;
+    let starters = app.get("/api/query/list_starters", Some(&desk)).await;
+    assert_eq!(starters.status, StatusCode::OK, "{:?}", starters.body);
+    assert_eq!(starters.body[0]["firstname"], "Anna");
+    assert_eq!(starters.body[0]["birthdate"], Value::Null);
+    assert_eq!(starters.body[0]["age_on_competition"], Value::Null);
+    let acts = app.get("/api/query/list_acts", Some(&desk)).await;
+    assert_eq!(acts.body[0]["max_age"], Value::Null);
+
+    let admin = app.create_admin().await;
+    let starters = app.get("/api/query/list_starters", Some(&admin)).await;
+    assert_ne!(starters.body[0]["birthdate"], Value::Null);
+    let acts = app.get("/api/query/list_acts", Some(&admin)).await;
+    assert_ne!(acts.body[0]["max_age"], Value::Null);
+}
+
+#[sqlx::test]
+async fn check_in_sees_club_balances_but_not_contacts(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let (owner, club_id) = app.create_club_owner("Clara", "SSV").await;
+    app.add_starter(&owner, starter_body(club_id, "Anna", true, false))
+        .await;
+    let admin = app.create_admin().await;
+    app.post(
+        "/api/command/set_payment",
+        json!({ "club_id": club_id, "amount": 5.0 }),
+        Some(&admin),
+    )
+    .await;
+
+    let desk = member(&app, "Desk", &["check_in"]).await;
+    let clubs = app.get("/api/query/list_clubs", Some(&desk)).await;
+    assert_eq!(clubs.status, StatusCode::OK, "{:?}", clubs.body);
+    let club = &clubs.body[0];
+    assert_eq!(club["name"], "SSV");
+    assert_eq!(club["payment"], 5.0);
+    assert!(club["amount_due"]["total"].as_f64().unwrap() > 0.0);
+    assert_eq!(club["owner_email"], Value::Null);
+    assert_eq!(club["responsible_email"], Value::Null);
+
+    let jury_lead = member(&app, "Jury", &["jury_lead"]).await;
+    let clubs = app.get("/api/query/list_clubs", Some(&jury_lead)).await;
+    let club = &clubs.body[0];
+    assert_eq!(club["owner_email"], email_for("Clara"));
+    assert_eq!(club["payment"], Value::Null);
+    assert_eq!(club["amount_due"], Value::Null);
+
+    let musik = member(&app, "Musik", &["music_control"]).await;
+    let clubs = app.get("/api/query/list_clubs", Some(&musik)).await;
+    assert_eq!(clubs.status, StatusCode::FORBIDDEN);
+}
+
+#[sqlx::test]
+async fn a_role_doesnt_open_other_clubs(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let (_, club_id) = app.create_club_owner("Clara", "SSV").await;
+    let treasurer = member(&app, "Kasse", &["treasurer", "jury_lead", "check_in"]).await;
+
+    // Renaming someone else's club changes nothing.
+    let rename = json!({ "club_id": club_id, "name": "Hijacked" });
+    app.post("/api/command/rename_club", rename.clone(), Some(&treasurer))
+        .await;
+    let clubs = app.get("/api/query/list_clubs", Some(&treasurer)).await;
+    assert_eq!(clubs.body[0]["name"], "SSV");
+    let add = starter_body(club_id, "Eva", true, false);
+    assert_eq!(
+        status(&app, "/api/command/add_club_starter", add, &treasurer).await,
+        StatusCode::FORBIDDEN
+    );
+    let admin = app.create_admin().await;
+    assert_eq!(
+        status(&app, "/api/command/rename_club", rename, &admin).await,
+        StatusCode::OK
+    );
+}
+
+#[sqlx::test]
+async fn only_registration_managers_edit_after_the_meldeschluss(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let (_, club_id) = app.create_club_owner("Clara", "SSV").await;
+    app.close_registration().await;
+    let status_of = |body: &Value| body["can_register_starter"].clone();
+
+    let jury_lead = member(&app, "Jury", &["jury_lead"]).await;
+    let response = app
+        .get("/api/query/get_system_status", Some(&jury_lead))
+        .await;
+    assert_eq!(status_of(&response.body), false, "{:?}", response.body);
+
+    let admin = app.create_admin().await;
+    let response = app.get("/api/query/get_system_status", Some(&admin)).await;
+    assert_eq!(status_of(&response.body), true);
+    let add = starter_body(club_id, "Eva", true, false);
+    assert_eq!(
+        status(&app, "/api/command/add_club_starter", add, &admin).await,
+        StatusCode::OK
+    );
 }

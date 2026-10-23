@@ -10,19 +10,21 @@ import {
   starterName,
 } from "../../../club-data";
 
-/** The fields of a starter that an edit sends. */
+/**
+ * The fields of a starter that an edit sends. Riders of other clubs come
+ * with a birthdate only for who manages registrations.
+ */
 type StarterFields = Pick<
   ClubStarter,
   | "firstname"
   | "lastname"
-  | "birthdate"
   | "gender"
   | "single_male"
   | "single_female"
   | "pair"
   | "partner_name"
   | "partner_id"
->;
+> & { birthdate?: string | null };
 
 /** A starter of the own club or (for admins) of any club. */
 export type StarterLike = StarterFields & { id: string };
@@ -33,6 +35,11 @@ export const editStarter = async (
   changes: Partial<StarterFields>,
 ) => {
   const next = { ...starter, ...changes };
+  if (!next.birthdate) {
+    throw new Error(
+      `Das Geburtsdatum von ${next.firstname} ist nicht bekannt.`,
+    );
+  }
   await unwrap(
     client.editClubStarter({
       body: {

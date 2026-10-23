@@ -8,6 +8,7 @@ use utoipa::ToSchema;
 use crate::{
     http_server::{ClientError, HttpError, HttpServerOptions, extractor::auth::Auth},
     reloadable_sqlite::ReloadableSqlite,
+    roles::Permission,
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -43,7 +44,9 @@ pub async fn reload_db(
     Query(query): Query<ReloadDBQuery>,
     Extension(http_options): Extension<Arc<HttpServerOptions>>,
 ) -> Result<Json<ReloadDBResponse>, HttpError> {
-    if !auth.is_admin() && query.token != Some(http_options.reload_db_token.clone()) {
+    if !auth.can(Permission::ManageUsers)
+        && query.token != Some(http_options.reload_db_token.clone())
+    {
         return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
     }
 

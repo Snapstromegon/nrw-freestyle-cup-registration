@@ -1,13 +1,14 @@
-use axum::{Extension, Json, http::StatusCode};
+use axum::{Extension, Json};
 use serde::{Deserialize, Serialize};
 use tracing::{info, instrument};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    http_server::{ClientError, HttpError, extractor::auth::Granted},
     jury::JuryEnabled,
     reloadable_sqlite::{ReloadableSqlite, begin_write},
+    roles::permit,
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -19,7 +20,7 @@ pub struct UnassignJudgeBody {
     jury_category_id: Uuid,
 }
 
-/// Remove a judge from a jury category of the Juryplan. Admin only.
+/// Remove a judge from a jury category of the Juryplan. Jury lead.
 #[utoipa::path(
     post,
     tags=["command", "jury"],
@@ -37,12 +38,9 @@ pub struct UnassignJudgeBody {
 pub async fn unassign_judge(
     _jury: JuryEnabled,
     Extension(db): Extension<ReloadableSqlite>,
-    auth: Auth,
+    _: Granted<permit::ManageJury>,
     Json(body): Json<UnassignJudgeBody>,
 ) -> Result<Json<UnassignJudgeResponse>, HttpError> {
-    if !auth.is_admin() {
-        return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
-    }
     let db = db.get().await.clone();
     let mut transaction = begin_write(&db).await?;
     info!(

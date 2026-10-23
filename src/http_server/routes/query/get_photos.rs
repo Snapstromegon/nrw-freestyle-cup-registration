@@ -6,8 +6,9 @@ use tracing::instrument;
 use utoipa::ToSchema;
 
 use crate::{
-    http_server::extractor::auth::Auth,
+    http_server::extractor::auth::Granted,
     photos::{PhotoInfo, Photos},
+    roles::permit,
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -19,7 +20,7 @@ pub struct PhotosOverview {
     pub newest: Option<PhotoInfo>,
     /// How many recent photos breaks choose from.
     pub recent: usize,
-    /// Admins only: why the source couldn't be listed last time.
+    /// Music control only: why the source couldn't be listed last time.
     pub error: Option<String>,
 }
 
@@ -36,13 +37,12 @@ pub struct PhotosOverview {
 #[instrument(skip(photos))]
 pub async fn get_photos(
     Extension(photos): Extension<Arc<Photos>>,
-    auth: Option<Auth>,
+    music: Option<Granted<permit::ControlMusic>>,
 ) -> Json<PhotosOverview> {
-    let admin = auth.is_some_and(|auth| auth.is_admin());
     Json(PhotosOverview {
         configured: photos.configured(),
         newest: photos.newest(),
         recent: photos.recent().len(),
-        error: photos.error().filter(|_| admin),
+        error: photos.error().filter(|_| music.is_some()),
     })
 }

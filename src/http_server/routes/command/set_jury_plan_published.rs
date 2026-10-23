@@ -1,13 +1,14 @@
-use axum::{Extension, Json, http::StatusCode};
+use axum::{Extension, Json};
 use serde::{Deserialize, Serialize};
 use tracing::{info, instrument};
 use utoipa::ToSchema;
 
 use crate::{
     competition::Competition,
-    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    http_server::{ClientError, HttpError, extractor::auth::Granted},
     jury::JuryEnabled,
     reloadable_sqlite::{ReloadableSqlite, begin_write},
+    roles::permit,
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -39,12 +40,9 @@ pub struct SetJuryPlanPublishedBody {
 pub async fn set_jury_plan_published(
     _jury: JuryEnabled,
     Extension(db): Extension<ReloadableSqlite>,
-    auth: Auth,
+    _: Granted<permit::ManageJury>,
     Json(body): Json<SetJuryPlanPublishedBody>,
 ) -> Result<Json<SetJuryPlanPublishedResponse>, HttpError> {
-    if !auth.is_admin() {
-        return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
-    }
     let db = db.get().await.clone();
     let mut transaction = begin_write(&db).await?;
     let now = time::OffsetDateTime::now_utc();

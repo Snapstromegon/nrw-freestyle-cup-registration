@@ -1,15 +1,16 @@
 use std::collections::HashSet;
 
-use axum::{Extension, Json, http::StatusCode};
+use axum::{Extension, Json};
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    http_server::{ClientError, HttpError, extractor::auth::Granted},
     jury::JuryEnabled,
     reloadable_sqlite::{ReloadableSqlite, begin_write},
+    roles::permit,
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -21,7 +22,7 @@ pub struct SetJuryCategoryOrderBody {
     ids: Vec<Uuid>,
 }
 
-/// Set the order of the jury categories. Admin only.
+/// Set the order of the jury categories. Jury lead.
 #[utoipa::path(
     post,
     tags=["command", "jury"],
@@ -39,12 +40,9 @@ pub struct SetJuryCategoryOrderBody {
 pub async fn set_jury_category_order(
     _jury: JuryEnabled,
     Extension(db): Extension<ReloadableSqlite>,
-    auth: Auth,
+    _: Granted<permit::ManageJury>,
     Json(body): Json<SetJuryCategoryOrderBody>,
 ) -> Result<Json<SetJuryCategoryOrderResponse>, HttpError> {
-    if !auth.is_admin() {
-        return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
-    }
     let db = db.get().await.clone();
     let mut transaction = begin_write(&db).await?;
     let existing: HashSet<Uuid> =

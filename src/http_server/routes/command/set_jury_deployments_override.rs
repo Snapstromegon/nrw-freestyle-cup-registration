@@ -5,9 +5,10 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    http_server::{ClientError, HttpError, extractor::auth::Granted},
     jury::JuryEnabled,
     reloadable_sqlite::{ReloadableSqlite, begin_write},
+    roles::permit,
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -22,7 +23,7 @@ pub struct SetJuryDeploymentsOverrideBody {
 }
 
 /// Credit a club with jury deployments instead of the registered ones, e.g.
-/// after a late cancellation or as a waiver. Admin only.
+/// after a late cancellation or as a waiver. Jury lead.
 #[utoipa::path(
     post,
     tags=["command", "jury"],
@@ -40,12 +41,9 @@ pub struct SetJuryDeploymentsOverrideBody {
 pub async fn set_jury_deployments_override(
     _jury: JuryEnabled,
     Extension(db): Extension<ReloadableSqlite>,
-    auth: Auth,
+    _: Granted<permit::ManageJury>,
     Json(body): Json<SetJuryDeploymentsOverrideBody>,
 ) -> Result<Json<SetJuryDeploymentsOverrideResponse>, HttpError> {
-    if !auth.is_admin() {
-        return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
-    }
     if body.deployments.is_some_and(|d| d < 0) {
         return Err(HttpError::ErrorMessages(
             "Die angerechneten Einsätze dürfen nicht negativ sein.".to_string(),

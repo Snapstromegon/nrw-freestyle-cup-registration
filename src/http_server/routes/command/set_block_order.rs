@@ -7,9 +7,10 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    http_server::{ClientError, HttpError, extractor::auth::Granted},
     player::PlayerHub,
     reloadable_sqlite::{ReloadableSqlite, begin_write},
+    roles::permit,
     timeplan::{EntryKind, Slot, load},
 };
 
@@ -66,12 +67,9 @@ fn invalid(message: &str) -> HttpError {
 pub async fn set_block_order(
     Extension(db): Extension<ReloadableSqlite>,
     Extension(player_hub): Extension<Arc<PlayerHub>>,
-    auth: Auth,
+    _: Granted<permit::PlanCompetition>,
     Json(body): Json<SetBlockOrderBody>,
 ) -> Result<Json<SetBlockOrderResponse>, HttpError> {
-    if !auth.is_admin() {
-        return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
-    }
     let db = db.get().await.clone();
     let mut tx = begin_write(&db).await?;
     let timeplan = load(&mut tx).await?;

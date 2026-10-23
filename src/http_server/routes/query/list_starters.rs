@@ -4,8 +4,9 @@ use uuid::Uuid;
 
 use crate::{
     gender::Gender,
-    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    http_server::{ClientError, HttpError, extractor::auth::Granted},
     reloadable_sqlite::ReloadableSqlite,
+    roles::permit,
 };
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
@@ -15,8 +16,9 @@ pub struct Starter {
     club_name: String,
     firstname: String,
     lastname: String,
-    #[serde(with = "time::serde::iso8601")]
-    birthdate: time::OffsetDateTime,
+    /// Only for who manages registrations.
+    #[serde(with = "time::serde::iso8601::option")]
+    birthdate: Option<time::OffsetDateTime>,
     gender: Option<Gender>,
     single_male: bool,
     single_female: bool,
@@ -25,7 +27,8 @@ pub struct Starter {
     partner_name: Option<String>,
     resolved_partner_name: Option<String>,
     resolved_partner_club: Option<String>,
-    age_on_competition: f64,
+    /// On the determining day; only for who manages registrations.
+    age_on_competition: Option<f64>,
     /// When the starter checked in on competition day.
     #[serde(with = "time::serde::iso8601::option")]
     checked_in_at: Option<time::OffsetDateTime>,
@@ -36,31 +39,27 @@ pub struct Starter {
     waived_count: i64,
 }
 
-/// Get information about a club.
+/// Every rider with their club and starts; birthdates and ages only for
+/// who manages registrations.
 #[utoipa::path(
     get,
     tags=["query"],
     path="/list_starters",
     responses(
         (status=200, content_type="application/json", body=Vec<Starter>),
-        (status=404, content_type="application/json", body=ClientError),
+        (status=401, content_type="application/json", body=ClientError),
+        (status=403, content_type="application/json", body=ClientError),
         (status=500, content_type="application/json", body=ClientError),
     ),
 )]
 #[instrument(skip(db))]
 pub async fn list_starters(
     Extension(db): Extension<ReloadableSqlite>,
-    auth: Option<Auth>,
+    _: Granted<permit::ViewRiders>,
+    registrations: Option<Granted<permit::ManageRegistrations>>,
 ) -> Result<Json<Vec<Starter>>, HttpError> {
-    auth.ok_or(HttpError::InvalidCredentials).map(|auth| {
-        if auth.is_admin() {
-            Ok(())
-        } else {
-            Err(HttpError::InvalidCredentials)
-        }
-    })??;
     let db = db.get().await.clone();
-    let club_starters = sqlx::query_as!(
+    let club_starters: Vec<Starter> = sqlx::query_as!(
         Starter,
         r#"
         SELECT
@@ -69,7 +68,7 @@ pub async fn list_starters(
             club.name as "club_name!",
             starter.firstname,
             starter.lastname,
-            starter.birthdate,
+            starter.birthdate as "birthdate: time::OffsetDateTime",
             starter.gender as "gender: Gender",
             starter.single_male,
             starter.single_female,
@@ -84,7 +83,7 @@ pub async fn list_starters(
                 - julianday(starter.birthdate)
               ) / 365.2425,
               0.0
-            ) as "age_on_competition!: f64",
+            ) as "age_on_competition: f64",
             starter.checked_in_at as "checked_in_at: time::OffsetDateTime",
             (
               SELECT COUNT(*) FROM act_participants
@@ -106,6 +105,19 @@ pub async fn list_starters(
         "#
     )
     .fetch_all(&db)
-    .await?;
+    .await?
+    .into_iter()
+    .map(|starter| {
+        if registrations.is_some() {
+            starter
+        } else {
+            Starter {
+                birthdate: None,
+                age_on_competition: None,
+                ..starter
+            }
+        }
+    })
+    .collect();
     Ok(Json(club_starters))
 }

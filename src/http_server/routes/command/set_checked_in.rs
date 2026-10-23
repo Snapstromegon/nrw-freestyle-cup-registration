@@ -8,8 +8,9 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    http_server::{ClientError, HttpError, extractor::auth::Granted},
     reloadable_sqlite::{ReloadableSqlite, begin_write},
+    roles::permit,
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -28,8 +29,8 @@ pub struct SetCheckedInBody {
 
 /// Check starters in (or out) on competition day.
 ///
-/// Admin only. Works after registration closed. Fails as a whole if one of the
-/// starters doesn't exist.
+/// Check-in and music control. Works after registration closed. Fails as a
+/// whole if one of the starters doesn't exist.
 #[utoipa::path(
     post,
     tags=["command", "check-in"],
@@ -46,12 +47,9 @@ pub struct SetCheckedInBody {
 #[axum::debug_handler]
 pub async fn set_checked_in(
     Extension(db): Extension<ReloadableSqlite>,
-    auth: Auth,
+    _: Granted<permit::CheckIn>,
     Json(body): Json<SetCheckedInBody>,
 ) -> Result<Json<SetCheckedInResponse>, HttpError> {
-    if !auth.is_admin() {
-        return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
-    }
     let db = db.get().await.clone();
     let mut transaction = begin_write(&db).await?;
 

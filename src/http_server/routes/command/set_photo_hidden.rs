@@ -6,8 +6,9 @@ use tracing::{info, instrument};
 use utoipa::ToSchema;
 
 use crate::{
-    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    http_server::{ClientError, HttpError, extractor::auth::Granted},
     photos::Photos,
+    roles::permit,
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -35,12 +36,9 @@ pub struct PhotoHiddenBody {
 #[axum::debug_handler]
 pub async fn set_photo_hidden(
     Extension(photos): Extension<Arc<Photos>>,
-    auth: Auth,
+    _: Granted<permit::ControlMusic>,
     Json(body): Json<PhotoHiddenBody>,
 ) -> Result<Json<SetPhotoHiddenResponse>, HttpError> {
-    if !auth.is_admin() {
-        return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
-    }
     if !photos.set_hidden(&body.id, body.hidden) {
         return Err(HttpError::StatusCode(StatusCode::NOT_FOUND));
     }

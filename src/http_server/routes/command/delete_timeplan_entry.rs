@@ -4,8 +4,9 @@ use tracing::instrument;
 use utoipa::ToSchema;
 
 use crate::{
-    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    http_server::{ClientError, HttpError, extractor::auth::Granted},
     reloadable_sqlite::{ReloadableSqlite, begin_write},
+    roles::permit,
     timeplan::{Slot, load},
 };
 
@@ -37,12 +38,9 @@ pub struct DeleteTimeplanEntryBody {
 #[axum::debug_handler]
 pub async fn delete_timeplan_entry(
     Extension(db): Extension<ReloadableSqlite>,
-    auth: Auth,
+    _: Granted<permit::PlanCompetition>,
     Json(body): Json<DeleteTimeplanEntryBody>,
 ) -> Result<Json<DeleteTimeplanEntryResponse>, HttpError> {
-    if !auth.is_admin() {
-        return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
-    }
     let db = db.get().await.clone();
     let mut tx = begin_write(&db).await?;
 

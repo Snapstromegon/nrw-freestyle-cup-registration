@@ -1,10 +1,11 @@
-use axum::{Extension, Json, http::StatusCode};
+use axum::{Extension, Json};
 use tracing::instrument;
 use uuid::Uuid;
 
 use crate::{
-    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    http_server::{ClientError, HttpError, extractor::auth::Granted},
     reloadable_sqlite::ReloadableSqlite,
+    roles::permit,
 };
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
@@ -15,7 +16,7 @@ pub struct CheckIn {
     checked_in_at: Option<time::OffsetDateTime>,
 }
 
-/// The check-in state of every starter. Admin only.
+/// The check-in state of every starter. Check-in and music control.
 ///
 /// Small enough to poll during the competition.
 #[utoipa::path(
@@ -31,11 +32,8 @@ pub struct CheckIn {
 #[instrument(skip(db))]
 pub async fn list_check_ins(
     Extension(db): Extension<ReloadableSqlite>,
-    auth: Auth,
+    _: Granted<permit::CheckIn>,
 ) -> Result<Json<Vec<CheckIn>>, HttpError> {
-    if !auth.is_admin() {
-        return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
-    }
     let db = db.get().await.clone();
     let check_ins = sqlx::query_as!(
         CheckIn,

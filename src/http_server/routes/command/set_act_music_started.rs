@@ -1,12 +1,13 @@
-use axum::{Extension, Json, http::StatusCode};
+use axum::{Extension, Json};
 use serde::{Deserialize, Serialize};
 use tracing::{info, instrument};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    http_server::{ClientError, HttpError, extractor::auth::Granted},
     reloadable_sqlite::ReloadableSqlite,
+    roles::permit,
     timeplan::mark_music_started,
 };
 
@@ -36,12 +37,9 @@ pub struct ActMusicStartedBody {
 #[axum::debug_handler]
 pub async fn set_act_music_started(
     Extension(db): Extension<ReloadableSqlite>,
-    auth: Auth,
+    _: Granted<permit::ControlMusic>,
     Json(body): Json<ActMusicStartedBody>,
 ) -> Result<Json<SetActMusicStartedResponse>, HttpError> {
-    if !auth.is_admin() {
-        return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
-    }
     let db = db.get().await.clone();
     if mark_music_started(&db, body.act_id, 0.0).await? {
         info!("Music of act {} started", body.act_id);

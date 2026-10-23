@@ -10,9 +10,10 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    http_server::{ClientError, HttpError, extractor::auth::Granted},
     player::PlayerHub,
     reloadable_sqlite::{ReloadableSqlite, begin_write},
+    roles::permit,
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -56,12 +57,9 @@ pub struct SetFinalPlacementBody {
 pub async fn set_final_placement(
     Extension(db): Extension<ReloadableSqlite>,
     Extension(player_hub): Extension<Arc<PlayerHub>>,
-    auth: Auth,
+    _: Granted<permit::ManageResults>,
     Json(body): Json<SetFinalPlacementBody>,
 ) -> Result<Json<SetFinalPlacementResponse>, HttpError> {
-    if !auth.is_admin() {
-        return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
-    }
     let db = db.get().await.clone();
     let mut tx = begin_write(&db).await?;
 

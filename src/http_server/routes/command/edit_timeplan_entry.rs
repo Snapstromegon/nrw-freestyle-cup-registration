@@ -5,8 +5,9 @@ use utoipa::ToSchema;
 
 use crate::{
     finals,
-    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    http_server::{ClientError, HttpError, extractor::auth::Granted},
     reloadable_sqlite::{ReloadableSqlite, begin_write},
+    roles::permit,
     timeplan::{EntryFields, EntryKind, Slot, load},
 };
 
@@ -53,12 +54,9 @@ pub struct EditTimeplanEntryBody {
 #[axum::debug_handler]
 pub async fn edit_timeplan_entry(
     Extension(db): Extension<ReloadableSqlite>,
-    auth: Auth,
+    _: Granted<permit::PlanCompetition>,
     Json(body): Json<EditTimeplanEntryBody>,
 ) -> Result<Json<EditTimeplanEntryResponse>, HttpError> {
-    if !auth.is_admin() {
-        return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
-    }
     let fields = EntryFields::new(
         body.kind,
         body.category,

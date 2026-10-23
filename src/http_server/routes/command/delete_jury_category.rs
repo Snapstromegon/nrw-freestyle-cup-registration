@@ -5,9 +5,10 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    http_server::{ClientError, HttpError, extractor::auth::Granted},
     jury::JuryEnabled,
     reloadable_sqlite::{ReloadableSqlite, begin_write},
+    roles::permit,
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -20,7 +21,7 @@ pub struct DeleteJuryCategoryBody {
 
 /// Delete a jury category. Refused while judges are registered for it or
 /// assigned to it.
-/// Admin only.
+/// Jury lead.
 #[utoipa::path(
     post,
     tags=["command", "jury"],
@@ -38,12 +39,9 @@ pub struct DeleteJuryCategoryBody {
 pub async fn delete_jury_category(
     _jury: JuryEnabled,
     Extension(db): Extension<ReloadableSqlite>,
-    auth: Auth,
+    _: Granted<permit::ManageJury>,
     Json(body): Json<DeleteJuryCategoryBody>,
 ) -> Result<Json<DeleteJuryCategoryResponse>, HttpError> {
-    if !auth.is_admin() {
-        return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
-    }
     let db = db.get().await.clone();
     let mut transaction = begin_write(&db).await?;
     let registrations = sqlx::query_scalar!(

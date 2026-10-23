@@ -1,13 +1,14 @@
-use axum::{Extension, Json, http::StatusCode};
+use axum::{Extension, Json};
 use tracing::instrument;
 
 use crate::{
-    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    http_server::{ClientError, HttpError, extractor::auth::Granted},
     jury::{self, ClubJudge, JuryEnabled},
     reloadable_sqlite::ReloadableSqlite,
+    roles::permit,
 };
 
-/// List the judges of all clubs, by club. Admin only.
+/// List the judges of all clubs, by club. Jury lead.
 #[utoipa::path(
     get,
     tags=["query", "jury"],
@@ -24,11 +25,8 @@ use crate::{
 pub async fn list_judges(
     _jury: JuryEnabled,
     Extension(db): Extension<ReloadableSqlite>,
-    auth: Auth,
+    _: Granted<permit::ManageJury>,
 ) -> Result<Json<Vec<ClubJudge>>, HttpError> {
-    if !auth.is_admin() {
-        return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
-    }
     let db = db.get().await.clone();
     let mut conn = db.acquire().await?;
     Ok(Json(jury::list_judges(&mut conn, None).await?))

@@ -14,6 +14,7 @@ use uuid::Uuid;
 use crate::{
     act_type::ActType,
     http_server::{HttpError, extractor::auth::Auth},
+    roles::Permission,
 };
 
 /// Group names longer than this are rejected.
@@ -116,7 +117,10 @@ pub async fn ensure_club_access(
     .await?
     .ok_or(HttpError::StatusCode(StatusCode::NOT_FOUND))?;
 
-    if auth.is_admin() || owner_id == auth.user_id || auth.club_id == Some(club_id) {
+    if auth.can(Permission::ManageRegistrations)
+        || owner_id == auth.user_id
+        || auth.club_id == Some(club_id)
+    {
         Ok(())
     } else {
         Err(HttpError::StatusCode(StatusCode::FORBIDDEN))
@@ -152,7 +156,7 @@ pub async fn ensure_partner_in_club(
     partner_id: Uuid,
     club_id: Uuid,
 ) -> Result<(), HttpError> {
-    if auth.is_admin() {
+    if auth.can(Permission::ManageRegistrations) {
         return Ok(());
     }
     let partner_club_id = sqlx::query_scalar!(
@@ -206,7 +210,7 @@ pub async fn ensure_act_access(
     .await?
     .ok_or(HttpError::StatusCode(StatusCode::NOT_FOUND))?;
 
-    if allowed || auth.is_admin() {
+    if allowed || auth.can(Permission::ManageRegistrations) {
         Ok(())
     } else {
         Err(HttpError::StatusCode(StatusCode::FORBIDDEN))
@@ -249,7 +253,7 @@ pub async fn ensure_group_owner(
     auth: &Auth,
     group: &Group,
 ) -> Result<(), HttpError> {
-    if auth.is_admin() {
+    if auth.can(Permission::ManageRegistrations) {
         return Ok(());
     }
     match group.owner_club_id {

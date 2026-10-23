@@ -5,8 +5,9 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
-    http_server::{ClientError, HttpError, extractor::auth::Auth},
+    http_server::{ClientError, HttpError, extractor::auth::Granted},
     reloadable_sqlite::{ReloadableSqlite, begin_write},
+    roles::permit,
 };
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -38,12 +39,9 @@ pub struct SetUserAdminBody {
 #[axum::debug_handler]
 pub async fn set_user_admin(
     Extension(db): Extension<ReloadableSqlite>,
-    auth: Auth,
+    auth: Granted<permit::ManageUsers>,
     Json(body): Json<SetUserAdminBody>,
 ) -> Result<Json<SetUserAdminResponse>, HttpError> {
-    if !auth.is_admin() {
-        return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
-    }
     if auth.user_id == body.user_id && !body.is_admin {
         return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
     }

@@ -3,11 +3,7 @@ use tracing::instrument;
 use uuid::Uuid;
 
 use crate::{
-    http_server::{
-        ClientError, HttpError,
-        extractor::auth::Granted,
-        routes::http_types::User,
-    },
+    http_server::{ClientError, HttpError, extractor::auth::Granted, routes::http_types::User},
     reloadable_sqlite::ReloadableSqlite,
     roles::{self, Role, permit},
 };

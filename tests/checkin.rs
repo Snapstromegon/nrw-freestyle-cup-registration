@@ -284,11 +284,11 @@ async fn list_clubs_shows_clubs_with_owners_to_admins(db: SqlitePool) {
         .await;
     assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
 
-    // Same as list_users: no access for non-admins.
-    for cookie in [Some(owner.as_str()), None] {
-        let response = app.get("/api/query/list_clubs", cookie).await;
-        assert_eq!(response.status, StatusCode::UNAUTHORIZED);
-    }
+    // Same as list_users: no access without a role.
+    let response = app.get("/api/query/list_clubs", Some(&owner)).await;
+    assert_eq!(response.status, StatusCode::FORBIDDEN);
+    let response = app.get("/api/query/list_clubs", None).await;
+    assert_eq!(response.status, StatusCode::UNAUTHORIZED);
 
     let response = app.get("/api/query/list_clubs", Some(&admin)).await;
     assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
