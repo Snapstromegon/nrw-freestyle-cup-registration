@@ -227,6 +227,8 @@ async fn system_status_reflects_open_registration(db: SqlitePool) {
             "can_create_club": true,
             "can_register_starter": true,
             "can_upload_music": true,
+            "can_register_judge": true,
+            "jury_registration": true,
         })
     );
     assert_eq!(competition["name"], "Einradevent 2027 (Demo)");

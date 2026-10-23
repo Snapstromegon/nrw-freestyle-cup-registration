@@ -21,6 +21,9 @@ iban = "DE02 1203 0000 0000 2020 51"
 bic = "BYLADEM1001"
 reference = "Startgeld"
 
+# The Jury-Konzept's rules are the defaults.
+[competition.jury]
+
 [[categories]]
 name = "EMU11"
 description = "Einzel Männlich U11"

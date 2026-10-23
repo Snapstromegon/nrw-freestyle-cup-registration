@@ -48,6 +48,12 @@
 # user = "anna"                                      # PHOTOS_USER
 # password = "…"                                     # PHOTOS_PASSWORD
 
+# Features that are still being refined. They are on in debug builds and off
+# in release builds unless set here.
+# [features]
+# Clubs register judges, admins plan the jury.
+# jury_registration = true                           # JURY_REGISTRATION
+
 # Only inserted if no admin exists yet.                # ADMIN (as JSON)
 # [admin]
 # name = "Admin"
@@ -90,6 +96,14 @@ bic = "BYLADEM1001"
 # The club name and its code are appended, e.g.
 # "Startgeld: SSV Nümbrecht (EV-K7Q3)". The QR code adds "QR" at the end.
 reference = "Startgeld"
+
+# Optional: the clubs' jury obligation, used by the jury registration. The
+# values are the defaults of the Jury-Konzept Einrad Freestyle.
+[competition.jury]
+# min_age = 15                   # trained judges, on the first competition day
+# deployments_per_two_acts = 4   # Einsätze per started two Küren
+# missing_deployment_fee = 7     # € per missing Einsatz
+# registration_end = 2027-04-30T23:59:59+02:00  # default: registration_end
 
 # Categories in timeplan order.
 #

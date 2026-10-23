@@ -74,6 +74,10 @@ pub struct CliArgs {
     /// password.
     #[clap(long, env = "PHOTOS_PASSWORD", hide_env_values = true)]
     pub photos_password: Option<String>,
+    /// Turns the jury registration on or off; on by default only in debug
+    /// builds (see `FeaturesConfig`).
+    #[clap(long, env = "JURY_REGISTRATION")]
+    pub jury_registration: Option<bool>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -85,6 +89,7 @@ pub struct ConfigFile {
     pub auth: AuthConfig,
     pub admin: Option<AdminConfig>,
     pub photos: PhotosConfig,
+    pub features: FeaturesConfig,
     pub competition: Option<CompetitionConfig>,
     pub categories: Vec<CategoryConfig>,
     pub finals: Vec<FinalConfig>,
@@ -120,6 +125,15 @@ pub struct ServerConfig {
     pub reload_db_token: Option<String>,
     pub metrics_token: Option<String>,
     pub local_player: Option<String>,
+}
+
+/// Features that are still being refined. Each is on by default in debug
+/// builds only, so production turns them on explicitly.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct FeaturesConfig {
+    /// Clubs register judges, admins plan the jury (see `crate::jury`).
+    pub jury_registration: Option<bool>,
 }
 
 /// Where the info board's photos come from; see `crate::photos`.
@@ -201,6 +215,40 @@ pub struct CompetitionConfig {
     pub photos_url: Option<String>,
     #[serde(default)]
     pub payment: PaymentConfig,
+    /// The clubs' jury obligation; without it there is none.
+    #[serde(default)]
+    pub jury: Option<JuryConfig>,
+}
+
+/// Rules of the Jury-Konzept Einrad Freestyle (Stand 15.09.2025), which are
+/// the defaults.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct JuryConfig {
+    /// Minimum age of trained judges on the first competition day.
+    #[serde(default = "default_jury_min_age")]
+    pub min_age: i64,
+    /// Required jury deployments (Einsätze) per started two Küren.
+    #[serde(default = "default_deployments_per_two_acts")]
+    pub deployments_per_two_acts: i64,
+    /// Fee in € per missing deployment.
+    #[serde(default = "default_missing_deployment_fee")]
+    pub missing_deployment_fee: f64,
+    /// End of the judge registration; the registration's end without it.
+    #[serde(default, deserialize_with = "toml_datetime_option")]
+    pub registration_end: Option<OffsetDateTime>,
+}
+
+fn default_jury_min_age() -> i64 {
+    15
+}
+
+fn default_deployments_per_two_acts() -> i64 {
+    4
+}
+
+fn default_missing_deployment_fee() -> f64 {
+    7.0
 }
 
 /// Whether `iban` passes the IBAN format and mod-97 check. Spaces and
@@ -259,6 +307,11 @@ impl CompetitionConfig {
         }
         if self.music_upload_end > start {
             errors.push("music_upload_end must not be after start_date");
+        }
+        if let Some(end) = self.jury.as_ref().and_then(|jury| jury.registration_end)
+            && end > start
+        {
+            errors.push("[competition.jury] registration_end must not be after start_date");
         }
         if errors.is_empty() {
             Ok(())
@@ -403,6 +456,8 @@ pub struct Settings {
     pub local_player: Option<String>,
     /// Where the info board's photos come from, if anywhere.
     pub photos: Option<crate::photos::PhotosSettings>,
+    /// Whether clubs can register judges (`[features] jury_registration`).
+    pub jury_registration: bool,
     pub competition: Option<CompetitionConfig>,
     pub categories: Vec<CategoryConfig>,
     pub finals: Vec<FinalConfig>,
@@ -518,6 +573,10 @@ impl Settings {
                     user: cli.photos_user.or(file.photos.user),
                     password: cli.photos_password.or(file.photos.password),
                 }),
+            jury_registration: cli
+                .jury_registration
+                .or(file.features.jury_registration)
+                .unwrap_or(cfg!(debug_assertions)),
             competition: file.competition,
             categories: file.categories,
             finals: file.finals,
@@ -652,6 +711,54 @@ determining_day = 2027-06-01
 registration_start = 2026-11-20T00:00:00+01:00
 registration_end = 2026-12-20T23:59:59+01:00
 music_upload_end = 2027-01-20T23:59:59+01:00";
+
+    #[test]
+    fn jury_registration_is_on_in_debug_builds_unless_configured() {
+        let settings = resolve(CliArgs::default(), SMTP).unwrap();
+        assert_eq!(settings.jury_registration, cfg!(debug_assertions));
+
+        let file = format!("{SMTP}\n[features]\njury_registration = false");
+        assert!(
+            !resolve(CliArgs::default(), &file)
+                .unwrap()
+                .jury_registration
+        );
+
+        let cli = CliArgs {
+            jury_registration: Some(true),
+            ..Default::default()
+        };
+        assert!(resolve(cli, &file).unwrap().jury_registration);
+    }
+
+    #[test]
+    fn jury_rules_default_to_the_jury_konzept() {
+        assert!(competition(VALID_DATES).jury.is_none());
+
+        let jury = competition(&format!("{VALID_DATES}\n[competition.jury]"))
+            .jury
+            .unwrap();
+        assert_eq!(jury.min_age, 15);
+        assert_eq!(jury.deployments_per_two_acts, 4);
+        assert_eq!(jury.missing_deployment_fee, 7.0);
+        assert_eq!(jury.registration_end, None);
+
+        let jury = competition(&format!(
+            "{VALID_DATES}\n[competition.jury]\nmin_age = 16\nregistration_end = 2027-01-10T23:59:59+01:00"
+        ))
+        .jury
+        .unwrap();
+        assert_eq!(jury.min_age, 16);
+        assert_eq!(
+            jury.registration_end.unwrap().format(&Rfc3339).unwrap(),
+            "2027-01-10T23:59:59+01:00"
+        );
+
+        let late = competition(&format!(
+            "{VALID_DATES}\n[competition.jury]\nregistration_end = 2027-02-13T00:00:00+01:00"
+        ));
+        assert!(late.validate().unwrap_err().contains("[competition.jury]"));
+    }
 
     #[test]
     fn ibans_are_checked() {

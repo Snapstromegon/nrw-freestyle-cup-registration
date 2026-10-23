@@ -114,6 +114,7 @@ async fn main() -> eyre::Result<()> {
             data_path: settings.data_path,
             reload_db_token: settings.reload_db_token,
             metrics_token: settings.metrics_token,
+            jury_registration: settings.jury_registration,
         },
         db,
         Arc::new(jwt_config),

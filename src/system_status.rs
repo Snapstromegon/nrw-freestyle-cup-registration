@@ -13,6 +13,8 @@ pub struct Capabilities {
     pub can_create_club: bool,
     pub can_register_starter: bool,
     pub can_upload_music: bool,
+    /// Clubs can add, change and remove judges.
+    pub can_register_judge: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -20,6 +22,8 @@ pub struct StatusOptions {
     pub start_register_date: OffsetDateTime,
     pub end_register_date: OffsetDateTime,
     pub end_music_upload_date: OffsetDateTime,
+    /// End of the judge registration; `end_register_date` without one.
+    pub end_judge_register_date: Option<OffsetDateTime>,
 }
 
 impl StatusOptions {
@@ -27,7 +31,8 @@ impl StatusOptions {
     ///
     /// Registration (users, clubs, starters) is possible between
     /// `start_register_date` and `end_register_date` (both inclusive); music
-    /// uploads are possible until `end_music_upload_date`.
+    /// uploads are possible until `end_music_upload_date`, judges from
+    /// `start_register_date` until `end_judge_register_date`.
     ///
     /// ```
     /// use nrw_freestyle_cup_registration::system_status::StatusOptions;
@@ -38,11 +43,13 @@ impl StatusOptions {
     ///     start_register_date: now - Duration::days(1),
     ///     end_register_date: now + Duration::days(1),
     ///     end_music_upload_date: now - Duration::days(1),
+    ///     end_judge_register_date: None,
     /// };
     ///
     /// let capabilities = options.get_system_status();
     /// assert!(capabilities.can_register);
     /// assert!(!capabilities.can_upload_music);
+    /// assert!(capabilities.can_register_judge);
     /// ```
     pub fn get_system_status(&self) -> Capabilities {
         let now = OffsetDateTime::now_utc();
@@ -54,6 +61,11 @@ impl StatusOptions {
             can_create_club: in_register_period,
             can_register_starter: in_register_period,
             can_upload_music: now <= self.end_music_upload_date,
+            can_register_judge: now >= self.start_register_date
+                && now
+                    <= self
+                        .end_judge_register_date
+                        .unwrap_or(self.end_register_date),
         }
     }
 }
@@ -65,6 +77,7 @@ impl Capabilities {
         can_create_club: false,
         can_register_starter: false,
         can_upload_music: false,
+        can_register_judge: false,
     };
 }
 
@@ -84,6 +97,7 @@ where
                 can_create_club: true,
                 can_register_starter: true,
                 can_upload_music: true,
+                can_register_judge: true,
             });
         }
         let db = parts.extensions.get::<ReloadableSqlite>().unwrap();
@@ -110,6 +124,7 @@ mod tests {
             start_register_date: now + Duration::days(start),
             end_register_date: now + Duration::days(end),
             end_music_upload_date: now + Duration::days(music_end),
+            end_judge_register_date: None,
         }
     }
 

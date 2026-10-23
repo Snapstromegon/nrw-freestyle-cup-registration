@@ -92,6 +92,8 @@ pub struct HttpServerOptions {
     pub reload_db_token: String,
     /// Bearer token for `GET /metrics`; without one the endpoint is off.
     pub metrics_token: Option<String>,
+    /// Whether the jury registration is on (`[features] jury_registration`).
+    pub jury_registration: bool,
 }
 
 pub struct HttpServer {

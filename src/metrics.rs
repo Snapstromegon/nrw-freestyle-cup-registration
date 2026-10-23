@@ -575,6 +575,7 @@ mod tests {
             data_path: std::path::PathBuf::new(),
             reload_db_token: String::new(),
             metrics_token: None,
+            jury_registration: false,
         };
         let mut headers = HeaderMap::new();
         headers.insert(header::AUTHORIZATION, "Bearer x".parse().unwrap());

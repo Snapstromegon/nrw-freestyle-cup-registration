@@ -27,6 +27,16 @@ Event settings only come from the config file:
   tables, so changes made in the admin UI are kept. A final reserves slots for
   the best riders of the heats ("1. Finalist (U11–U15)") before the results are
   known; a `[[timeplan]]` entry with `final = "…"` plans it.
+- `[competition.jury]`: the clubs' jury obligation (minimum age of judges,
+  Einsätze per two Küren, fee per missing Einsatz, optional judge deadline).
+  The defaults are the Jury-Konzept Einrad Freestyle's rules.
+
+Features that are still being refined are behind flags in `[features]`. They
+are on in debug builds and off in release builds unless set:
+
+- `jury_registration` (`JURY_REGISTRATION`): clubs register judges for the jury
+  categories, admins see the jury obligation and plan the jury. Off, the judge
+  endpoints answer 404 and the UI shows nothing about judges.
 
 The database migrations only create the schema and don't insert any data.
 

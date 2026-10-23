@@ -9,6 +9,7 @@ import {
   systemStatusContext,
 } from "../../contexts/systemStatus";
 import { type User, userContext } from "../../contexts/user";
+import { isJudgeRegistrationOpen, judgeRegistrationEnd } from "../../jury";
 import { iconStyles, resetStyles } from "../../styles/base";
 import {
   competitionName,
@@ -379,6 +380,10 @@ export default class CupAdminShell extends LitElement {
     const competition = this.systemStatus.competition;
     const registration = isRegistrationOpen(competition);
     const music = isMusicUploadOpen(competition);
+    const jury =
+      this.systemStatus.jury_registration && competition?.jury
+        ? isJudgeRegistrationOpen(competition)
+        : null;
     return html`<span class="caps">
       <span
         class=${classMap({ cap: true, open: registration })}
@@ -398,6 +403,15 @@ export default class CupAdminShell extends LitElement {
         }
         >Musik-Upload ${music ? "offen" : "zu"}</span
       >
+      ${
+        jury === null
+          ? nothing
+          : html`<span
+              class=${classMap({ cap: true, open: jury })}
+              title="Jury-Anmeldung bis: ${formatDate(judgeRegistrationEnd(competition) ?? "")}"
+              >Jury ${jury ? "offen" : "zu"}</span
+            >`
+      }
     </span>`;
   }
 

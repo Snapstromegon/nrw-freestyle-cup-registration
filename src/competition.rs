@@ -41,6 +41,22 @@ pub struct Competition {
     pub payment_bic: Option<String>,
     /// Prefix for the transfer reference, followed by the club name.
     pub payment_reference: Option<String>,
+    /// The clubs' jury obligation; `None` means there is none.
+    pub jury: Option<JuryRules>,
+}
+
+/// The jury rules of a competition, from `[competition.jury]`.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, utoipa::ToSchema)]
+pub struct JuryRules {
+    /// Minimum age of trained judges on the first competition day.
+    pub min_age: i64,
+    /// Required jury deployments (Einsätze) per started two Küren.
+    pub deployments_per_two_acts: i64,
+    /// Fee in € per missing deployment.
+    pub missing_deployment_fee: f64,
+    /// End of the judge registration; the registration's end without it.
+    #[serde(with = "time::serde::rfc3339::option")]
+    pub registration_end: Option<OffsetDateTime>,
 }
 
 impl Competition {
@@ -55,8 +71,7 @@ impl Competition {
 
     /// Loads the current competition: the one with the latest start date.
     pub async fn current(db: impl sqlx::SqliteExecutor<'_>) -> sqlx::Result<Option<Competition>> {
-        sqlx::query_as!(
-            Competition,
+        let row = sqlx::query!(
             r#"
             SELECT
                 id as "id!",
@@ -78,14 +93,58 @@ impl Competition {
                 payment_account_holder,
                 payment_iban,
                 payment_bic,
-                payment_reference
+                payment_reference,
+                jury_min_age,
+                jury_deployments_per_two_acts,
+                jury_missing_deployment_fee,
+                jury_registration_end as "jury_registration_end: OffsetDateTime"
             FROM competition
             ORDER BY start_date DESC
             LIMIT 1
             "#
         )
         .fetch_optional(db)
-        .await
+        .await?;
+        Ok(row.map(|row| {
+            let jury = match (
+                row.jury_min_age,
+                row.jury_deployments_per_two_acts,
+                row.jury_missing_deployment_fee,
+            ) {
+                (Some(min_age), Some(deployments_per_two_acts), Some(missing_deployment_fee)) => {
+                    Some(JuryRules {
+                        min_age,
+                        deployments_per_two_acts,
+                        missing_deployment_fee,
+                        registration_end: row.jury_registration_end,
+                    })
+                }
+                _ => None,
+            };
+            Competition {
+                id: row.id,
+                name: row.name,
+                location: row.location,
+                start_date: row.start_date,
+                end_date: row.end_date,
+                determining_day: row.determining_day,
+                registration_start: row.registration_start,
+                registration_end: row.registration_end,
+                music_upload_end: row.music_upload_end,
+                fee_per_start: row.fee_per_start,
+                max_fee_per_starter: row.max_fee_per_starter,
+                venue: row.venue,
+                contact_email: row.contact_email,
+                announcement_url: row.announcement_url,
+                photos_url: row.photos_url,
+                payment_deadline: row.payment_deadline,
+                payment_account_holder: row.payment_account_holder,
+                payment_iban: row.payment_iban,
+                payment_bic: row.payment_bic,
+                payment_reference: row.payment_reference,
+                jury,
+            }
+        }))
     }
 
     pub fn status_options(&self) -> StatusOptions {
@@ -93,6 +152,7 @@ impl Competition {
             start_register_date: self.registration_start,
             end_register_date: self.registration_end,
             end_music_upload_date: self.music_upload_end,
+            end_judge_register_date: self.jury.as_ref().and_then(|jury| jury.registration_end),
         }
     }
 }
@@ -102,14 +162,17 @@ pub async fn upsert_competition(
     db: impl sqlx::SqliteExecutor<'_>,
     config: &CompetitionConfig,
 ) -> sqlx::Result<()> {
+    let jury = config.jury.as_ref();
     sqlx::query!(
         r#"
         INSERT INTO competition (
             id, name, location, start_date, end_date, determining_day,
             registration_start, registration_end, music_upload_end,
             fee_per_start, max_fee_per_starter, venue, contact_email, announcement_url, photos_url,
-            payment_deadline, payment_account_holder, payment_iban, payment_bic, payment_reference
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            payment_deadline, payment_account_holder, payment_iban, payment_bic, payment_reference,
+            jury_min_age, jury_deployments_per_two_acts, jury_missing_deployment_fee,
+            jury_registration_end
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (id) DO UPDATE SET
             name = excluded.name,
             location = excluded.location,
@@ -129,7 +192,11 @@ pub async fn upsert_competition(
             payment_account_holder = excluded.payment_account_holder,
             payment_iban = excluded.payment_iban,
             payment_bic = excluded.payment_bic,
-            payment_reference = excluded.payment_reference
+            payment_reference = excluded.payment_reference,
+            jury_min_age = excluded.jury_min_age,
+            jury_deployments_per_two_acts = excluded.jury_deployments_per_two_acts,
+            jury_missing_deployment_fee = excluded.jury_missing_deployment_fee,
+            jury_registration_end = excluded.jury_registration_end
         "#,
         config.id,
         config.name,
@@ -151,6 +218,10 @@ pub async fn upsert_competition(
         config.payment.iban,
         config.payment.bic,
         config.payment.reference,
+        jury.map(|jury| jury.min_age),
+        jury.map(|jury| jury.deployments_per_two_acts),
+        jury.map(|jury| jury.missing_deployment_fee),
+        jury.and_then(|jury| jury.registration_end),
     )
     .execute(db)
     .await?;

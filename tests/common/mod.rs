@@ -95,6 +95,7 @@ pub fn open_registration() -> StatusOptions {
         start_register_date: now - Duration::days(1),
         end_register_date: now + Duration::days(1),
         end_music_upload_date: now + Duration::days(1),
+        end_judge_register_date: None,
     }
 }
 
@@ -105,6 +106,7 @@ pub fn closed_registration() -> StatusOptions {
         start_register_date: now - Duration::days(10),
         end_register_date: now - Duration::days(1),
         end_music_upload_date: now - Duration::days(1),
+        end_judge_register_date: None,
     }
 }
 
@@ -148,14 +150,21 @@ impl TestApp {
         seed_db(&db, &status).await;
         // Nothing listens on port 1, so any attempt to send a mail fails.
         let mailer = Mailer::from_url("smtp://127.0.0.1:1", FROM_ADDRESS).unwrap();
-        Self::build(db, mailer, None, None)
+        Self::build(db, mailer, None, None, true)
+    }
+
+    /// App with the jury registration turned off, as in release builds.
+    pub async fn without_jury_registration(db: SqlitePool) -> Self {
+        seed_db(&db, &open_registration()).await;
+        let mailer = Mailer::from_url("smtp://127.0.0.1:1", FROM_ADDRESS).unwrap();
+        Self::build(db, mailer, None, None, false)
     }
 
     /// App showing the photos of `photos` on the info board.
     pub async fn with_photos(db: SqlitePool, photos: PhotosSettings) -> Self {
         seed_db(&db, &open_registration()).await;
         let mailer = Mailer::from_url("smtp://127.0.0.1:1", FROM_ADDRESS).unwrap();
-        Self::build(db, mailer, None, Some(photos))
+        Self::build(db, mailer, None, Some(photos), true)
     }
 
     /// App sending mails to a dedicated Mailpit container.
@@ -163,7 +172,7 @@ impl TestApp {
         seed_db(&db, &open_registration()).await;
         let mailpit = Mailpit::start().await;
         let mailer = mailpit.mailer();
-        Self::build(db, mailer, Some(mailpit), None)
+        Self::build(db, mailer, Some(mailpit), None, true)
     }
 
     fn build(
@@ -171,6 +180,7 @@ impl TestApp {
         mailer: Mailer,
         mailpit: Option<Mailpit>,
         photos: Option<PhotosSettings>,
+        jury_registration: bool,
     ) -> Self {
         let mut validation = Validation::new(Algorithm::HS512);
         validation.validate_aud = false;
@@ -188,6 +198,7 @@ impl TestApp {
             data_path: data_dir.0.clone(),
             reload_db_token: RELOAD_DB_TOKEN.into(),
             metrics_token: Some(METRICS_TOKEN.into()),
+            jury_registration,
         };
         let reloadable = ReloadableSqlite::new(db.clone(), String::new());
         let player_hub = PlayerHub::new(reloadable.clone());
