@@ -213,3 +213,10 @@ export const countDeployments = (
       : Math.min(registered, maxDeployments);
   return { registered, counted };
 };
+
+/**
+ * How far a club has filled its jury obligation, for colouring: "none" with
+ * no Einsätze, "below" under the obligation, "met" once it's reached.
+ */
+export const obligationTone = (credited: number, required: number) =>
+  credited <= 0 ? "none" : credited < required ? "below" : "met";

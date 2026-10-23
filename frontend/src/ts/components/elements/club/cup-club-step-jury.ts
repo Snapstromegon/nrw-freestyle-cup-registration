@@ -14,6 +14,7 @@ import {
   ageOnStart,
   countDeployments,
   deploymentNote,
+  obligationTone,
   ROLES,
   roleLabels,
   roleNames,
@@ -114,9 +115,8 @@ export default class CupClubStepJury extends LitElement {
         border-collapse: collapse;
       }
 
-      table.list th {
+      table.list > thead > tr > th {
         padding: 0.5rem;
-        background: var(--cup-surface-2);
         border-bottom: 1px solid var(--cup-border);
         color: var(--cup-muted);
         font-size: 0.8rem;
@@ -124,37 +124,37 @@ export default class CupClubStepJury extends LitElement {
         text-align: left;
       }
 
-      table.list td {
+      table.list > * > tr > td {
         padding: 0.5rem;
         border-bottom: 1px solid var(--cup-border);
         vertical-align: middle;
       }
 
-      table.list tfoot td {
+      table.list > tfoot > tr > td {
         background: var(--cup-surface-2);
         border-top: 2px solid var(--cup-border);
         border-bottom: none;
         font-weight: 600;
       }
 
-      table.list td.name {
+      table.list > * > tr > td.name {
         font-weight: 600;
         white-space: nowrap;
       }
 
-      table.list td.name small {
+      table.list > * > tr > td.name small {
         display: block;
         font-weight: normal;
         white-space: normal;
       }
 
-      table.list th.icon,
-      table.list td.icon {
+      table.list > thead > tr > th.icon,
+      table.list > * > tr > td.icon {
         width: 2.5rem;
         text-align: center;
       }
 
-      table.list th.icon .material-icon {
+      table.list > thead > tr > th.icon .material-icon {
         font-size: 1.15rem;
         vertical-align: middle;
       }
@@ -163,9 +163,30 @@ export default class CupClubStepJury extends LitElement {
         color: var(--cup-green);
       }
 
-      table.list th.num,
-      table.list td.num {
+      table.list > thead > tr > th.num,
+      table.list > * > tr > td.num {
         text-align: right;
+      }
+
+      .sum {
+        padding: 0.125rem 0.5rem;
+        border-radius: 0.375rem;
+        white-space: nowrap;
+      }
+
+      .sum.none {
+        background: color-mix(in srgb, var(--cup-red) 20%, var(--cup-surface));
+        color: var(--cup-red);
+      }
+
+      .sum.below {
+        background: color-mix(in srgb, var(--cup-amber) 30%, var(--cup-surface));
+        color: color-mix(in srgb, var(--cup-amber) 70%, var(--cup-text));
+      }
+
+      .sum.met {
+        background: color-mix(in srgb, var(--cup-green) 20%, var(--cup-surface));
+        color: var(--cup-green);
       }
 
       table.list .unit {
@@ -174,19 +195,19 @@ export default class CupClubStepJury extends LitElement {
 
       /* Phones: each judge as a small card, like the riders. */
       @media (max-width: 720px) {
-        table.judges thead {
+        table.judges > thead {
           display: none;
         }
 
         table.judges,
-        table.judges tbody,
-        table.judges tfoot,
-        table.judges tr,
-        table.judges td {
+        table.judges > tbody,
+        table.judges > tfoot,
+        table.judges > * > tr,
+        table.judges > * > tr > td {
           display: block;
         }
 
-        table.judges tbody tr {
+        table.judges > tbody > tr {
           display: grid;
           grid-template-columns: 1fr auto auto;
           grid-template-areas:
@@ -198,30 +219,30 @@ export default class CupClubStepJury extends LitElement {
           border-bottom: 1px solid var(--cup-border);
         }
 
-        table.judges tbody td {
+        table.judges > tbody > tr > td {
           padding: 0;
           border: none;
         }
 
-        table.judges tbody tr.editing {
+        table.judges > tbody > tr.editing {
           display: block;
         }
 
-        table.judges td.name {
+        table.judges > tbody > tr > td.name {
           grid-area: name;
           white-space: normal;
         }
 
-        table.judges td.icon {
+        table.judges > tbody > tr > td.icon {
           grid-area: icon;
           width: auto;
         }
 
-        table.judges td.actions-col {
+        table.judges > tbody > tr > td.actions-col {
           grid-area: actions;
         }
 
-        table.judges td.age {
+        table.judges > tbody > tr > td.age {
           grid-area: age;
           color: var(--cup-muted);
           font-size: 0.9rem;
@@ -231,26 +252,26 @@ export default class CupClubStepJury extends LitElement {
           display: inline;
         }
 
-        table.judges td.deployments {
+        table.judges > tbody > tr > td.deployments {
           grid-area: count;
         }
 
-        table.judges td.regs {
+        table.judges > tbody > tr > td.regs {
           grid-area: regs;
         }
 
-        table.judges tfoot tr {
+        table.judges > tfoot > tr {
           display: flex;
           justify-content: space-between;
           background: var(--cup-surface-2);
           border-top: 2px solid var(--cup-border);
         }
 
-        table.judges tfoot td:empty {
+        table.judges > tfoot > tr > td:empty {
           display: none;
         }
 
-        table.judges tfoot td {
+        table.judges > tfoot > tr > td {
           border: none;
           background: none;
         }
@@ -613,13 +634,21 @@ export default class CupClubStepJury extends LitElement {
     return html`<tfoot>
       <tr>
         <td colspan="4">
-          Gesamt${jury ? html` · Pflicht ${jury.required}` : nothing}${
+          Gesamt${
             override
-              ? html` · vom Veranstalter angerechnet: ${jury!.credited}`
+              ? html` · vom Veranstalter angerechnet (gemeldet: ${counted})`
               : nothing
           }
         </td>
-        <td class="num"><strong>${counted}</strong></td>
+        <td class="num">
+          ${
+            jury?.required
+              ? html`<strong class="sum ${obligationTone(jury.credited, jury.required)}"
+                  >${jury.credited}/${jury.required}</strong
+                >`
+              : html`<strong>${counted}</strong>`
+          }
+        </td>
         <td></td>
       </tr>
     </tfoot>`;

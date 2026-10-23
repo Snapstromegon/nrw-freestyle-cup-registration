@@ -5,6 +5,7 @@ import {
   countDeployments,
   coverage,
   deploymentNote,
+  obligationTone,
   planWarnings,
   isJudgeRegistrationOpen,
   judgeRegistrationEnd,
@@ -181,5 +182,12 @@ describe("jury", () => {
       registered: 0,
       counted: 0,
     });
+  });
+
+  test("obligationTone colours the Einsätze against the obligation", () => {
+    assert.equal(obligationTone(0, 28), "none");
+    assert.equal(obligationTone(15, 28), "below");
+    assert.equal(obligationTone(28, 28), "met");
+    assert.equal(obligationTone(30, 28), "met");
   });
 });
