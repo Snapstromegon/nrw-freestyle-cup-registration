@@ -189,8 +189,26 @@ _Avoid_: Strafgebühr, penalty
 What a club owes: its start fees plus its jury fee.
 _Avoid_: Invoice, Rechnung
 
+**Booking** (Buchung):
+A movement of money on the event account as recorded by the organizer, with an amount (negative for money going out), a date and a note; it is a payment, unassigned or ignored.
+_Avoid_: Transaction, Überweisung (for the record)
+
 **Payment** (Zahlung):
-The money a club has transferred, as recorded by the organizer.
+A booking assigned to a club: money the club paid, or a refund to it when negative.
+_Avoid_: Booking (for one that isn't assigned)
+
+**Refund** (Rückzahlung):
+A negative payment: money the organizer paid back to a club.
+
+**Unassigned booking** (nicht zugeordnete Buchung):
+A booking not assigned to a club yet, e.g. a transfer whose reference names no club.
+_Avoid_: Unknown payment, Fehlbuchung
+
+**Ignored booking** (ignorierte Buchung):
+A booking that has nothing to do with the event, e.g. account fees; it counts for no club.
+
+**Paid** (Gezahlt):
+The sum of a club's payments.
 
 **Fee waiver** (Gebühr erlassen):
 The organizer dropping a withdrawn act's start fee.
@@ -256,6 +274,7 @@ An award for each rider of the first three places of a final, and for each group
 - The best acts of a **Heat** fill the **Finalist slots** of its **Final**.
 - A **Block** runs one **Category** or one **Final**; **Custom entries** and **Breaks** fill the rest of the **Timeplan**.
 - A **Judge** registers for **Jury categories** for **Tasks**; the **Jury plan** assigns each judge at most one task per jury category.
+- A **Booking** is a **Payment** of one **Club**, an **Unassigned booking** or an **Ignored booking**; a club's **Paid** amount is the sum of its payments, set against its **Amount due**.
 - A club's **Credited deployments** below its **Jury obligation** cost a **Jury fee** per missing **Jury deployment**.
 
 ## Example dialogue
