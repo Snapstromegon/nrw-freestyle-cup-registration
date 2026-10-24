@@ -1,5 +1,5 @@
 //! A club registers each rider and each judge once: names count as the same
-//! ignoring case and surrounding spaces. Clubs read "Thomas Höser ist bereits
+//! ignoring case and surrounding spaces. Clubs read "Max Müller ist bereits
 //! gemeldet." instead of a database error.
 
 use sqlx::SqliteConnection;
@@ -86,9 +86,9 @@ mod tests {
     #[test]
     fn names_match_ignoring_case_and_spaces() {
         assert_eq!(
-            person_key(" Thomas ", "HÖSER"),
-            person_key("thomas", "höser")
+            person_key(" Max ", "MÜLLER"),
+            person_key("max", "müller")
         );
-        assert_ne!(person_key("Thomas", "Hoser"), person_key("Thomas", "Höser"));
+        assert_ne!(person_key("Max", "Muller"), person_key("Max", "Müller"));
     }
 }

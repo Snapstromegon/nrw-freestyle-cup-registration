@@ -1189,11 +1189,11 @@ describe("unwrap", () => {
       unwrap(Promise.reject(responseError(status, data))).catch((e) => e);
     const sentence = await failing({
       type: "Generic",
-      message: '"Thomas Höser ist bereits gemeldet."',
+      message: '"Max Müller ist bereits gemeldet."',
     });
     assert.equal(
       failureText("Fehler beim Hinzufügen", sentence),
-      "Thomas Höser ist bereits gemeldet.",
+      "Max Müller ist bereits gemeldet.",
     );
     const raw = await failing({
       type: "Generic",

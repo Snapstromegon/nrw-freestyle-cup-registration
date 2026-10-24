@@ -125,7 +125,7 @@ export class ApiError extends Error {
 
 /**
  * The text for a failed action: a German sentence the server wrote for the
- * user stands alone ("Thomas Höser ist bereits gemeldet."), anything else
+ * user stands alone ("Max Müller ist bereits gemeldet."), anything else
  * gets `context` in front ("Fehler beim Hinzufügen: Keine Verbindung …").
  */
 export const failureText = (context: string, error: unknown) => {
