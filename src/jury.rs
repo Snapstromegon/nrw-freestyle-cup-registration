@@ -16,6 +16,7 @@ use crate::{
     competition::{Competition, JuryRules},
     groups::ensure_club_access,
     http_server::{HttpError, HttpServerOptions, extractor::auth::Auth},
+    utils::{already_registered, person_key},
 };
 
 time::serde::format_description!(iso_date, Date, "[year]-[month]-[day]");
@@ -355,6 +356,24 @@ pub async fn save_judge(
     club_id: Uuid,
     fields: &JudgeFields,
 ) -> Result<(), HttpError> {
+    let others = sqlx::query!(
+        "SELECT firstname, lastname FROM judge WHERE club_id = ? AND id != ?",
+        club_id,
+        judge_id
+    )
+    .fetch_all(&mut *conn)
+    .await?;
+    let key = person_key(&fields.firstname, &fields.lastname);
+    if let Some(judge) = others
+        .iter()
+        .find(|judge| person_key(&judge.firstname, &judge.lastname) == key)
+    {
+        // The name as registered, which may differ in case.
+        return Err(HttpError::ErrorMessages(already_registered(
+            &judge.firstname,
+            &judge.lastname,
+        )));
+    }
     let result = sqlx::query!(
         r#"
         INSERT INTO judge (
@@ -382,9 +401,9 @@ pub async fn save_judge(
     match result {
         Ok(_) => {}
         Err(e) if is_unique_violation(&e) => {
-            return Err(HttpError::ErrorMessages(format!(
-                "{} {} ist schon als JurorIn gemeldet.",
-                fields.firstname, fields.lastname
+            return Err(HttpError::ErrorMessages(already_registered(
+                &fields.firstname,
+                &fields.lastname,
             )));
         }
         Err(e) => return Err(e.into()),

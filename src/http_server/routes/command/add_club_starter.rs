@@ -7,7 +7,7 @@ use uuid::Uuid;
 use crate::{
     act_type::ActType,
     gender::Gender,
-    groups::{ensure_club_access, ensure_partner_in_club},
+    groups::{ensure_club_access, ensure_partner_in_club, ensure_rider_name_is_free},
     http_server::{ClientError, HttpError, extractor::auth::Auth},
     reloadable_sqlite::ReloadableSqlite,
     system_status::Capabilities,
@@ -61,8 +61,10 @@ pub async fn add_club_starter(
     Extension(db): Extension<ReloadableSqlite>,
     auth: Auth,
     capabilities: Capabilities,
-    Json(body): Json<AddClubStarterBody>,
+    Json(mut body): Json<AddClubStarterBody>,
 ) -> Result<Json<AddClubStarterResponse>, HttpError> {
+    body.firstname = body.firstname.trim().to_string();
+    body.lastname = body.lastname.trim().to_string();
     if !capabilities.can_register_starter {
         return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
     }
@@ -77,6 +79,14 @@ pub async fn add_club_starter(
     {
         let mut conn = db.acquire().await?;
         ensure_club_access(&mut conn, &auth, body.club_id).await?;
+        ensure_rider_name_is_free(
+            &mut conn,
+            body.club_id,
+            &body.firstname,
+            &body.lastname,
+            None,
+        )
+        .await?;
         if let Some(partner_id) = body.partner_id {
             ensure_partner_in_club(&mut conn, &auth, partner_id, body.club_id).await?;
         }

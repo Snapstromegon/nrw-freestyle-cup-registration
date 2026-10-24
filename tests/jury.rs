@@ -474,6 +474,24 @@ async fn judges_are_validated(db: SqlitePool) {
     )
     .await;
     assert!(!duplicate.status.is_success());
+    let message = duplicate.body["message"].as_str().unwrap();
+    assert!(
+        message.contains("Fünfzehn Jury ist bereits gemeldet."),
+        "{message}"
+    );
+    // Also in another case and with spaces around it.
+    let duplicate = add_judge(
+        &app,
+        &owner,
+        judge_body(club_id, " fünfzehn ", fifteen, true, &technical),
+    )
+    .await;
+    let message = duplicate.body["message"].as_str().unwrap_or_default();
+    assert!(
+        message.contains("ist bereits gemeldet."),
+        "{:?}",
+        duplicate.body
+    );
     assert_eq!(club_judges(&app, &owner, club_id).await.len(), 2);
 }
 

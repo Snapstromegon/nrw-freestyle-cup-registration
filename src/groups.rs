@@ -15,6 +15,7 @@ use crate::{
     act_type::ActType,
     http_server::{HttpError, extractor::auth::Auth},
     roles::Permission,
+    utils::{already_registered, person_key},
 };
 
 /// Group names longer than this are rejected.
@@ -288,6 +289,37 @@ pub async fn ensure_group_name_is_free(
         )));
     }
     Ok(())
+}
+
+/// Fails with a German message if the club already registered a rider with
+/// this name (see [`person_key`]). `except_starter_id` excludes the rider
+/// being edited.
+pub async fn ensure_rider_name_is_free(
+    conn: &mut SqliteConnection,
+    club_id: Uuid,
+    firstname: &str,
+    lastname: &str,
+    except_starter_id: Option<Uuid>,
+) -> Result<(), HttpError> {
+    let existing = sqlx::query!(
+        "SELECT firstname, lastname FROM starter WHERE club_id = ? AND id IS NOT ?",
+        club_id,
+        except_starter_id
+    )
+    .fetch_all(&mut *conn)
+    .await?;
+    let key = person_key(firstname, lastname);
+    match existing
+        .iter()
+        .find(|rider| person_key(&rider.firstname, &rider.lastname) == key)
+    {
+        // The name as registered, which may differ in case.
+        Some(rider) => Err(HttpError::ErrorMessages(already_registered(
+            &rider.firstname,
+            &rider.lastname,
+        ))),
+        None => Ok(()),
+    }
 }
 
 /// Checks that `act_type` is a group type, for commands that set a group's

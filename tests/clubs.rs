@@ -1106,3 +1106,58 @@ async fn amount_due_keeps_withdrawn_starts_unless_the_fee_is_waived(db: SqlitePo
         assert_eq!(start_fees().await, expected, "fee_waived: {fee_waived}");
     }
 }
+
+#[sqlx::test]
+async fn a_rider_is_registered_once_per_club_ignoring_case_and_spaces(db: SqlitePool) {
+    let app = TestApp::new(db).await;
+    let (cookie, club_id) = app.create_club_owner("Owner", "RSV").await;
+    let anna = app
+        .add_starter(&cookie, starter_body(club_id, "Anna", true, false))
+        .await;
+    let berta = app
+        .add_starter(&cookie, starter_body(club_id, "Berta", true, false))
+        .await;
+
+    for (firstname, lastname) in [("Anna", "Muster"), (" anna ", "MUSTER ")] {
+        let mut body = starter_body(club_id, firstname, true, false);
+        body["lastname"] = json!(lastname);
+        let response = app
+            .post("/api/command/add_club_starter", body, Some(&cookie))
+            .await;
+        assert_ne!(response.status, StatusCode::OK, "{firstname} {lastname}");
+        let message = response.body["message"].as_str().unwrap();
+        assert!(
+            message.contains("Anna Muster ist bereits gemeldet."),
+            "{message}"
+        );
+    }
+
+    // Renaming Berta to Anna is refused the same way.
+    let renamed = app
+        .post(
+            "/api/command/edit_club_starter",
+            edit_body(berta, "anna", true, false),
+            Some(&cookie),
+        )
+        .await;
+    let message = renamed.body["message"].as_str().unwrap_or_default();
+    assert!(
+        message.contains("ist bereits gemeldet."),
+        "{:?}",
+        renamed.body
+    );
+    // Editing Anna herself keeps her name.
+    let same = app
+        .post(
+            "/api/command/edit_club_starter",
+            edit_body(anna, "Anna", true, false),
+            Some(&cookie),
+        )
+        .await;
+    assert_eq!(same.status, StatusCode::OK, "{:?}", same.body);
+
+    // Another club may have its own Anna Muster.
+    let (other, other_club) = app.create_club_owner("Other", "ESV").await;
+    app.add_starter(&other, starter_body(other_club, "Anna", true, false))
+        .await;
+}
