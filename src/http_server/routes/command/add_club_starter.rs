@@ -7,8 +7,9 @@ use uuid::Uuid;
 use crate::{
     act_type::ActType,
     gender::Gender,
-    groups::{ensure_club_access, ensure_partner_in_club, ensure_rider_name_is_free},
+    groups::{ensure_club_access, ensure_partner_in_club},
     http_server::{ClientError, HttpError, extractor::auth::Auth},
+    people::{self, Person},
     reloadable_sqlite::ReloadableSqlite,
     system_status::Capabilities,
     utils::{check_single_start, set_act},
@@ -63,12 +64,12 @@ pub async fn add_club_starter(
     capabilities: Capabilities,
     Json(mut body): Json<AddClubStarterBody>,
 ) -> Result<Json<AddClubStarterResponse>, HttpError> {
-    body.firstname = body.firstname.trim().to_string();
-    body.lastname = body.lastname.trim().to_string();
     if !capabilities.can_register_starter {
         return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
     }
     check_single_start(body.single_male, body.single_female).map_err(HttpError::ErrorMessages)?;
+    people::trim_name(&mut body.firstname);
+    people::trim_name(&mut body.lastname);
     Gender::check_single(body.gender, body.single_male, body.single_female)
         .map_err(HttpError::ErrorMessages)?;
     let gender = body
@@ -79,8 +80,9 @@ pub async fn add_club_starter(
     {
         let mut conn = db.acquire().await?;
         ensure_club_access(&mut conn, &auth, body.club_id).await?;
-        ensure_rider_name_is_free(
+        people::ensure_name_is_free(
             &mut conn,
+            Person::Rider,
             body.club_id,
             &body.firstname,
             &body.lastname,
@@ -156,7 +158,8 @@ pub async fn add_club_starter(
         body.partner_name,
     )
     .execute(&db)
-    .await?;
+    .await
+    .map_err(|e| people::map_duplicate(e, &body.firstname, &body.lastname))?;
 
     if body.single_female || body.single_male {
         set_act(&db, "", &[starter_id], None, ActType::Single)

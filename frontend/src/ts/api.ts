@@ -115,11 +115,25 @@ export class ApiError extends Error {
     message: string,
     /** The HTTP status, if there was a response. */
     readonly status?: number,
+    /** The server wrote the message for the user (a `Generic` error). */
+    readonly fromServer = false,
   ) {
     super(message);
     this.name = "ApiError";
   }
 }
+
+/**
+ * The text for a failed action: a German sentence the server wrote for the
+ * user stands alone ("Thomas Höser ist bereits gemeldet."), anything else
+ * gets `context` in front ("Fehler beim Hinzufügen: Keine Verbindung …").
+ */
+export const failureText = (context: string, error: unknown) => {
+  const message = errorMessage(error);
+  return error instanceof ApiError && error.fromServer && message.endsWith(".")
+    ? message
+    : `${context}: ${message}`;
+};
 
 /** The `ResponseError` the generated client throws on an HTTP error. */
 interface ResponseError extends Error {
@@ -146,7 +160,11 @@ export async function unwrap<T>(call: Promise<{ data: T }>): Promise<T> {
     return (await call).data;
   } catch (error) {
     if (isResponseError(error)) {
-      throw new ApiError(errorMessage(error.data, error.status), error.status);
+      throw new ApiError(
+        errorMessage(error.data, error.status),
+        error.status,
+        isClientError(error.data) && error.data.type === "Generic",
+      );
     }
     throw error;
   }

@@ -1,7 +1,7 @@
 /* global process, DOMException */
 import assert from "node:assert/strict";
 import { describe, test } from "vite-plus/test";
-import { ApiError, errorMessage, unwrap } from "../src/ts/api.ts";
+import { ApiError, errorMessage, failureText, unwrap } from "../src/ts/api.ts";
 import {
   dateInputValue,
   actClubNames,
@@ -1181,6 +1181,31 @@ describe("unwrap", () => {
         error instanceof Error &&
         error.message === "Keine Berechtigung" &&
         error.status === 403,
+    );
+  });
+
+  test("a sentence of the server stands alone, anything else gets context", async () => {
+    const failing = (data, status = 500) =>
+      unwrap(Promise.reject(responseError(status, data))).catch((e) => e);
+    const sentence = await failing({
+      type: "Generic",
+      message: '"Thomas Höser ist bereits gemeldet."',
+    });
+    assert.equal(
+      failureText("Fehler beim Hinzufügen", sentence),
+      "Thomas Höser ist bereits gemeldet.",
+    );
+    const raw = await failing({
+      type: "Generic",
+      message: '"Database error: UNIQUE constraint failed"',
+    });
+    assert.equal(
+      failureText("Fehler beim Hinzufügen", raw),
+      "Fehler beim Hinzufügen: Database error: UNIQUE constraint failed",
+    );
+    assert.equal(
+      failureText("Fehler beim Speichern", new TypeError("Failed to fetch")),
+      "Fehler beim Speichern: Keine Verbindung zum Server",
     );
   });
 

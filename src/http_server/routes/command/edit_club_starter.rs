@@ -7,8 +7,9 @@ use uuid::Uuid;
 use crate::{
     act_type::ActType,
     gender::Gender,
-    groups::{ensure_partner_in_club, ensure_rider_name_is_free, ensure_starter_access},
+    groups::{ensure_partner_in_club, ensure_starter_access},
     http_server::{ClientError, HttpError, extractor::auth::Auth},
+    people::{self, Person},
     reloadable_sqlite::ReloadableSqlite,
     system_status::Capabilities,
     utils::{check_single_start, delete_act, get_act_id_for_starter_id, set_act},
@@ -64,14 +65,15 @@ pub async fn edit_club_starter(
         return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
     }
     check_single_start(body.single_male, body.single_female).map_err(HttpError::ErrorMessages)?;
-    body.firstname = body.firstname.trim().to_string();
-    body.lastname = body.lastname.trim().to_string();
+    people::trim_name(&mut body.firstname);
+    people::trim_name(&mut body.lastname);
     let db = db.get().await.clone();
     let club_id = {
         let mut conn = db.acquire().await?;
         let club_id = ensure_starter_access(&mut conn, &auth, body.starter_id).await?;
-        ensure_rider_name_is_free(
+        people::ensure_name_is_free(
             &mut conn,
+            Person::Rider,
             club_id,
             &body.firstname,
             &body.lastname,
@@ -267,7 +269,8 @@ pub async fn edit_club_starter(
         body.starter_id,
     )
     .execute(&db)
-    .await?;
+    .await
+    .map_err(|e| people::map_duplicate(e, &body.firstname, &body.lastname))?;
 
     let existing_act = get_act_id_for_starter_id(&db, body.starter_id, ActType::Single)
         .await

@@ -2,7 +2,7 @@ import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 import { styleMap } from "lit/directives/style-map.js";
-import { errorMessage, unwrap } from "../../../api";
+import { failureText, unwrap } from "../../../api";
 import { client, type schemas } from "../../../apiClient";
 import {
   type ClubData,
@@ -1264,7 +1264,7 @@ export default class CupClubStepJury extends LitElement {
       this.editing = null;
       dataChanged(this);
     } catch (error) {
-      this.error = `${action} fehlgeschlagen: ${errorMessage(error)}`;
+      this.error = failureText(`${action} fehlgeschlagen`, error);
     } finally {
       this.saving = false;
     }

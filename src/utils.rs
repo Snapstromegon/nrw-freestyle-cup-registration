@@ -4,21 +4,6 @@ use uuid::Uuid;
 
 use crate::act_type::ActType;
 
-/// Compares people's names like the "once per club" rule for riders and
-/// judges does: ignoring case and surrounding spaces.
-pub fn person_key(firstname: &str, lastname: &str) -> String {
-    format!("{} {}", firstname.trim(), lastname.trim()).to_lowercase()
-}
-
-/// The German message for a rider or judge the club already registered.
-pub fn already_registered(firstname: &str, lastname: &str) -> String {
-    format!(
-        "{} {} ist bereits gemeldet.",
-        firstname.trim(),
-        lastname.trim()
-    )
-}
-
 /// For `#[serde(default = "crate::utils::default_true")]`.
 pub fn default_true() -> bool {
     true

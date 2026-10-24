@@ -8,7 +8,7 @@ import {
 } from "lit/decorators.js";
 import { classMap } from "lit/directives/class-map.js";
 import { repeat } from "lit/directives/repeat.js";
-import { errorMessage } from "../../../api";
+import { failureText } from "../../../api";
 import {
   actsOfStarter,
   ageOnDeterminingDay,
@@ -695,7 +695,9 @@ export default class CupClubStepRiders extends LitElement {
       await this.updateComplete;
       this.firstnameInput?.focus();
     } catch (error) {
-      this.error = `Fehler beim Hinzufügen: ${errorMessage(error)}`;
+      this.error = failureText("Fehler beim Hinzufügen", error);
+      // The last success no longer applies.
+      this.lastAdded = null;
     } finally {
       this.adding = false;
     }
@@ -761,7 +763,7 @@ export default class CupClubStepRiders extends LitElement {
       this.error = null;
       dataChanged(this);
     } catch (error) {
-      this.error = `Fehler beim Speichern: ${errorMessage(error)}`;
+      this.error = failureText("Fehler beim Speichern", error);
     } finally {
       const busy = new Set(this.busy);
       busy.delete(starter.id);

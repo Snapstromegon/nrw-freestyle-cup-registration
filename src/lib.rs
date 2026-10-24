@@ -12,6 +12,7 @@ pub mod jwt;
 pub mod mailer;
 pub mod metrics;
 pub mod normalize;
+pub mod people;
 pub mod photos;
 pub mod player;
 pub mod reloadable_sqlite;

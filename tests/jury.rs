@@ -493,6 +493,25 @@ async fn judges_are_validated(db: SqlitePool) {
         duplicate.body
     );
     assert_eq!(club_judges(&app, &owner, club_id).await.len(), 2);
+
+    // Renaming the dismount counter onto the trained judge's name, too.
+    let counter = club_judges(&app, &owner, club_id)
+        .await
+        .into_iter()
+        .find(|judge| judge["firstname"] == "Zählerin")
+        .unwrap();
+    let mut rename = judge_body(club_id, "FÜNFZEHN", fourteen, false, &dismounts);
+    rename.as_object_mut().unwrap().remove("club_id");
+    rename["judge_id"] = counter["id"].clone();
+    let renamed = app
+        .post("/api/command/edit_club_judge", rename, Some(&owner))
+        .await;
+    let message = renamed.body["message"].as_str().unwrap_or_default();
+    assert!(
+        message.contains("Fünfzehn Jury ist bereits gemeldet."),
+        "{:?}",
+        renamed.body
+    );
 }
 
 #[sqlx::test]

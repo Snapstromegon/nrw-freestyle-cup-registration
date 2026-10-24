@@ -16,7 +16,7 @@ use crate::{
     competition::{Competition, JuryRules},
     groups::ensure_club_access,
     http_server::{HttpError, HttpServerOptions, extractor::auth::Auth},
-    utils::{already_registered, person_key},
+    people::{self, Person},
 };
 
 time::serde::format_description!(iso_date, Date, "[year]-[month]-[day]");
@@ -177,11 +177,7 @@ pub async fn insert_category(
     }
 }
 
-pub(crate) fn is_unique_violation(error: &sqlx::Error) -> bool {
-    error
-        .as_database_error()
-        .is_some_and(|e| e.is_unique_violation())
-}
+pub(crate) use crate::people::is_unique_violation;
 
 pub(crate) fn duplicate_name(name: &str) -> HttpError {
     HttpError::ErrorMessages(format!("Die Jury-Kategorie „{name}“ gibt es schon."))
@@ -285,8 +281,8 @@ impl JudgeFields {
     /// competition day; untrained people only count dismounts. The message is
     /// German.
     pub fn normalize(mut self, competition: Option<&Competition>) -> Result<Self, String> {
-        self.firstname = self.firstname.trim().to_string();
-        self.lastname = self.lastname.trim().to_string();
+        people::trim_name(&mut self.firstname);
+        people::trim_name(&mut self.lastname);
         if !is_safe_name(&self.firstname) || !is_safe_name(&self.lastname) {
             return Err(
                 "Bitte Vor- und Nachnamen angeben (nicht mit =, +, - oder @ beginnend)."
@@ -356,24 +352,15 @@ pub async fn save_judge(
     club_id: Uuid,
     fields: &JudgeFields,
 ) -> Result<(), HttpError> {
-    let others = sqlx::query!(
-        "SELECT firstname, lastname FROM judge WHERE club_id = ? AND id != ?",
+    people::ensure_name_is_free(
+        conn,
+        Person::Judge,
         club_id,
-        judge_id
+        &fields.firstname,
+        &fields.lastname,
+        Some(judge_id),
     )
-    .fetch_all(&mut *conn)
     .await?;
-    let key = person_key(&fields.firstname, &fields.lastname);
-    if let Some(judge) = others
-        .iter()
-        .find(|judge| person_key(&judge.firstname, &judge.lastname) == key)
-    {
-        // The name as registered, which may differ in case.
-        return Err(HttpError::ErrorMessages(already_registered(
-            &judge.firstname,
-            &judge.lastname,
-        )));
-    }
     let result = sqlx::query!(
         r#"
         INSERT INTO judge (
@@ -400,13 +387,13 @@ pub async fn save_judge(
     .await;
     match result {
         Ok(_) => {}
-        Err(e) if is_unique_violation(&e) => {
-            return Err(HttpError::ErrorMessages(already_registered(
+        Err(e) => {
+            return Err(people::map_duplicate(
+                e,
                 &fields.firstname,
                 &fields.lastname,
-            )));
+            ));
         }
-        Err(e) => return Err(e.into()),
     }
     sqlx::query!(
         "DELETE FROM judge_registration WHERE judge_id = ?",
