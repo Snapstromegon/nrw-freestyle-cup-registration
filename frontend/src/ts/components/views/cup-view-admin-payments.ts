@@ -522,16 +522,16 @@ export default class CupViewAdminPayments extends LitElement {
                     "Einzel, Paar und Gruppen (inkl. Ersatz)",
                   )}
                   ${this.renderSortHeader(
-                    "paidStarts",
-                    "Berechnet",
-                    "num",
-                    "Starts mit Startgeld",
-                  )}
-                  ${this.renderSortHeader(
                     "freeStarts",
                     "Frei",
                     "num",
                     "Starts ohne Startgeld, weil die FahrerIn das Höchstgeld je FahrerIn schon erreicht hat",
+                  )}
+                  ${this.renderSortHeader(
+                    "paidStarts",
+                    "Berechnet",
+                    "num",
+                    "Starts mit Startgeld",
                   )}
                   ${this.renderSortHeader(
                     "due",
@@ -581,8 +581,8 @@ export default class CupViewAdminPayments extends LitElement {
                   <td class="num">
                     ${sum(rows, (r) => r.starts)}
                   </td>
-                  <td class="num">${sum(rows, (r) => r.paidStarts)}</td>
                   <td class="num">${sum(rows, (r) => r.freeStarts)}</td>
+                  <td class="num">${sum(rows, (r) => r.paidStarts)}</td>
                   <td class="num">${formatMoney(sum(rows, (r) => r.due))}</td>
                   <td class="num">${formatMoney(sum(rows, (r) => r.paid))}</td>
                   <td
@@ -620,10 +620,10 @@ export default class CupViewAdminPayments extends LitElement {
         ${row.starts || html`<span class="zero">0</span>`}
       </td>
       <td class="num">
-        ${row.paidStarts || html`<span class="zero">0</span>`}
+        ${row.freeStarts || html`<span class="zero">0</span>`}
       </td>
       <td class="num">
-        ${row.freeStarts || html`<span class="zero">0</span>`}
+        ${row.paidStarts || html`<span class="zero">0</span>`}
       </td>
       <td
         class="num"
