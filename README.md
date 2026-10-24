@@ -146,10 +146,10 @@ Event day setup:
   timeplan entry it shows the entry's name and the clock, with photos unless
   the entry turns them off ("Fotos" in the admin timeplan).
 - **Internal timeplan entries** ("intern" in the admin timeplan): custom
-  entries only the organizer team sees, e.g. a jury meeting. They take their
-  time like any entry; the info board, the startlist and its CSV leave them
-  out and show a break. Admin, Juryleitung, Moderation and Musiksteuerung see
-  them, marked "intern".
+  entries only the organizer team sees, e.g. a jury meeting. Admin,
+  Juryleitung, Moderation and Musiksteuerung see them, marked "intern";
+  everyone else, and always the info board, the startlist and its CSV, get a
+  „Pause“ of the same length instead.
 - **Photos:** set `[photos] source` (see `config.example.toml`): a Nextcloud
   folder over WebDAV with a user and an app password, a Nextcloud share link,
   or a local folder. The server lists it every 15 s (the folder and its direct

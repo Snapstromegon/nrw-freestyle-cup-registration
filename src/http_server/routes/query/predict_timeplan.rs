@@ -6,7 +6,7 @@ use crate::{
     http_server::{ClientError, HttpError, extractor::auth::Granted},
     reloadable_sqlite::ReloadableSqlite,
     roles::permit,
-    timeplan::{self, EntryKind, Slot},
+    timeplan::{self, Audience, EntryKind, Slot},
 };
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
@@ -228,21 +228,6 @@ pub struct Timeplan {
     pub items: Vec<TimeplanItem>,
 }
 
-impl Timeplan {
-    /// Leaves out the internal timeplan entries. Their time stays, so every
-    /// other entry starts when it would with them.
-    #[must_use]
-    pub fn public(mut self) -> Self {
-        self.items.retain(|item| {
-            !matches!(
-                item.timeplan_entry,
-                TimeplanEntry::Custom { internal: true, .. }
-            )
-        });
-        self
-    }
-}
-
 #[derive(Debug, serde::Deserialize, utoipa::IntoParams)]
 pub struct PredictTimeplanQuery {
     /// Leave out the internal entries even for the organizer team, e.g. for
@@ -270,20 +255,20 @@ pub async fn predict_timeplan(
     Query(query): Query<PredictTimeplanQuery>,
 ) -> Result<Json<Timeplan>, HttpError> {
     let db = db.get().await.clone();
-    let timeplan = predict(&db).await?;
-    Ok(Json(if internal.is_some() && !query.public {
-        timeplan
+    let audience = if internal.is_some() && !query.public {
+        Audience::OrganizerTeam
     } else {
-        timeplan.public()
-    }))
+        Audience::Public
+    };
+    Ok(Json(predict(&db, audience).await?))
 }
 
 /// The prediction behind `predict_timeplan`, also used by the startlist CSV,
 /// the player hub and the metrics.
-pub async fn predict(db: &sqlx::SqlitePool) -> Result<Timeplan, HttpError> {
+pub async fn predict(db: &sqlx::SqlitePool, audience: Audience) -> Result<Timeplan, HttpError> {
     // One read transaction, so the blocks and acts are read consistently.
     let mut tx = db.begin().await?;
-    let loaded = timeplan::load(&mut tx).await?;
+    let loaded = timeplan::load_for(&mut tx, audience).await?;
     tx.commit().await?;
     predict_from(loaded, time::OffsetDateTime::now_utc())
 }

@@ -36,7 +36,7 @@ use crate::{
     },
     normalize::NormalizationStatus,
     reloadable_sqlite::ReloadableSqlite,
-    timeplan::mark_music_started,
+    timeplan::{Audience, mark_music_started},
 };
 
 #[cfg(feature = "local-audio")]
@@ -1022,7 +1022,7 @@ impl PlayerHub {
     /// Acts placed in a published final play there again.
     async fn upcoming_acts(&self) -> Result<Vec<Uuid>, sqlx::Error> {
         let db = self.db.get().await.clone();
-        let Ok(timeplan) = predict(&db).await else {
+        let Ok(timeplan) = predict(&db, Audience::OrganizerTeam).await else {
             // An incomplete timeplan has no order to follow.
             return Ok(vec![]);
         };

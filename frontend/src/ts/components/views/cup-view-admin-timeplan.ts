@@ -20,6 +20,7 @@ import {
   formatTime,
   parseDuration,
   slotItem,
+  INTERNAL_ENTRY_TITLE,
 } from "../../utils";
 
 type Act = schemas.Act;
@@ -892,7 +893,7 @@ export default class CupViewAdminTimeplan extends LitElement {
         entry.internal
           ? html`<span
               class="chip info"
-              title="Interner Zeitplaneintrag: nur das Orga-Team sieht ihn, öffentliche Anzeigen zeigen eine Pause"
+              title=${INTERNAL_ENTRY_TITLE}
               >intern</span
             >`
           : nothing
@@ -1650,7 +1651,7 @@ export default class CupViewAdminTimeplan extends LitElement {
                 </label>
                 <label
                   class="flag"
-                  title="Interner Zeitplaneintrag: nur das Orga-Team sieht ihn; Info-Board und Startliste zeigen eine Pause"
+                  title=${INTERNAL_ENTRY_TITLE}
                 >
                   <input
                     type="checkbox"

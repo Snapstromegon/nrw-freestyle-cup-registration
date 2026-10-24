@@ -36,6 +36,7 @@ use crate::{
     fees,
     http_server::{HttpServerOptions, routes::query::predict_timeplan::predict},
     reloadable_sqlite::ReloadableSqlite,
+    timeplan::Audience,
 };
 
 type Labels = Vec<(String, String)>;
@@ -474,7 +475,7 @@ impl Metrics {
         );
         // An incomplete timeplan can't be predicted; that isn't a scrape error.
         self.timeplan_predicted_end.clear();
-        match predict(db).await {
+        match predict(db, Audience::OrganizerTeam).await {
             Ok(timeplan) => {
                 self.timeplan_delay.set(timeplan.offset);
                 if let Some(last) = timeplan.items.last() {

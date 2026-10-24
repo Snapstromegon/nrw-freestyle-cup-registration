@@ -47,6 +47,12 @@ pub enum EntryKind {
 }
 
 impl EntryKind {
+    /// Only custom entries can be internal timeplan entries: a start block's
+    /// acts are on the public startlist.
+    pub fn can_be_internal(self) -> bool {
+        self == Self::Custom
+    }
+
     /// The kind of an entry sent without one: entries with a category (or a
     /// final) are start blocks, as before there were kinds.
     pub fn derive(kind: Option<Self>, category: Option<&str>) -> Self {
@@ -147,10 +153,9 @@ impl EntryFields {
         }
     }
 
-    /// Custom entries: internal or public. Start blocks are always public:
-    /// their acts are on the public startlist.
+    /// Custom entries: internal or public (see [`EntryKind::can_be_internal`]).
     pub fn with_internal(self, internal: bool) -> Result<Self, &'static str> {
-        if internal && self.kind == EntryKind::Acts {
+        if internal && !self.kind.can_be_internal() {
             return Err("Nur eigene Einträge können intern sein, keine Startblöcke.");
         }
         Ok(Self { internal, ..self })
@@ -455,9 +460,28 @@ impl Timeplan {
     }
 }
 
-/// Loads the timeplan in order, with every block's slots, emptiness and
-/// effective warm-ups.
+/// Who a loaded timeplan is for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Audience {
+    /// Everything, internal timeplan entries included.
+    OrganizerTeam,
+    /// Internal timeplan entries become a "Pause" of the same length, so
+    /// every other entry keeps its time.
+    Public,
+}
+
+/// The label an internal timeplan entry has for the public.
+pub const INTERNAL_PUBLIC_LABEL: &str = "Pause";
+
+/// Loads the whole timeplan for the organizer team (see [`load_for`]).
 pub async fn load(db: &mut SqliteConnection) -> sqlx::Result<Timeplan> {
+    load_for(db, Audience::OrganizerTeam).await
+}
+
+/// Loads the timeplan in order, with every block's slots, emptiness and
+/// effective warm-ups, as `audience` may see it.
+pub async fn load_for(db: &mut SqliteConnection, audience: Audience) -> sqlx::Result<Timeplan> {
+    let public = audience == Audience::Public;
     let categories: HashMap<String, CategoryInfo> = sqlx::query!(
         r#"
         SELECT
@@ -596,17 +620,19 @@ pub async fn load(db: &mut SqliteConnection) -> sqlx::Result<Timeplan> {
             kind as "kind: EntryKind",
             earliest_start_time as "earliest_start_time: OffsetDateTime",
             duration_seconds,
-            label,
+            CASE WHEN internal AND ?1 THEN ?2 ELSE label END as "label: String",
             category,
             final_name,
             einfahrzeit_seconds,
             show_photos,
-            internal,
+            internal AND NOT ?1 as "internal!: bool",
             started_at as "started_at: OffsetDateTime",
             ended_at as "ended_at: OffsetDateTime"
         FROM timeplan
         ORDER BY position, id
-        "#
+        "#,
+        public,
+        INTERNAL_PUBLIC_LABEL,
     )
     .fetch_all(&mut *db)
     .await?;

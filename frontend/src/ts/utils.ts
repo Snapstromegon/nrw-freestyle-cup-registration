@@ -32,6 +32,10 @@ export type ActsEntry = Extract<
 export const blockOf = (item: TimeplanItem | undefined) =>
   item && "Acts" in item.timeplan_entry ? item.timeplan_entry.Acts : undefined;
 
+/** What an internal timeplan entry is, for its markers and its checkbox. */
+export const INTERNAL_ENTRY_TITLE =
+  "Interner Zeitplaneintrag: nur das Orga-Team sieht ihn, alle anderen sehen eine „Pause“";
+
 /** The custom entry (a break, an award ceremony, …) of a timeplan item. */
 export const customOf = (item: TimeplanItem | undefined) =>
   item && "Custom" in item.timeplan_entry

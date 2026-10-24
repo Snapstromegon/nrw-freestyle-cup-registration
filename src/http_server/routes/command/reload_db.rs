@@ -45,11 +45,11 @@ pub async fn reload_db(
     Extension(db): Extension<ReloadableSqlite>,
     // A login is needed even with the token.
     _: Auth,
-    users: Option<Granted<permit::ManageUsers>>,
+    user_manager: Option<Granted<permit::ManageUsers>>,
     Query(query): Query<ReloadDBQuery>,
     Extension(http_options): Extension<Arc<HttpServerOptions>>,
 ) -> Result<Json<ReloadDBResponse>, HttpError> {
-    if users.is_none() && query.token != Some(http_options.reload_db_token.clone()) {
+    if user_manager.is_none() && query.token != Some(http_options.reload_db_token.clone()) {
         return Err(HttpError::StatusCode(StatusCode::FORBIDDEN));
     }
 

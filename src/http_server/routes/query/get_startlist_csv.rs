@@ -15,6 +15,7 @@ use crate::{
         },
     },
     reloadable_sqlite::ReloadableSqlite,
+    timeplan::Audience,
 };
 
 static TIME_FORMAT: StaticFormatDescription =
@@ -50,8 +51,8 @@ pub async fn get_startlist_csv(
     Extension(db): Extension<ReloadableSqlite>,
 ) -> Result<String, HttpError> {
     let db = db.get().await.clone();
-    // A printed startlist is public: no internal entries.
-    let timeplan = predict(&db).await?.public();
+    // A printed startlist is public: internal entries are a "Pause".
+    let timeplan = predict(&db, Audience::Public).await?;
     let details: HashMap<Uuid, _> = sqlx::query!(
         r#"
         SELECT

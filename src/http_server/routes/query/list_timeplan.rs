@@ -5,7 +5,7 @@ use crate::{
     http_server::{ClientError, HttpError, extractor::auth::Granted},
     reloadable_sqlite::ReloadableSqlite,
     roles::permit,
-    timeplan::EntryKind,
+    timeplan::{EntryKind, INTERNAL_PUBLIC_LABEL},
 };
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
@@ -24,8 +24,8 @@ pub struct TimeplanListEntry {
     einfahrzeit_seconds: Option<i64>,
     /// Custom entries: photos next to the clock on the info board.
     show_photos: bool,
-    /// Custom entries: only the organizer team sees it. Left out for
-    /// everyone else.
+    /// Custom entries: an internal timeplan entry. Only the organizer team
+    /// gets it as it is; everyone else gets a "Pause" of the same length.
     internal: bool,
     /// Start blocks only: the order was edited by hand (`set_block_order`),
     /// so the category's start order no longer applies to it.
@@ -53,7 +53,8 @@ pub async fn list_timeplan(
     internal: Option<Granted<permit::ViewInternalEntries>>,
 ) -> Result<Json<Vec<TimeplanListEntry>>, HttpError> {
     let db = db.get().await.clone();
-    let with_internal = internal.is_some();
+    // The public gets internal entries as a "Pause", like in the prediction.
+    let public = internal.is_none();
     let timeplan_entries = sqlx::query_as!(
         TimeplanListEntry,
         r#"
@@ -62,22 +63,22 @@ pub async fn list_timeplan(
             kind as "kind: EntryKind",
             earliest_start_time,
             duration_seconds,
-            label,
+            CASE WHEN internal AND ?1 THEN ?2 ELSE label END as "label: String",
             category,
             final_name,
             einfahrzeit_seconds,
             show_photos,
-            internal,
+            internal AND NOT ?1 as "internal!: bool",
             EXISTS (
                 SELECT 1 FROM timeplan_slots WHERE timeplan_slots.timeplan_id = timeplan.id
             ) as "manually_ordered!: bool",
             started_at,
             ended_at
         FROM timeplan
-        WHERE ? OR NOT internal
         ORDER BY position, id
         "#,
-        with_internal,
+        public,
+        INTERNAL_PUBLIC_LABEL,
     )
     .fetch_all(&db)
     .await?;

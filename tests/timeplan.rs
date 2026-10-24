@@ -1769,7 +1769,7 @@ async fn add_internal_entry(app: &TestApp, admin: &str) {
 }
 
 #[sqlx::test]
-async fn internal_entries_take_their_time_but_only_the_organizer_team_sees_them(db: SqlitePool) {
+async fn internal_entries_are_a_pause_for_everyone_but_the_organizer_team(db: SqlitePool) {
     let app = TestApp::new(db).await;
     let admin = app.create_admin().await;
     add_internal_entry(&app, &admin).await;
@@ -1781,17 +1781,22 @@ async fn internal_entries_take_their_time_but_only_the_organizer_team_sees_them(
     let internal = predicted_custom(&full, "Jury-Besprechung").expect("admins see it");
     assert_eq!(internal["timeplan_entry"]["Custom"]["internal"], true);
 
-    // Public: left out, but the entry after it starts at the same time.
+    // Public: the same entry at the same time, as a plain "Pause".
     let public = app.get("/api/query/predict_timeplan", None).await.body;
     assert!(predicted_custom(&public, "Jury-Besprechung").is_none());
-    let next_id = full["items"][2]["id"].clone();
-    let next = public["items"]
+    let pause = public["items"]
         .as_array()
         .unwrap()
         .iter()
-        .find(|i| i["id"] == next_id)
+        .find(|i| i["id"] == internal["id"])
         .unwrap();
-    assert_eq!(next["predicted_start"], full["items"][2]["predicted_start"]);
+    assert_eq!(pause["timeplan_entry"]["Custom"]["label"], "Pause");
+    assert_eq!(pause["timeplan_entry"]["Custom"]["internal"], false);
+    assert_eq!(pause["predicted_start"], internal["predicted_start"]);
+    assert_eq!(
+        public["items"][2]["predicted_start"],
+        full["items"][2]["predicted_start"]
+    );
 
     // The info board asks for the public version, whoever is logged in.
     let board = app
@@ -1799,6 +1804,7 @@ async fn internal_entries_take_their_time_but_only_the_organizer_team_sees_them(
         .await
         .body;
     assert!(predicted_custom(&board, "Jury-Besprechung").is_none());
+    assert!(predicted_custom(&board, "Pause").is_some());
 
     for (name, role, sees) in [
         ("Moderation", "moderation", true),
@@ -1820,16 +1826,19 @@ async fn internal_entries_take_their_time_but_only_the_organizer_team_sees_them(
             .get("/api/query/list_timeplan", Some(&cookie))
             .await
             .body;
-        let listed = list
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|e| e["label"] == "Jury-Besprechung");
-        assert_eq!(listed, sees, "{role}");
+        let label = &list[1]["label"];
+        assert_eq!(
+            label,
+            if sees { "Jury-Besprechung" } else { "Pause" },
+            "{role}"
+        );
+        assert_eq!(list[1]["internal"], sees, "{role}");
     }
 
     let csv = app.get("/api/query/get_startlist_csv", Some(&admin)).await;
-    assert!(!csv.body.as_str().unwrap().contains("Jury-Besprechung"));
+    let csv = csv.body.as_str().unwrap();
+    assert!(!csv.contains("Jury-Besprechung"));
+    assert!(csv.contains("Pause"));
 }
 
 #[sqlx::test]

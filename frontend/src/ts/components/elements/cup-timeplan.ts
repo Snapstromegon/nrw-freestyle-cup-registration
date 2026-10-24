@@ -22,6 +22,7 @@ import {
   slotAct,
   slotItem,
   type TimeplanFinalist,
+  INTERNAL_ENTRY_TITLE,
 } from "../../utils";
 
 type Act = schemas.Act;
@@ -640,7 +641,7 @@ export default class CupTimeplan extends LitElement {
     const internal = custom.internal
       ? html`<span
           class="internal"
-          title="Interner Zeitplaneintrag: nur für das Orga-Team, öffentliche Anzeigen zeigen eine Pause"
+          title=${INTERNAL_ENTRY_TITLE}
           >intern</span
         >`
       : nothing;

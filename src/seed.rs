@@ -341,7 +341,11 @@ pub fn validate_timeplan(
     let mut planned_finals = HashSet::new();
     for (index, entry) in timeplan.iter().enumerate() {
         let position = index + 1;
-        if entry.internal && (entry.category.is_some() || entry.final_name.is_some()) {
+        let kind = EntryKind::derive(
+            None,
+            entry.category.as_deref().or(entry.final_name.as_deref()),
+        );
+        if entry.internal && !kind.can_be_internal() {
             return Err(format!(
                 "Timeplan entry {position}: only custom entries can be internal."
             ));
