@@ -50,8 +50,20 @@ interface Notice {
   text: string;
   tone: "ok" | "warn";
   /** Deletes the booking just recorded. */
-  undo?: { bookingId: string; clubName: string };
+  undo?: { bookingId: string; clubId: string; clubName: string };
 }
+
+/**
+ * The rows to highlight after a booking was applied: the booking and the
+ * clubs whose paid amount it changed.
+ */
+interface Highlight {
+  bookingId: string | null;
+  clubIds: string[];
+}
+
+/** How long an applied booking stays highlighted, in ms (see `flash`). */
+const HIGHLIGHT_MS = 2500;
 
 /** The select value of a booking that counts for no club. */
 const UNASSIGNED = "";
@@ -285,6 +297,28 @@ export default class CupViewAdminPayments extends LitElement {
       .negative {
         color: var(--cup-red);
       }
+
+      /* An applied booking and the clubs it changed; fades out. */
+      @keyframes applied {
+        from {
+          background: color-mix(in srgb, var(--cup-green) 35%, var(--cup-surface));
+        }
+      }
+
+      tr.applied > td {
+        animation: applied ${HIGHLIGHT_MS}ms ease-out;
+      }
+
+      tr.applied > td:first-child {
+        box-shadow: inset 3px 0 0 var(--cup-green);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        tr.applied > td {
+          animation: none;
+          background: var(--tone-ok-bg);
+        }
+      }
     `,
   ];
 
@@ -307,6 +341,7 @@ export default class CupViewAdminPayments extends LitElement {
   @state() editingBooking: string | null = null;
   /** The new booking's amount couldn't be parsed. */
   @state() formInvalid = false;
+  @state() highlight: Highlight | null = null;
 
   @query("input.pay-input") payInput?: HTMLInputElement;
 
@@ -320,6 +355,7 @@ export default class CupViewAdminPayments extends LitElement {
   private editText = "";
   /** Only the latest click on a paid amount opens the editor. */
   private editSeq = 0;
+  private highlightTimer?: ReturnType<typeof setTimeout>;
   /**
    * The last data that loaded. A failed reload sets the task's value to
    * `undefined`; the page keeps showing this instead.
@@ -704,7 +740,8 @@ export default class CupViewAdminPayments extends LitElement {
     const { club } = row;
     const editing = this.editing === club.id;
     const open = this.openClub === club.id;
-    return html`<tr class=${editing ? "editing" : ""}>
+    const applied = this.highlight?.clubIds.includes(club.id);
+    return html`<tr class="${editing ? "editing" : ""} ${applied ? "applied" : ""}">
       <td class="trunc" title="${club.name} · Code im Verwendungszweck: ${club.code}">
         <button
           class="icon-btn expand no-print"
@@ -953,7 +990,9 @@ export default class CupViewAdminPayments extends LitElement {
           (b) =>
             this.editingBooking === b.id
               ? this.renderBookingEditor(b, data, showState, assign)
-              : html`<tr>
+              : html`<tr
+                  class=${this.highlight?.bookingId === b.id ? "applied" : ""}
+                >
                   <td class="nowrap">${formatDate(b.date)}</td>
                   <td class="num nowrap ${b.amount < 0 ? "negative" : ""}">
                     ${formatMoney(b.amount)}
@@ -1361,9 +1400,10 @@ export default class CupViewAdminPayments extends LitElement {
       this.notice = {
         text: `Gebucht: ${club.name} ${formatMoney(amount)} (${formatMoney(current)} → ${formatMoney(club.paid)})`,
         tone: "ok",
-        undo: { bookingId: id, clubName: club.name },
+        undo: { bookingId: id, clubId: club.id, clubName: club.name },
       };
       this.data.run();
+      this.flash(id, [club.id]);
     } catch (error) {
       this.editing = club.id;
       this.error = `Zahlung für „${club.name}“ nicht gespeichert: ${errorMessage(error)}`;
@@ -1383,7 +1423,7 @@ export default class CupViewAdminPayments extends LitElement {
     if (!undo || this.saving) {
       return;
     }
-    await this.write(
+    const done = await this.write(
       () =>
         unwrap(client.deleteBooking({ body: { booking_id: undo.bookingId } })),
       `Rückgängig für „${undo.clubName}“ fehlgeschlagen`,
@@ -1392,6 +1432,35 @@ export default class CupViewAdminPayments extends LitElement {
         tone: "ok",
       },
     );
+    if (done) {
+      this.flash(null, [undo.clubId]);
+    }
+  }
+
+  /**
+   * Highlights the rows of an applied booking and of `clubIds`, once the
+   * reloaded data shows them. A new highlight replaces the last one.
+   */
+  async flash(
+    bookingId: string | null,
+    clubIds: (string | null | undefined)[],
+  ) {
+    clearTimeout(this.highlightTimer);
+    // Restart the animation of rows that are still highlighted.
+    this.highlight = null;
+    await this.data.taskComplete.catch(() => undefined);
+    this.highlight = {
+      bookingId,
+      clubIds: clubIds.filter((id): id is string => !!id),
+    };
+    this.highlightTimer = setTimeout(() => {
+      this.highlight = null;
+    }, HIGHLIGHT_MS);
+  }
+
+  override disconnectedCallback() {
+    super.disconnectedCallback?.();
+    clearTimeout(this.highlightTimer);
   }
 
   /**
@@ -1442,9 +1511,10 @@ export default class CupViewAdminPayments extends LitElement {
     }
     const clubId = field("state");
     const club = this.findClub(clubId);
+    let bookingId: string | null = null;
     const done = await this.write(
-      () =>
-        unwrap(
+      async () => {
+        ({ id: bookingId } = await unwrap(
           client.createBooking({
             body: {
               amount,
@@ -1453,7 +1523,8 @@ export default class CupViewAdminPayments extends LitElement {
               club_id: club ? club.id : null,
             },
           }),
-        ),
+        ));
+      },
       "Buchung nicht gespeichert",
       {
         text: `Gebucht: ${formatMoney(amount)} ${club ? `für ${club.name}` : "(nicht zugeordnet)"}`,
@@ -1461,6 +1532,7 @@ export default class CupViewAdminPayments extends LitElement {
       },
     );
     if (done) {
+      this.flash(bookingId, [club?.id]);
       form.reset();
       const date = form.elements.namedItem("date") as HTMLInputElement | null;
       if (date) {
@@ -1498,6 +1570,7 @@ export default class CupViewAdminPayments extends LitElement {
     );
     if (done) {
       this.editingBooking = null;
+      this.flash(b.id, [b.club_id, changes.club_id]);
     }
   }
 
@@ -1598,11 +1671,14 @@ export default class CupViewAdminPayments extends LitElement {
     ) {
       return;
     }
-    await this.write(
+    const done = await this.write(
       () => unwrap(client.deleteBooking({ body: { booking_id: b.id } })),
       "Buchung nicht gelöscht",
       { text: `Gelöscht: ${describeBooking(b)}`, tone: "ok" },
     );
+    if (done) {
+      this.flash(null, [b.club_id]);
+    }
   }
 
   onToggleClubClick(e: Event) {
