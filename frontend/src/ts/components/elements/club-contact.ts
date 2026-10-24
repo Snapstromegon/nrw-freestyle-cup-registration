@@ -7,15 +7,15 @@ export const renderContact = (
   contacts: schemas.ClubContacts | null | undefined,
 ) =>
   contacts
-    ? html`${contacts.owner_name}
+    ? html`${contacts.contact_name}
         <a
           class="email"
-          href="mailto:${contacts.owner_email}"
-          title=${contacts.owner_email}
-          >${contacts.owner_email}</a
+          href="mailto:${contacts.contact_email}"
+          title=${contacts.contact_email}
+          >${contacts.contact_email}</a
         >
         ${
-          contacts.owner_email_verified
+          contacts.contact_email_verified
             ? nothing
             : html`<span class="chip warn">unverifiziert</span>`
         }`

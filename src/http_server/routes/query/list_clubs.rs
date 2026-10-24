@@ -36,14 +36,15 @@ pub struct ClubOverview {
 /// The people to reach a club through.
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct ClubContacts {
-    /// The club contact.
-    owner_name: String,
-    owner_email: String,
-    owner_email_verified: bool,
-    /// The Vereinsverantwortliche/r; the owner unless the club named someone
-    /// else.
-    responsible_name: String,
-    responsible_email: String,
+    /// The club contact (VereinsansprechpartnerIn): whose account registered
+    /// the club.
+    contact_name: String,
+    contact_email: String,
+    contact_email_verified: bool,
+    /// The club representative (Vereinsverantwortliche/r); the club contact
+    /// unless the club named someone else.
+    representative_name: String,
+    representative_email: String,
 }
 
 /// List all clubs; their balances and contacts only with the permission to
@@ -105,11 +106,11 @@ pub async fn list_clubs(
                 payment: row.payment.filter(|_| balances),
                 owner_id: row.owner_id,
                 contacts: contacts.then(|| ClubContacts {
-                    owner_name: row.owner_name,
-                    owner_email: row.owner_email,
-                    owner_email_verified: row.owner_email_verified,
-                    responsible_name: row.responsible_name,
-                    responsible_email: row.responsible_email,
+                    contact_name: row.owner_name,
+                    contact_email: row.owner_email,
+                    contact_email_verified: row.owner_email_verified,
+                    representative_name: row.responsible_name,
+                    representative_email: row.responsible_email,
                 }),
             }
         })

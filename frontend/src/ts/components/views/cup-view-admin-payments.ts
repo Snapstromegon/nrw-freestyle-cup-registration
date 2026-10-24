@@ -75,7 +75,7 @@ const sortValue = (row: PaymentRow, key: SortKey): number | string => {
     case "name":
       return row.club.name;
     case "contact":
-      return row.club.contacts?.owner_name ?? "";
+      return row.club.contacts?.contact_name ?? "";
     default:
       return row[key];
   }
@@ -354,8 +354,8 @@ export default class CupViewAdminPayments extends LitElement {
           [
             row.club.name,
             row.club.code,
-            row.club.contacts?.owner_name,
-            row.club.contacts?.owner_email,
+            row.club.contacts?.contact_name,
+            row.club.contacts?.contact_email,
           ].some((text) => text?.toLowerCase().includes(needle))),
     );
     const { key, desc } = this.sort;

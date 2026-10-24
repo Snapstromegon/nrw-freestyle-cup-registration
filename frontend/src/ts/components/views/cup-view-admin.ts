@@ -7,7 +7,6 @@ import { repeat } from "lit/directives/repeat.js";
 import { errorMessage, PollController, unwrap } from "../../api";
 import { client, type schemas } from "../../apiClient";
 import { renderContact } from "../elements/club-contact";
-import { responsibleIsContact } from "../../club-data";
 import {
   type SystemStatus,
   systemStatusContext,
@@ -102,7 +101,7 @@ const sortValue = (row: ClubRow, key: SortKey): number | string => {
     case "name":
       return row.club.name;
     case "contact":
-      return row.club.contacts?.owner_name ?? "";
+      return row.club.contacts?.contact_name ?? "";
     case "starters":
       return row.starters.length;
     case "acts":
@@ -1074,10 +1073,10 @@ export default class CupViewAdmin extends LitElement {
       ? allRows.filter((row) =>
           [
             row.club.name,
-            row.club.contacts?.owner_name,
-            row.club.contacts?.owner_email,
-            row.club.contacts?.responsible_name,
-            row.club.contacts?.responsible_email,
+            row.club.contacts?.contact_name,
+            row.club.contacts?.contact_email,
+            row.club.contacts?.representative_name,
+            row.club.contacts?.representative_email,
           ].some((text) => text?.toLowerCase().includes(needle)),
         )
       : [...allRows];
@@ -1203,22 +1202,25 @@ export default class CupViewAdmin extends LitElement {
           class="contact"
           title=${
             club.contacts
-              ? `${club.contacts.owner_name} <${club.contacts.owner_email}>`
+              ? `${club.contacts.contact_name} <${club.contacts.contact_email}>`
               : nothing
           }
         >
           ${renderContact(club.contacts)}
           ${
-            !club.contacts || responsibleIsContact(club.contacts)
+            !club.contacts ||
+            (club.contacts.representative_name === club.contacts.contact_name &&
+              club.contacts.representative_email ===
+                club.contacts.contact_email)
               ? nothing
               : html`<br /><small
                     class="muted"
-                    title=${`Vereinsverantwortliche/r: ${club.contacts.responsible_name} <${club.contacts.responsible_email}>`}
-                    >Verantwortlich: ${club.contacts.responsible_name}
+                    title=${`Vereinsverantwortliche/r: ${club.contacts.representative_name} <${club.contacts.representative_email}>`}
+                    >Verantwortlich: ${club.contacts.representative_name}
                     <a
                       class="email"
-                      href="mailto:${club.contacts.responsible_email}"
-                      >${club.contacts.responsible_email}</a
+                      href="mailto:${club.contacts.representative_email}"
+                      >${club.contacts.representative_email}</a
                     ></small
                   >`
           }

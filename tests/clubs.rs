@@ -953,8 +953,11 @@ async fn responsible_person_is_only_set_by_the_club_or_admins(db: SqlitePool) {
         .iter()
         .find(|club| club["id"] == club_id.to_string())
         .unwrap();
-    assert_eq!(listed["contacts"]["responsible_name"], "Berta");
-    assert_eq!(listed["contacts"]["responsible_email"], "berta@verein.test");
+    assert_eq!(listed["contacts"]["representative_name"], "Berta");
+    assert_eq!(
+        listed["contacts"]["representative_email"],
+        "berta@verein.test"
+    );
 }
 
 #[sqlx::test]
