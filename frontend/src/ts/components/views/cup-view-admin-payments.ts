@@ -523,13 +523,13 @@ export default class CupViewAdminPayments extends LitElement {
                   )}
                   ${this.renderSortHeader(
                     "paidStarts",
-                    "bezahlt",
+                    "Berechnet",
                     "num",
                     "Starts mit Startgeld",
                   )}
                   ${this.renderSortHeader(
                     "freeStarts",
-                    "frei",
+                    "Frei",
                     "num",
                     "Starts ohne Startgeld, weil die FahrerIn das Höchstgeld je FahrerIn schon erreicht hat",
                   )}
