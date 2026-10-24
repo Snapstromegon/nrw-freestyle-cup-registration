@@ -182,7 +182,7 @@ impl Metrics {
         );
         registry.register(
             "payments_received_euros",
-            "Sum of the payments recorded for all clubs",
+            "Sum of the payments of all clubs, refunds subtracted",
             m.payments_received.clone(),
         );
         registry.register(
@@ -434,7 +434,7 @@ impl Metrics {
         );
 
         let paid =
-            sqlx::query_scalar!(r#"SELECT COALESCE(SUM(payment), 0.0) as "paid!: f64" FROM clubs"#)
+            sqlx::query_scalar!(r#"SELECT COALESCE(SUM(amount), 0.0) as "paid!: f64" FROM bookings WHERE club_id IS NOT NULL"#)
                 .fetch_one(db)
                 .await?;
         self.payments_received.set(paid);

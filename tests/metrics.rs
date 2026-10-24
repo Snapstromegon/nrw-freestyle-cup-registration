@@ -51,8 +51,8 @@ async fn metrics_count_registrations_acts_and_money(db: SqlitePool) {
     app.add_starter(&cookie, carla).await;
     let admin = app.create_admin().await;
     app.post(
-        "/api/command/set_payment",
-        json!({ "club_id": club_id, "amount": 20.0 }),
+        "/api/command/create_booking",
+        json!({ "club_id": club_id, "amount": 20.0, "date": "2027-03-01" }),
         Some(&admin),
     )
     .await;
@@ -86,7 +86,7 @@ async fn metrics_count_registrations_acts_and_money(db: SqlitePool) {
     assert!(has_line(&body, "cup_fees_due_euros 60.0"), "{body}");
     // Requests are counted by their matched route.
     assert!(
-        body.contains(r#"cup_http_requests_total{method="POST",route="/api/command/set_payment",status="200"}"#),
+        body.contains(r#"cup_http_requests_total{method="POST",route="/api/command/create_booking",status="200"}"#),
         "{body}"
     );
     assert!(body.contains("cup_build_info{version="), "{body}");

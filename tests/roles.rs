@@ -226,14 +226,14 @@ async fn each_role_reaches_its_own_commands_only(db: SqlitePool) {
         .add_starter(&owner, starter_body(club_id, "Anna", true, false))
         .await;
     let act_id = app.act_of(rider).await;
-    let payment = || json!({ "club_id": club_id, "amount": 20.0 });
+    let payment = || json!({ "club_id": club_id, "amount": 20.0, "date": "2027-03-01" });
     let check_in = || json!({ "starter_ids": [rider], "checked_in": true });
     let song = || json!({ "act_id": act_id, "checked": true });
     let order = || json!({ "act_id": act_id, "order": 1 });
 
     let treasurer = member(&app, "Kasse", &["treasurer"]).await;
     assert_eq!(
-        status(&app, "/api/command/set_payment", payment(), &treasurer).await,
+        status(&app, "/api/command/create_booking", payment(), &treasurer).await,
         StatusCode::OK
     );
     assert_eq!(
@@ -247,7 +247,7 @@ async fn each_role_reaches_its_own_commands_only(db: SqlitePool) {
         StatusCode::OK
     );
     assert_eq!(
-        status(&app, "/api/command/set_payment", payment(), &desk).await,
+        status(&app, "/api/command/create_booking", payment(), &desk).await,
         StatusCode::FORBIDDEN
     );
 
@@ -261,7 +261,7 @@ async fn each_role_reaches_its_own_commands_only(db: SqlitePool) {
         StatusCode::OK
     );
     assert_eq!(
-        status(&app, "/api/command/set_payment", payment(), &music).await,
+        status(&app, "/api/command/create_booking", payment(), &music).await,
         StatusCode::FORBIDDEN
     );
     assert_eq!(
@@ -299,7 +299,7 @@ async fn each_role_reaches_its_own_commands_only(db: SqlitePool) {
         StatusCode::OK
     );
     assert_eq!(
-        status(&app, "/api/command/set_payment", payment(), &jury_lead).await,
+        status(&app, "/api/command/create_booking", payment(), &jury_lead).await,
         StatusCode::FORBIDDEN
     );
     assert_eq!(
@@ -355,8 +355,8 @@ async fn check_in_sees_club_balances_but_not_contacts(db: SqlitePool) {
         .await;
     let admin = app.create_admin().await;
     app.post(
-        "/api/command/set_payment",
-        json!({ "club_id": club_id, "amount": 5.0 }),
+        "/api/command/create_booking",
+        json!({ "club_id": club_id, "amount": 5.0, "date": "2027-03-01" }),
         Some(&admin),
     )
     .await;
@@ -366,7 +366,7 @@ async fn check_in_sees_club_balances_but_not_contacts(db: SqlitePool) {
     assert_eq!(clubs.status, StatusCode::OK, "{:?}", clubs.body);
     let club = &clubs.body[0];
     assert_eq!(club["name"], "SSV");
-    assert_eq!(club["payment"], 5.0);
+    assert_eq!(club["paid"], 5.0);
     assert!(club["amount_due"]["total"].as_f64().unwrap() > 0.0);
     assert_eq!(club["contacts"], Value::Null);
 
@@ -374,7 +374,7 @@ async fn check_in_sees_club_balances_but_not_contacts(db: SqlitePool) {
     let clubs = app.get("/api/query/list_clubs", Some(&jury_lead)).await;
     let club = &clubs.body[0];
     assert_eq!(club["contacts"]["contact_email"], email_for("Clara"));
-    assert_eq!(club["payment"], Value::Null);
+    assert_eq!(club["paid"], Value::Null);
     assert_eq!(club["amount_due"], Value::Null);
 
     let musik = member(&app, "Musik", &["music_control"]).await;

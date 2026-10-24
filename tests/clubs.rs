@@ -43,7 +43,8 @@ async fn create_club_assigns_club_to_owner(db: SqlitePool) {
     assert_eq!(club.status, StatusCode::OK);
     assert_eq!(club.body["id"], club_id.to_string());
     assert_eq!(club.body["name"], "RSV Test");
-    assert_eq!(club.body["payment"], Value::Null);
+    assert_eq!(club.body["paid"], 0.0);
+    assert_eq!(club.body["payments"], json!([]));
 }
 
 #[sqlx::test]
@@ -224,27 +225,6 @@ async fn adding_starter_requires_login(db: SqlitePool) {
         )
         .await;
     assert_eq!(response.status, StatusCode::UNAUTHORIZED);
-}
-
-#[sqlx::test]
-async fn set_payment_is_admin_only(db: SqlitePool) {
-    let app = TestApp::new(db).await;
-    let (owner, club_id) = app.create_club_owner("Owner", "RSV").await;
-    let admin = app.create_admin().await;
-    let body = json!({ "club_id": club_id, "amount": 42.5 });
-
-    let forbidden = app
-        .post("/api/command/set_payment", body.clone(), Some(&owner))
-        .await;
-    assert_eq!(forbidden.status, StatusCode::FORBIDDEN);
-
-    let ok = app
-        .post("/api/command/set_payment", body, Some(&admin))
-        .await;
-    assert_eq!(ok.status, StatusCode::OK, "{:?}", ok.body);
-
-    let club = app.get("/api/query/get_club", Some(&owner)).await;
-    assert_eq!(club.body["payment"], 42.5);
 }
 
 fn edit_body(starter_id: Uuid, firstname: &str, single: bool, pair: bool) -> Value {

@@ -5,6 +5,16 @@ import { customElement, query, state } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 import { errorMessage, unwrap } from "../../api";
 import { client, type schemas } from "../../apiClient";
+import {
+  actionLabels,
+  amountInputValue,
+  bookingChanges,
+  bookingStateLabel,
+  describeBooking,
+  parseAmount,
+  parseBookingAmount,
+  todayIso,
+} from "../../bookings";
 import { renderContact } from "../elements/club-contact";
 import {
   type SystemStatus,
@@ -12,23 +22,40 @@ import {
 } from "../../contexts/systemStatus";
 import { adminStyles } from "../../styles/admin";
 import { iconStyles, resetStyles } from "../../styles/base";
-import { countStarts, formatDate, formatMoney, startsByFee } from "../../utils";
+import { roleNames } from "../../roles";
+import {
+  countStarts,
+  formatDate,
+  formatDateTime,
+  formatMoney,
+  startsByFee,
+} from "../../utils";
 
 type ClubOverview = schemas.ClubOverview;
 type Starter = schemas.Starter;
+type ListedBooking = schemas.ListedBooking;
+type BookingLogEntry = schemas.BookingLogEntry;
 
 interface PaymentsData {
   clubs: ClubOverview[];
   starters: Starter[];
+  /** Newest first. */
+  bookings: ListedBooking[];
+  /** The payment log, newest first. */
+  log: BookingLogEntry[];
 }
 
 /** What the toolbar reports about the last save, with an undo. */
 interface Notice {
   text: string;
   tone: "ok" | "warn";
-  /** Sets the club's paid amount back to `amount`, if it is still `expected`. */
-  undo?: { clubId: string; amount: number; expected: number };
+  /** Deletes the booking just recorded. */
+  undo?: { bookingId: string; clubName: string };
 }
+
+/** The select value of a booking that counts for no club. */
+const UNASSIGNED = "";
+const IGNORED = "ignored";
 
 /** One line of the payment table. */
 interface PaymentRow {
@@ -87,28 +114,6 @@ const sortValue = (row: PaymentRow, key: SortKey): number | string => {
 };
 
 /**
- * Parses the amount typed into the payment field: a non-negative amount with
- * at most two decimals and "," or "." as decimal separator ("120", "120,5",
- * "120.50", "1.505,00 €"); `null` if invalid. A separator followed by three
- * digits is ambiguous ("1,505") and only accepted as German thousands
- * separator ("1.505").
- *
- * A plain text field is used on purpose: a number field in a browser with an
- * English locale silently turns "150,5" into 1505.
- */
-const parseAmount = (text: string) => {
-  const t = text.replace(/[\s\u00a0€]/g, "");
-  const german = /^(\d{1,3}(?:\.\d{3})+)(?:,(\d{1,2}))?$/.exec(t);
-  const plain = /^(\d+)(?:[.,](\d{1,2}))?$/.exec(t);
-  const match = german ?? plain;
-  if (!match) {
-    return null;
-  }
-  const value = Number(`${match[1].replaceAll(".", "")}.${match[2] ?? "0"}`);
-  return Number.isFinite(value) ? Math.round(value * 100) / 100 : null;
-};
-
-/**
  * The typed payment: an amount that replaces the paid total, or, with a
  * leading "+" ("+45"), one that is added to it. `null` if invalid.
  */
@@ -118,10 +123,6 @@ const parsePaymentInput = (text: string) => {
   const amount = parseAmount(add ? trimmed.slice(1) : trimmed);
   return amount === null ? null : { amount, add };
 };
-
-/** The paid amount as the editor shows it, e.g. "120,50". */
-const amountInputValue = (amount: number | null | undefined) =>
-  (amount ?? 0).toFixed(2).replace(".", ",");
 
 /** Whether two paid amounts are equal; "nothing paid" counts as 0. */
 const samePayment = (
@@ -223,6 +224,67 @@ export default class CupViewAdminPayments extends LitElement {
       tr.editing > td {
         background: var(--tone-info-bg);
       }
+
+      .booking-form {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.25rem 0.75rem;
+        margin: 0.375rem 0;
+        padding: 4px 8px;
+        border: 1px solid var(--cup-border);
+        border-radius: 4px;
+        background: var(--cup-surface-2);
+      }
+
+      .booking-form label {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+      }
+
+      .booking-form label.grow {
+        flex: 1 1 14em;
+      }
+
+      .booking-form label.grow input {
+        flex: 1;
+      }
+
+      h2.section {
+        margin: 0.75rem 0 0.25rem;
+        font-size: 1rem;
+      }
+
+      /* The bookings and log of one club, under its row. */
+      tr.club-details > td {
+        padding: 0.25rem 0.5rem 0.75rem 2rem;
+        background: var(--cup-surface-2);
+      }
+
+      tr.club-details h3 {
+        margin: 0.25rem 0;
+        font-size: 0.875rem;
+      }
+
+      .expand {
+        vertical-align: middle;
+      }
+
+      td.actions {
+        white-space: nowrap;
+        text-align: right;
+      }
+
+      ul.changes {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .negative {
+        color: var(--cup-red);
+      }
     `,
   ];
 
@@ -239,6 +301,12 @@ export default class CupViewAdminPayments extends LitElement {
   @state() invalid = false;
   @state() error: string | null = null;
   @state() notice: Notice | null = null;
+  /** The club whose bookings and log show under its row. */
+  @state() openClub: string | null = null;
+  /** The booking being edited, in every table that shows it. */
+  @state() editingBooking: string | null = null;
+  /** The new booking's amount couldn't be parsed. */
+  @state() formInvalid = false;
 
   @query("input.pay-input") payInput?: HTMLInputElement;
 
@@ -260,11 +328,13 @@ export default class CupViewAdminPayments extends LitElement {
 
   data = new Task(this, {
     task: async (): Promise<PaymentsData> => {
-      const [clubs, starters] = await Promise.all([
+      const [clubs, starters, bookings, log] = await Promise.all([
         unwrap(client.listClubs()),
         unwrap(client.listStarters()),
+        unwrap(client.listBookings()),
+        unwrap(client.listBookingLog()),
       ]);
-      return { clubs, starters };
+      return { clubs, starters, bookings, log };
     },
     args: () => [],
     onComplete: (value) => {
@@ -302,7 +372,7 @@ export default class CupViewAdminPayments extends LitElement {
       }
       ${
         data
-          ? this.renderPayments(data.clubs, data.starters)
+          ? this.renderPayments(data)
           : this.data.status === TaskStatus.PENDING
             ? html`<p class="empty">Lädt Zahlungen…</p>`
             : nothing
@@ -328,7 +398,7 @@ export default class CupViewAdminPayments extends LitElement {
           startFees: club.amount_due?.start_fees ?? 0,
           juryFee: club.amount_due?.jury_fee ?? 0,
           due: club.amount_due?.total ?? 0,
-          paid: club.payment ?? 0,
+          paid: club.paid ?? 0,
           open: 0,
         },
       ]),
@@ -354,7 +424,8 @@ export default class CupViewAdminPayments extends LitElement {
     return [...rows.values()];
   }
 
-  renderPayments(clubs: ClubOverview[], starters: Starter[]) {
+  renderPayments(data: PaymentsData) {
+    const { clubs, starters } = data;
     const competition = this.systemStatus?.competition;
     const allRows = this.buildRows(clubs, starters);
     const needle = this.search.trim().toLowerCase();
@@ -384,6 +455,7 @@ export default class CupViewAdminPayments extends LitElement {
       list.reduce((total, row) => total + f(row), 0);
     const openRows = allRows.filter((row) => row.open > CENT);
     const overpaidRows = allRows.filter((row) => row.open < -CENT);
+    const unassigned = data.bookings.filter((b) => !b.club_id && !b.ignored);
     const deadline = competition?.payment_deadline;
     const deadlineOver =
       !!deadline && new Date(`${deadline}T23:59:59`).getTime() < Date.now();
@@ -416,6 +488,17 @@ export default class CupViewAdminPayments extends LitElement {
               : nothing
           }
           ${
+            unassigned.length
+              ? html`<span class="kpi"
+                  >Nicht zugeordnet
+                  <b class="text-warn"
+                    >${formatMoney(unassigned.reduce((t, b) => t + b.amount, 0))}</b
+                  >
+                  (${unassigned.length})</span
+                >`
+              : nothing
+          }
+          ${
             competition
               ? html`<span class="kpi"
                   >${formatMoney(competition.fee_per_start)} je Start${
@@ -441,6 +524,7 @@ export default class CupViewAdminPayments extends LitElement {
           }
         </div>
       </div>
+      ${this.renderBookingForm(clubs)} ${this.renderUnassigned(unassigned, data)}
       <div class="toolbar">
         <input
           class="inline no-print"
@@ -458,8 +542,8 @@ export default class CupViewAdminPayments extends LitElement {
           nur offene (${openRows.length})
         </button>
         <span class="muted small no-print">
-          Gezahlten Betrag anklicken zum Bearbeiten · „+45“ addiert · Enter
-          speichert · Esc bricht ab
+          Gezahlten Betrag anklicken: ein neuer Gesamtbetrag bucht die Differenz
+          · „+45“ bucht 45 € · Enter speichert · Esc bricht ab
         </span>
         <span class="spacer"></span>
         ${
@@ -471,7 +555,7 @@ export default class CupViewAdminPayments extends LitElement {
                   this.notice.undo
                     ? html`<button
                         class="btn small no-print"
-                        title="Den vorherigen Betrag wiederherstellen"
+                        title="Die eben erfasste Buchung löschen"
                         ?disabled=${this.saving}
                         @click=${this.onUndoClick}
                       >
@@ -543,7 +627,7 @@ export default class CupViewAdminPayments extends LitElement {
                     "paid",
                     "Gezahlt gesamt",
                     "num",
-                    "Bisher insgesamt gezahlter Betrag; beim Bearbeiten wird er ersetzt, mit „+“ davor (z. B. +45) wird addiert",
+                    "Summe der Zahlungen des Vereins; ein neuer Gesamtbetrag bucht die Differenz, mit „+“ davor (z. B. +45) wird der Betrag gebucht",
                   )}
                   ${this.renderSortHeader("open", "Offen", "num")}
                 </tr>
@@ -552,7 +636,7 @@ export default class CupViewAdminPayments extends LitElement {
                 ${repeat(
                   rows,
                   (row) => row.club.id,
-                  (row) => this.renderRow(row),
+                  (row) => this.renderRow(row, data),
                 )}
                 ${
                   rows.length
@@ -599,14 +683,39 @@ export default class CupViewAdminPayments extends LitElement {
             </table>`
           : html`<p class="empty">Noch keine Vereine angemeldet.</p>`
       }
+      <details class="block">
+        <summary>
+          Alle Buchungen
+          <span class="muted">${data.bookings.length}</span>
+        </summary>
+        ${this.renderBookingTable(data.bookings, data, true)}
+      </details>
+      <details class="block">
+        <summary>
+          Änderungsprotokoll
+          <span class="muted">${data.log.length} Einträge</span>
+        </summary>
+        ${this.renderLog(data.log)}
+      </details>
     `;
   }
 
-  renderRow(row: PaymentRow) {
+  renderRow(row: PaymentRow, data: PaymentsData) {
     const { club } = row;
     const editing = this.editing === club.id;
+    const open = this.openClub === club.id;
     return html`<tr class=${editing ? "editing" : ""}>
       <td class="trunc" title="${club.name} · Code im Verwendungszweck: ${club.code}">
+        <button
+          class="icon-btn expand no-print"
+          data-id=${club.id}
+          aria-expanded=${open ? "true" : "false"}
+          title="Buchungen und Änderungen des Vereins"
+          aria-label="Buchungen und Änderungen von ${club.name}"
+          @click=${this.onToggleClubClick}
+        >
+          ${open ? "expand_less" : "expand_more"}
+        </button>
         ${club.name} <span class="muted small">${club.code}</span>
       </td>
       <td class="contact">${renderContact(club.contacts)}</td>
@@ -697,15 +806,349 @@ export default class CupViewAdminPayments extends LitElement {
               >
                 <span class="material-icon">edit</span>
                 ${
-                  club.payment === null || club.payment === undefined
-                    ? html`<span class="zero">–</span>`
-                    : formatMoney(club.payment)
+                  row.paid
+                    ? formatMoney(row.paid)
+                    : html`<span class="zero">${formatMoney(0)}</span>`
                 }
               </button>`
         }
       </td>
       <td class="num">${this.renderOpen(row.open, row.due)}</td>
+    </tr>
+    ${open ? this.renderClubDetails(club, data) : nothing}`;
+  }
+
+  /** The bookings and the payment log of one club, under its row. */
+  renderClubDetails(club: ClubOverview, data: PaymentsData) {
+    const bookings = data.bookings.filter((b) => b.club_id === club.id);
+    const log = data.log.filter(
+      (e) => e.before?.club_id === club.id || e.after?.club_id === club.id,
+    );
+    return html`<tr class="club-details">
+      <td colspan="9">
+        <h3>Zahlungen von ${club.name}</h3>
+        ${
+          bookings.length
+            ? this.renderBookingTable(bookings, data, false)
+            : html`<p class="empty">Noch keine Zahlungen.</p>`
+        }
+        <h3>Änderungen</h3>
+        ${this.renderLog(log)}
+      </td>
     </tr>`;
+  }
+
+  /** The form to record a booking, e.g. a transfer from the bank statement. */
+  renderBookingForm(clubs: ClubOverview[]) {
+    return html`<form
+      class="booking-form no-print"
+      @submit=${this.onBookingSubmit}
+    >
+      <b>Buchung erfassen</b>
+      <label
+        >Betrag
+        <input
+          class="inline num ${this.formInvalid ? "invalid" : ""}"
+          name="amount"
+          type="text"
+          inputmode="decimal"
+          autocomplete="off"
+          placeholder="45,00"
+          title="Negativ für ausgehendes Geld, z. B. -20 für eine Rückzahlung"
+          aria-invalid=${this.formInvalid ? "true" : "false"}
+          required
+          @input=${this.onFormInput}
+      /></label>
+      <label
+        >Datum
+        <input class="inline" name="date" type="date" .value=${todayIso()} required
+      /></label>
+      <label
+        >Verein
+        <select class="inline" name="state">
+          ${this.renderStateOptions(clubs, UNASSIGNED, false)}
+        </select></label
+      >
+      <label class="grow"
+        >Notiz
+        <input
+          class="inline"
+          name="note"
+          type="text"
+          autocomplete="off"
+          placeholder="z. B. Verwendungszweck"
+      /></label>
+      <button class="btn small primary" ?disabled=${this.saving}>Buchen</button>
+    </form>`;
+  }
+
+  /**
+   * The choices whom a booking counts for: no club, ignored (only with
+   * `withIgnored`) or a club.
+   */
+  renderStateOptions(
+    clubs: ClubOverview[],
+    selected: string,
+    withIgnored: boolean,
+  ) {
+    const sorted = [...clubs].sort((a, b) =>
+      a.name.localeCompare(b.name, "de"),
+    );
+    const options = sorted.map(
+      (club) =>
+        html`<option value=${club.id} ?selected=${selected === club.id}>
+          ${club.name}
+        </option>`,
+    );
+    return html`<option value=${UNASSIGNED} ?selected=${selected === UNASSIGNED}>
+        nicht zugeordnet
+      </option>
+      ${
+        withIgnored
+          ? html`<option value=${IGNORED} ?selected=${selected === IGNORED}>
+              ignoriert
+            </option>`
+          : nothing
+      }
+      ${options}`;
+  }
+
+  /** Bookings no club was found for yet, to assign or ignore. */
+  renderUnassigned(unassigned: ListedBooking[], data: PaymentsData) {
+    if (!unassigned.length) {
+      return nothing;
+    }
+    return html`<h2 class="section">Nicht zugeordnete Buchungen</h2>
+      ${this.renderBookingTable(unassigned, data, false, true)}`;
+  }
+
+  /**
+   * Bookings with their edit and delete buttons; `showState` adds whom each
+   * counts for, `assign` a club choice to assign or ignore it.
+   */
+  renderBookingTable(
+    bookings: ListedBooking[],
+    data: PaymentsData,
+    showState: boolean,
+    assign = false,
+  ) {
+    if (!bookings.length) {
+      return html`<p class="empty">Noch keine Buchungen.</p>`;
+    }
+    return html`<table class="dense fit">
+      <thead>
+        <tr>
+          <th>Datum</th>
+          <th class="num">Betrag</th>
+          ${showState ? html`<th>Verein</th>` : nothing}
+          <th>Notiz</th>
+          ${assign ? html`<th class="no-print">Zuordnen</th>` : nothing}
+          <th class="no-print"></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${repeat(
+          bookings,
+          (b) => b.id,
+          (b) =>
+            this.editingBooking === b.id
+              ? this.renderBookingEditor(b, data, showState, assign)
+              : html`<tr>
+                  <td class="nowrap">${formatDate(b.date)}</td>
+                  <td class="num nowrap ${b.amount < 0 ? "negative" : ""}">
+                    ${formatMoney(b.amount)}
+                  </td>
+                  ${
+                    showState
+                      ? html`<td class=${b.club_id ? "" : "muted"}>
+                          ${bookingStateLabel(b)}
+                        </td>`
+                      : nothing
+                  }
+                  <td>${b.note}</td>
+                  ${
+                    assign
+                      ? html`<td class="nowrap no-print">
+                          <select
+                            class="inline"
+                            data-assign=${b.id}
+                            aria-label="Verein für die Buchung"
+                          >
+                            ${this.renderStateOptions(data.clubs, UNASSIGNED, false)}
+                          </select>
+                          <button
+                            class="btn small"
+                            data-id=${b.id}
+                            ?disabled=${this.saving}
+                            @click=${this.onAssignClick}
+                          >
+                            Zuordnen
+                          </button>
+                          <button
+                            class="btn small"
+                            data-id=${b.id}
+                            title="Hat nichts mit der Veranstaltung zu tun, z. B. Kontoführungsgebühren"
+                            ?disabled=${this.saving}
+                            @click=${this.onIgnoreClick}
+                          >
+                            Ignorieren
+                          </button>
+                        </td>`
+                      : nothing
+                  }
+                  <td class="actions no-print">
+                    <button
+                      class="icon-btn"
+                      data-id=${b.id}
+                      title="Bearbeiten"
+                      aria-label="Buchung bearbeiten"
+                      ?disabled=${this.saving}
+                      @click=${this.onEditBookingClick}
+                    >
+                      edit
+                    </button>
+                    <button
+                      class="icon-btn"
+                      data-id=${b.id}
+                      title="Löschen"
+                      aria-label="Buchung löschen"
+                      ?disabled=${this.saving}
+                      @click=${this.onDeleteBookingClick}
+                    >
+                      delete
+                    </button>
+                  </td>
+                </tr>`,
+        )}
+      </tbody>
+    </table>`;
+  }
+
+  /** A booking's row while it is edited. */
+  renderBookingEditor(
+    b: ListedBooking,
+    data: PaymentsData,
+    showState: boolean,
+    assign: boolean,
+  ) {
+    const state = b.ignored ? IGNORED : (b.club_id ?? UNASSIGNED);
+    const select = html`<select class="inline" name="state" aria-label="Verein">
+      ${this.renderStateOptions(data.clubs, state, true)}
+    </select>`;
+    return html`<tr class="editing">
+      <td>
+        <input
+          class="inline"
+          name="date"
+          type="date"
+          aria-label="Datum"
+          .value=${b.date}
+        />
+      </td>
+      <td class="num">
+        <input
+          class="inline num"
+          name="amount"
+          type="text"
+          inputmode="decimal"
+          autocomplete="off"
+          aria-label="Betrag in Euro, negativ für ausgehendes Geld"
+          .value=${amountInputValue(b.amount)}
+          @keydown=${this.onBookingKeydown}
+        />
+      </td>
+      ${showState ? html`<td>${select}</td>` : nothing}
+      <td>
+        <input
+          class="inline"
+          name="note"
+          type="text"
+          autocomplete="off"
+          aria-label="Notiz"
+          .value=${b.note}
+          @keydown=${this.onBookingKeydown}
+        />
+        ${showState ? nothing : select}
+      </td>
+      ${assign ? html`<td></td>` : nothing}
+      <td class="actions">
+        <button
+          class="icon-btn ok"
+          data-id=${b.id}
+          title="Speichern (Enter)"
+          aria-label="Speichern"
+          ?disabled=${this.saving}
+          @click=${this.onSaveBookingClick}
+        >
+          check
+        </button>
+        <button
+          class="icon-btn"
+          title="Abbrechen (Esc)"
+          aria-label="Abbrechen"
+          ?disabled=${this.saving}
+          @click=${this.onCancelBookingClick}
+        >
+          close
+        </button>
+      </td>
+    </tr>`;
+  }
+
+  /** Changes to bookings, newest first: who, when, what, before and after. */
+  renderLog(log: BookingLogEntry[]) {
+    if (!log.length) {
+      return html`<p class="empty">Noch keine Änderungen.</p>`;
+    }
+    const rows = log.map(
+      (entry) => html`<tr>
+        <td class="nowrap">${formatDateTime(entry.at)}</td>
+        <td>
+          ${entry.user_name ?? html`<span class="muted">System</span>`}
+          ${
+            entry.roles.length
+              ? html`<span class="muted small"
+                  >(${entry.roles.map((r) => roleNames[r]).join(", ")})</span
+                >`
+              : nothing
+          }
+        </td>
+        <td class="nowrap">${actionLabels[entry.action]}</td>
+        <td>${this.renderLogChange(entry)}</td>
+      </tr>`,
+    );
+    return html`<table class="dense fit">
+      <thead>
+        <tr>
+          <th>Zeit</th>
+          <th>Wer</th>
+          <th>Was</th>
+          <th>Vorher → Nachher</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+      </tbody>
+    </table>`;
+  }
+
+  renderLogChange(entry: BookingLogEntry) {
+    if (!entry.before && entry.after) {
+      return describeBooking(entry.after);
+    }
+    if (entry.before && !entry.after) {
+      return html`<s>${describeBooking(entry.before)}</s>`;
+    }
+    const changes = bookingChanges(entry.before, entry.after).map(
+      (c) =>
+        html`<li>
+          <span class="muted">${c.field}:</span> ${c.before || "–"} →
+          ${c.after || "–"}
+        </li>`,
+    );
+    return html`<ul class="changes">
+      ${changes}
+    </ul>`;
   }
 
   /** Red if owed, green if settled, a blue chip if overpaid. */
@@ -781,8 +1224,8 @@ export default class CupViewAdminPayments extends LitElement {
     let changed = false;
     for (const club of (this.data.value ?? this.lastData)?.clubs ?? []) {
       const current = byId.get(club.id);
-      if (current && (current.payment ?? null) !== (club.payment ?? null)) {
-        club.payment = current.payment;
+      if (current && (current.paid ?? null) !== (club.paid ?? null)) {
+        club.paid = current.paid;
         changed = true;
       }
     }
@@ -802,7 +1245,7 @@ export default class CupViewAdminPayments extends LitElement {
     }
     const id = (e.currentTarget as HTMLElement).dataset.id!;
     const seq = ++this.editSeq;
-    const before = this.findClub(id)?.payment ?? null;
+    const before = this.findClub(id)?.paid ?? null;
     this.error = null;
     // Open the editor with the current total, not the one from page load.
     let fresh: ClubOverview | null = null;
@@ -815,14 +1258,14 @@ export default class CupViewAdminPayments extends LitElement {
     if (seq !== this.editSeq || this.saving || !club) {
       return;
     }
-    if (fresh && !samePayment(fresh.payment, before)) {
+    if (fresh && !samePayment(fresh.paid, before)) {
       this.notice = {
-        text: `Betrag von ${club.name} wurde inzwischen geändert: jetzt ${formatMoney(fresh.payment ?? 0)}`,
+        text: `Betrag von ${club.name} wurde inzwischen geändert: jetzt ${formatMoney(fresh.paid ?? 0)}`,
         tone: "warn",
       };
     }
-    this.editBase = club.payment ?? null;
-    this.editText = amountInputValue(club.payment);
+    this.editBase = club.paid ?? null;
+    this.editText = amountInputValue(club.paid);
     this.invalid = false;
     this.editing = id;
   }
@@ -883,32 +1326,46 @@ export default class CupViewAdminPayments extends LitElement {
     // Keep the typed text if saving is refused.
     this.editText = input.value;
     try {
-      // The amount replaces the total: don't overwrite a payment recorded
-      // elsewhere since the editor opened.
-      const current = (await this.reloadPayments(club.id)).payment ?? null;
+      // A new total books the difference to the current one: don't book
+      // against a payment recorded elsewhere since the editor opened.
+      const current = (await this.reloadPayments(club.id)).paid ?? 0;
       if (!parsed.add && !samePayment(current, this.editBase)) {
         this.editBase = current;
-        this.error = `Nicht gespeichert: Der gezahlte Betrag von „${club.name}“ wurde inzwischen auf ${formatMoney(current ?? 0)} geändert. Bitte die Eingabe prüfen (oder mit „+“ addieren) und erneut speichern.`;
+        this.error = `Nicht gespeichert: Der gezahlte Betrag von „${club.name}“ wurde inzwischen auf ${formatMoney(current)} geändert. Bitte die Eingabe prüfen (oder mit „+“ addieren) und erneut speichern.`;
         return;
       }
       const amount = parsed.add
-        ? Math.round(((current ?? 0) + parsed.amount) * 100) / 100
-        : parsed.amount;
-      await unwrap(
-        client.setPayment({
-          body: { club_id: club.id, amount },
+        ? parsed.amount
+        : Math.round((parsed.amount - current) * 100) / 100;
+      this.editing = null;
+      if (Math.abs(amount) < CENT) {
+        this.notice = {
+          text: `Unverändert: ${club.name} ${formatMoney(current)}`,
+          tone: "ok",
+        };
+        return;
+      }
+      const { id } = await unwrap(
+        client.createBooking({
+          body: {
+            club_id: club.id,
+            amount,
+            date: todayIso(),
+            note: parsed.add
+              ? ""
+              : `Gezahlt gesamt auf ${formatMoney(parsed.amount)} gesetzt`,
+          },
         }),
       );
-      club.payment = amount;
-      this.editing = null;
+      club.paid = Math.round((current + amount) * 100) / 100;
       this.notice = {
-        text: `Gespeichert: ${club.name} ${formatMoney(current ?? 0)} → ${formatMoney(amount)}`,
+        text: `Gebucht: ${club.name} ${formatMoney(amount)} (${formatMoney(current)} → ${formatMoney(club.paid)})`,
         tone: "ok",
-        undo: samePayment(current, amount)
-          ? undefined
-          : { clubId: club.id, amount: current ?? 0, expected: amount },
+        undo: { bookingId: id, clubName: club.name },
       };
+      this.data.run();
     } catch (error) {
+      this.editing = club.id;
       this.error = `Zahlung für „${club.name}“ nicht gespeichert: ${errorMessage(error)}`;
     } finally {
       this.saving = false;
@@ -920,39 +1377,237 @@ export default class CupViewAdminPayments extends LitElement {
     }
   }
 
-  /** Sets the paid amount back, unless it was changed again meanwhile. */
+  /** Deletes the booking just recorded; the payment log keeps it. */
   async onUndoClick() {
     const undo = this.notice?.undo;
-    const club = this.findClub(undo?.clubId);
-    if (!undo || !club || this.saving) {
+    if (!undo || this.saving) {
       return;
     }
+    await this.write(
+      () =>
+        unwrap(client.deleteBooking({ body: { booking_id: undo.bookingId } })),
+      `Rückgängig für „${undo.clubName}“ fehlgeschlagen`,
+      {
+        text: `Rückgängig gemacht: Buchung für ${undo.clubName} gelöscht`,
+        tone: "ok",
+      },
+    );
+  }
+
+  /**
+   * Runs a change to bookings and reloads the page's data. Shows `failText`
+   * with the reason if it fails, `notice` if it worked; returns whether it did.
+   */
+  async write(
+    change: () => Promise<unknown>,
+    failText: string,
+    notice: Notice | null = null,
+  ) {
     this.saving = true;
     this.error = null;
     try {
-      const current = (await this.reloadPayments(club.id)).payment ?? null;
-      if (!samePayment(current, undo.expected)) {
-        this.notice = null;
-        this.error = `Nicht rückgängig gemacht: Der gezahlte Betrag von „${club.name}“ wurde inzwischen auf ${formatMoney(current ?? 0)} geändert.`;
-        return;
-      }
-      await unwrap(
-        client.setPayment({
-          body: { club_id: club.id, amount: undo.amount },
-        }),
-      );
-      // An editor open for this club keeps its old base: saving it is then
-      // refused as a conflict, so nothing is overwritten unseen.
-      club.payment = undo.amount;
-      this.notice = {
-        text: `Rückgängig gemacht: ${club.name} wieder ${formatMoney(undo.amount)}`,
-        tone: "ok",
-      };
+      await change();
+      this.notice = notice;
+      return true;
     } catch (error) {
-      this.error = `Rückgängig für „${club.name}“ fehlgeschlagen: ${errorMessage(error)}`;
+      this.error = `${failText}: ${errorMessage(error)}`;
+      return false;
     } finally {
       this.saving = false;
+      this.data.run();
     }
+  }
+
+  findBooking(id: string | undefined) {
+    return (this.data.value ?? this.lastData)?.bookings.find(
+      (b) => b.id === id,
+    );
+  }
+
+  onFormInput() {
+    this.formInvalid = false;
+  }
+
+  async onBookingSubmit(e: SubmitEvent) {
+    e.preventDefault();
+    const form = e.currentTarget as HTMLFormElement;
+    const field = (name: string) =>
+      (form.elements.namedItem(name) as HTMLInputElement | null)?.value ?? "";
+    const amount = parseBookingAmount(field("amount"));
+    if (amount === null) {
+      this.formInvalid = true;
+      this.error =
+        "Bitte einen Betrag ungleich 0 mit höchstens zwei Nachkommastellen eingeben, z. B. 120,50 oder -20 für eine Rückzahlung.";
+      return;
+    }
+    const clubId = field("state");
+    const club = this.findClub(clubId);
+    const done = await this.write(
+      () =>
+        unwrap(
+          client.createBooking({
+            body: {
+              amount,
+              date: field("date") || todayIso(),
+              note: field("note"),
+              club_id: club ? club.id : null,
+            },
+          }),
+        ),
+      "Buchung nicht gespeichert",
+      {
+        text: `Gebucht: ${formatMoney(amount)} ${club ? `für ${club.name}` : "(nicht zugeordnet)"}`,
+        tone: "ok",
+      },
+    );
+    if (done) {
+      form.reset();
+      const date = form.elements.namedItem("date") as HTMLInputElement | null;
+      if (date) {
+        date.value = todayIso();
+      }
+    }
+  }
+
+  /** The booking `b` with `changes`, as the API takes it. */
+  bookingInput(b: ListedBooking, changes: Partial<schemas.BookingInput> = {}) {
+    return {
+      amount: b.amount,
+      date: b.date,
+      note: b.note,
+      club_id: b.club_id ?? null,
+      ignored: b.ignored,
+      ...changes,
+    };
+  }
+
+  async editBooking(
+    b: ListedBooking,
+    changes: Partial<schemas.BookingInput>,
+    notice: string,
+  ) {
+    const done = await this.write(
+      () =>
+        unwrap(
+          client.editBooking({
+            body: { booking_id: b.id, booking: this.bookingInput(b, changes) },
+          }),
+        ),
+      "Buchung nicht gespeichert",
+      { text: notice, tone: "ok" },
+    );
+    if (done) {
+      this.editingBooking = null;
+    }
+  }
+
+  async onAssignClick(e: Event) {
+    const b = this.findBooking((e.currentTarget as HTMLElement).dataset.id);
+    const select = (e.currentTarget as HTMLElement)
+      .closest("td")
+      ?.querySelector("select");
+    const club = this.findClub(select?.value);
+    if (!b || this.saving) {
+      return;
+    }
+    if (!club) {
+      this.error = "Bitte zuerst einen Verein wählen.";
+      select?.focus();
+      return;
+    }
+    await this.editBooking(
+      b,
+      { club_id: club.id, ignored: false },
+      `Zugeordnet: ${formatMoney(b.amount)} an ${club.name}`,
+    );
+  }
+
+  async onIgnoreClick(e: Event) {
+    const b = this.findBooking((e.currentTarget as HTMLElement).dataset.id);
+    if (!b || this.saving) {
+      return;
+    }
+    await this.editBooking(
+      b,
+      { club_id: null, ignored: true },
+      `Ignoriert: ${describeBooking(b)}`,
+    );
+  }
+
+  onEditBookingClick(e: Event) {
+    this.editingBooking = (e.currentTarget as HTMLElement).dataset.id ?? null;
+    this.error = null;
+  }
+
+  onCancelBookingClick() {
+    this.editingBooking = null;
+  }
+
+  onBookingKeydown(e: KeyboardEvent) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      this.saveBooking(e.currentTarget as HTMLElement);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      this.onCancelBookingClick();
+    }
+  }
+
+  onSaveBookingClick(e: Event) {
+    this.saveBooking(e.currentTarget as HTMLElement);
+  }
+
+  /** Saves the editor in the row of `from`; another table may show it too. */
+  async saveBooking(from: HTMLElement) {
+    const row = from.closest("tr");
+    const b = this.findBooking(this.editingBooking ?? undefined);
+    if (!row || !b || this.saving) {
+      return;
+    }
+    const field = (name: string) =>
+      row.querySelector<HTMLInputElement | HTMLSelectElement>(`[name=${name}]`);
+    const amountInput = field("amount");
+    const amount = parseBookingAmount(amountInput?.value ?? "");
+    if (amount === null) {
+      amountInput?.classList.add("invalid");
+      amountInput?.focus();
+      this.error =
+        "Bitte einen Betrag ungleich 0 mit höchstens zwei Nachkommastellen eingeben, z. B. 120,50 oder -20.";
+      return;
+    }
+    const state = field("state")?.value ?? UNASSIGNED;
+    await this.editBooking(
+      b,
+      {
+        amount,
+        date: field("date")?.value || b.date,
+        note: field("note")?.value ?? "",
+        club_id: state === UNASSIGNED || state === IGNORED ? null : state,
+        ignored: state === IGNORED,
+      },
+      "Buchung gespeichert",
+    );
+  }
+
+  async onDeleteBookingClick(e: Event) {
+    const b = this.findBooking((e.currentTarget as HTMLElement).dataset.id);
+    if (
+      !b ||
+      this.saving ||
+      !confirm(`Buchung löschen?\n\n${describeBooking(b)}`)
+    ) {
+      return;
+    }
+    await this.write(
+      () => unwrap(client.deleteBooking({ body: { booking_id: b.id } })),
+      "Buchung nicht gelöscht",
+      { text: `Gelöscht: ${describeBooking(b)}`, tone: "ok" },
+    );
+  }
+
+  onToggleClubClick(e: Event) {
+    const id = (e.currentTarget as HTMLElement).dataset.id ?? null;
+    this.openClub = this.openClub === id ? null : id;
   }
 
   onReloadClick() {

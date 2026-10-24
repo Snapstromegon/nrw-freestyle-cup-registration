@@ -95,7 +95,7 @@ pub struct DemoClub {
     pub name: String,
     /// Name of the owning user.
     pub owner: String,
-    /// Amount in € the club has paid.
+    /// Amount in € the club has paid, as one payment.
     pub payment: Option<f64>,
     #[serde(default)]
     pub starters: Vec<DemoStarter>,
@@ -409,15 +409,28 @@ impl DemoData {
             })?;
             let club_id = Uuid::now_v7();
             sqlx::query!(
-                "INSERT INTO clubs (id, name, owner_id, payment) VALUES (?, ?, ?, ?)",
+                "INSERT INTO clubs (id, name, owner_id) VALUES (?, ?, ?)",
                 club_id,
                 club.name,
                 owner_id,
-                club.payment,
             )
             .execute(db)
             .await
             .map_err(|e| format!("Couldn't insert club {}: {e}", club.name))?;
+            if let Some(amount) = club.payment {
+                let booking_id = Uuid::now_v7();
+                let date = OffsetDateTime::now_utc().date();
+                sqlx::query!(
+                    "INSERT INTO bookings (id, amount, date, note, club_id) VALUES (?, ?, ?, 'Überweisung', ?)",
+                    booking_id,
+                    amount,
+                    date,
+                    club_id,
+                )
+                .execute(db)
+                .await
+                .map_err(|e| format!("Couldn't insert the payment of {}: {e}", club.name))?;
+            }
             sqlx::query!(
                 "UPDATE users SET club_id = ? WHERE id = ?",
                 club_id,

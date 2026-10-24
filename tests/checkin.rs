@@ -277,8 +277,8 @@ async fn list_clubs_shows_clubs_with_owners_to_admins(db: SqlitePool) {
     let admin = app.create_admin().await;
     let response = app
         .post(
-            "/api/command/set_payment",
-            json!({ "club_id": club_id, "amount": 42.5 }),
+            "/api/command/create_booking",
+            json!({ "club_id": club_id, "amount": 42.5, "date": "2027-03-01" }),
             Some(&admin),
         )
         .await;
@@ -296,7 +296,7 @@ async fn list_clubs_shows_clubs_with_owners_to_admins(db: SqlitePool) {
     // Sorted by name.
     assert_eq!(clubs.len(), 2);
     assert_eq!(clubs[0]["id"], other_club_id.to_string());
-    assert_eq!(clubs[0]["payment"], Value::Null);
+    assert_eq!(clubs[0]["paid"], 0.0);
     let rsv = &clubs[1];
     let owner_id: Uuid = rsv["owner_id"].as_str().unwrap().parse().unwrap();
     assert_eq!(
@@ -304,7 +304,7 @@ async fn list_clubs_shows_clubs_with_owners_to_admins(db: SqlitePool) {
         json!({
             "id": club_id,
             "name": "RSV",
-            "payment": 42.5,
+            "paid": 42.5,
             "owner_id": owner_id,
             "contacts": {
                 "contact_name": "Owner",

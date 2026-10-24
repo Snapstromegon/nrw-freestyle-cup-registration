@@ -153,7 +153,7 @@ const buildClubRows = (
         checked: 0,
         checkedIn: 0,
         due: club.amount_due?.total ?? 0,
-        paid: club.payment ?? 0,
+        paid: club.paid ?? 0,
         open: 0,
       },
     ]),
@@ -1250,9 +1250,9 @@ export default class CupViewAdmin extends LitElement {
         </td>
         <td class="num">
           ${
-            club.payment === null || club.payment === undefined
+            club.paid === null || club.paid === undefined
               ? html`<span class="zero">–</span>`
-              : formatMoney(club.payment)
+              : formatMoney(club.paid)
           }
         </td>
         <td class="num">${openAmount(row.open, row.due)}</td>

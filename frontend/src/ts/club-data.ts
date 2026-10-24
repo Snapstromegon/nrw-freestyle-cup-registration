@@ -120,7 +120,7 @@ export const paymentState = (data: Pick<ClubData, "club">) => {
   const startFees = due?.start_fees ?? 0;
   const juryFee = due?.jury_fee ?? 0;
   const amount = due?.total ?? 0;
-  const paid = data.club.payment ?? 0;
+  const paid = data.club.paid ?? 0;
   const open = Math.round((amount - paid) * 100) / 100;
   return { startFees, juryFee, amount, paid, open };
 };

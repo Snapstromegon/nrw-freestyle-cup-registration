@@ -5,6 +5,7 @@ use tracing::instrument;
 use uuid::Uuid;
 
 use crate::{
+    bookings::paid_by_club,
     competition::Competition,
     fees::{AmountDue, fees_by_club},
     http_server::{ClientError, HttpError, HttpServerOptions, extractor::auth::Granted},
@@ -18,8 +19,8 @@ use crate::{
 pub struct ClubOverview {
     id: Uuid,
     name: String,
-    /// The amount the club has paid so far; only with club balances.
-    payment: Option<f64>,
+    /// The sum of the club's payments; only with club balances.
+    paid: Option<f64>,
     owner_id: Uuid,
     /// Only with the permission to see club contacts.
     contacts: Option<ClubContacts>,
@@ -77,7 +78,6 @@ pub async fn list_clubs(
         SELECT
             clubs.id as "id!: Uuid",
             clubs.name,
-            clubs.payment,
             clubs.owner_id as "owner_id!: Uuid",
             users.name as owner_name,
             users.email as owner_email,
@@ -92,6 +92,7 @@ pub async fn list_clubs(
     .fetch_all(&db)
     .await?;
     let competition = Competition::current(&db).await?;
+    let paid = paid_by_club(&db).await?;
     let mut fees = fees_by_club(&db, competition.as_ref(), http_options.jury_registration).await?;
     let clubs = rows
         .into_iter()
@@ -103,7 +104,7 @@ pub async fn list_clubs(
                 jury: club_fees.jury.filter(|_| jury),
                 id: row.id,
                 name: row.name,
-                payment: row.payment.filter(|_| balances),
+                paid: balances.then(|| paid.get(&row.id).copied().unwrap_or(0.0)),
                 owner_id: row.owner_id,
                 contacts: contacts.then(|| ClubContacts {
                     contact_name: row.owner_name,

@@ -188,6 +188,7 @@ export default class CupClubStepPayment extends LitElement {
           : nothing
       }
       ${open >= 0.01 ? this.renderTransfer(open) : nothing}
+      ${this.renderPayments()}
 
       <p class="banner info">
         <i class="material-icon">schedule</i>
@@ -199,6 +200,44 @@ export default class CupClubStepPayment extends LitElement {
       </p>
 
       ${this.renderBreakdown(startFees)}`;
+  }
+
+  /** The payments we recorded for the club; refunds are negative. */
+  renderPayments() {
+    const payments = this.data.club.payments ?? [];
+    if (!payments.length) {
+      return nothing;
+    }
+    const rows = payments.map(
+      (p) => html`<tr>
+        <td>${formatDate(p.date)}</td>
+        <td>
+          ${p.amount < 0 ? html`<b>Rückzahlung</b> ` : nothing}${p.note}
+        </td>
+        <td class="num">${formatMoney(p.amount)}</td>
+      </tr>`,
+    );
+    return html`<section class="card">
+      <header><h3>Eure Zahlungen</h3></header>
+      <table>
+        <thead>
+          <tr>
+            <th>Datum</th>
+            <th>Notiz</th>
+            <th class="num">Betrag</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="2">Bezahlt</td>
+            <td class="num">${formatMoney(this.data.club.paid ?? 0)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </section>`;
   }
 
   renderTransfer(open: number) {

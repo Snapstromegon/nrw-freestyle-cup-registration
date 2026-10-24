@@ -78,13 +78,13 @@ const group = (id, members, fields = {}) => ({
   ...fields,
 });
 
-/** A club that paid `payment` and owes `due` (start fees only). */
-const club = (payment, due = 0) => ({
+/** A club that paid `paid` and owes `due` (start fees only). */
+const club = (paid, due = 0) => ({
   id: CLUB,
   name: "RSV",
   code: "RS-1",
   owner_id: "u",
-  payment,
+  paid,
   amount_due: { start_fees: due, jury_fee: 0, total: due },
 });
 

@@ -955,7 +955,7 @@ export default class CupViewAdminCheckIn extends LitElement {
       return nothing;
     }
     const info = this.clubInfos.find((info) => info.id === club.id);
-    const payment = info?.payment ?? 0;
+    const payment = info?.paid ?? 0;
     const due = info?.amount_due?.total ?? 0;
     const open = Math.round((due - payment) * 100) / 100;
     const breakdown = info?.amount_due?.jury_fee

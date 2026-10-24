@@ -8,8 +8,10 @@ mod add_final;
 mod add_jury_category;
 mod add_timeplan_entry;
 mod assign_judge;
+mod create_booking;
 mod create_club;
 mod create_club_group;
+mod delete_booking;
 mod delete_category;
 mod delete_club_group;
 mod delete_club_judge;
@@ -17,6 +19,7 @@ mod delete_club_starter;
 mod delete_final;
 mod delete_jury_category;
 mod delete_timeplan_entry;
+mod edit_booking;
 mod edit_category;
 mod edit_club_act;
 mod edit_club_judge;
@@ -53,7 +56,6 @@ mod set_final_published;
 mod set_jury_category_order;
 mod set_jury_deployments_override;
 mod set_jury_plan_published;
-mod set_payment;
 mod set_photo_hidden;
 mod set_song_checked;
 mod set_user_roles;
@@ -102,7 +104,9 @@ pub fn get_command_router() -> OpenApiRouter {
         .routes(routes!(edit_club_act::edit_club_act))
         .routes(routes!(replace_act_rider::replace_act_rider))
         .routes(routes!(save_act_song::save_act_song))
-        .routes(routes!(set_payment::set_payment))
+        .routes(routes!(create_booking::create_booking))
+        .routes(routes!(edit_booking::edit_booking))
+        .routes(routes!(delete_booking::delete_booking))
         .routes(routes!(set_photo_hidden::set_photo_hidden))
         .routes(routes!(set_song_checked::set_song_checked))
         .routes(routes!(set_user_roles::set_user_roles))

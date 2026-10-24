@@ -5,6 +5,7 @@ use tracing::instrument;
 use uuid::Uuid;
 
 use crate::{
+    bookings::{Payment, payments_of_club, round_cents},
     competition::Competition,
     fees::{AmountDue, fees_of_club},
     http_server::{ClientError, HttpError, HttpServerOptions, extractor::auth::Auth},
@@ -19,7 +20,12 @@ pub struct Club {
     id: Uuid,
     name: String,
     owner_id: Uuid,
-    payment: Option<f64>,
+    /// The sum of the club's payments. Only for the club itself and the
+    /// organizer.
+    paid: Option<f64>,
+    /// The club's payments, oldest first; refunds are negative. Only for the
+    /// club itself and the organizer.
+    payments: Option<Vec<Payment>>,
     /// Short code for the transfer reference, e.g. "EV-K7Q3"; stays the
     /// same when the club is renamed.
     code: String,
@@ -77,7 +83,6 @@ pub async fn get_club(
             clubs.id as "id!: Uuid",
             clubs.name,
             clubs.owner_id as "owner_id: Uuid",
-            clubs.payment,
             users.name as "owner_name?: String",
             users.email as "owner_email?: String",
             COALESCE(clubs.responsible_name, users.name) as "responsible_name?: String",
@@ -96,7 +101,8 @@ pub async fn get_club(
             id: row.id,
             name: row.name,
             owner_id: row.owner_id,
-            payment: row.payment,
+            paid: None,
+            payments: None,
             code: club_code(&row.id),
             owner_name: row.owner_name,
             owner_email: row.owner_email,
@@ -114,6 +120,9 @@ pub async fn get_club(
                 club.id,
             )
             .await?;
+            let payments = payments_of_club(&db, club.id).await?;
+            club.paid = Some(round_cents(payments.iter().map(|p| p.amount).sum()));
+            club.payments = Some(payments);
             club.amount_due = Some(fees.amount_due);
             club.jury = fees.jury;
         } else {
