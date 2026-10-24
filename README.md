@@ -118,7 +118,7 @@ waveform marks where the act's time runs out.
   the server player) and start it with a login with the Musiksteuerung role:
 
   ```sh
-  CUP_SERVER=https://anmeldung.example.org CUP_EMAIL=musik@example.org \
+  CUP_SERVER=https://anmeldung.example.org CUP_EMAIL=musiksteuerung@example.org \
     CUP_PASSWORD=… target/release/cup-player
   ```
 

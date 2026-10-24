@@ -6,8 +6,7 @@
 # which DELETES the configured database, recreates it and applies this file
 # (see src/demo.rs). Tests use it as well.
 #
-# Every user's password is their first name, e.g. "Maria". Logins:
-# - admin@example.org             admin
+# Every club user's password is their first name, e.g. "Maria". Logins:
 # - maria.wagner@example.org      SSV Nümbrecht, paid in full, live timeplan acts,
 #                                 owns a small group across clubs, all checked in
 # - jonas.becker@example.org      RSC Köln, paid partially, owns a large group,
@@ -18,13 +17,15 @@
 # - tim.neumann@example.org       verified, no club yet
 # - paul.hoffmann@example.org     email not verified
 #
-# One login per role of the organizer team (password in brackets):
-# - juryleitung@example.org       Juryleitung (Juryleitung)
-# - kasse@example.org             Kasse (Kasse)
-# - checkin@example.org           Check-in (Checkin)
-# - musik@example.org             Musiksteuerung (Musik), e.g. for players
-# - moderation@example.org        Moderation (Moderation)
-# - musikpruefung@example.org     Musikprüfung (Musikpruefung)
+# One login per role of the organizer team; the password is the part before
+# the @, e.g. kasse@example.org / kasse:
+# - admin@example.org             Admin
+# - juryleitung@example.org       Juryleitung
+# - kasse@example.org             Kasse
+# - checkin@example.org           Check-in
+# - musiksteuerung@example.org    Musiksteuerung, e.g. for players
+# - moderation@example.org        Moderation
+# - musikpruefung@example.org     Musikprüfung
 #
 # Links with the fixed tokens below:
 # - /verify_email?token=00000000-0000-4000-8000-000000000001
@@ -67,44 +68,44 @@ reference = "Startgeld"
 [[users]]
 name = "Admin"
 email = "admin@example.org"
-password = "Admin"
+password = "admin"
 roles = ["admin"]
 
 # One account per role of the organizer team (ADR 0003).
 [[users]]
 name = "Juryleitung"
 email = "juryleitung@example.org"
-password = "Juryleitung"
+password = "juryleitung"
 roles = ["jury_lead"]
 
 [[users]]
 name = "Kasse"
 email = "kasse@example.org"
-password = "Kasse"
+password = "kasse"
 roles = ["treasurer"]
 
 [[users]]
 name = "Check-in"
 email = "checkin@example.org"
-password = "Checkin"
+password = "checkin"
 roles = ["check_in"]
 
 [[users]]
 name = "Musiksteuerung"
-email = "musik@example.org"
-password = "Musik"
+email = "musiksteuerung@example.org"
+password = "musiksteuerung"
 roles = ["music_control"]
 
 [[users]]
 name = "Moderation"
 email = "moderation@example.org"
-password = "Moderation"
+password = "moderation"
 roles = ["moderation"]
 
 [[users]]
 name = "Musikprüfung"
 email = "musikpruefung@example.org"
-password = "Musikpruefung"
+password = "musikpruefung"
 roles = ["music_check"]
 
 [[users]]
