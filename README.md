@@ -66,7 +66,7 @@ never open another club's registration: that stays with the club contact.
 | Role | Can |
 |---|---|
 | Admin | Everything, including granting roles |
-| Juryleitung | Jury categories, judges, the jury plan, finals placements, the moderation screen |
+| Juryleitung | Jury categories, judges, the jury plan, finals placements, the medals, the moderation screen |
 | Kasse | Payments, with the clubs, their contacts and riders |
 | Check-in | The check-in desk with birthdates and club balances, the medals |
 | Musiksteuerung | The music control, players, award ceremonies, the moderation screen and checking riders in at the start |
