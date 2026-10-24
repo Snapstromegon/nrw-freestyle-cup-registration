@@ -133,12 +133,14 @@ impl Role {
         use Permission as P;
         match self {
             Role::Admin => Permission::ALL,
-            // The jury lead follows the event on the moderation screen.
+            // The jury lead follows the event on the moderation screen and
+            // prepares the medals for the results.
             Role::JuryLead => &[
                 P::ViewClubs,
                 P::ViewClubContacts,
                 P::ManageJury,
                 P::ManageResults,
+                P::ViewMedals,
                 P::ViewModeration,
                 P::ViewInternalEntries,
             ],
@@ -227,6 +229,7 @@ mod tests {
                     P::ViewClubContacts,
                     P::ManageJury,
                     P::ManageResults,
+                    P::ViewMedals,
                     P::ViewModeration,
                     P::ViewInternalEntries,
                 ],

@@ -228,19 +228,19 @@ export default class CupAdminFinals extends LitElement {
           Kategorien eingeplant.</span
         >
         <span class="spacer"></span>
-        <button
-          class="btn primary small"
-          title=${this.editing ? "Erst speichern oder abbrechen" : nothing}
-          ?disabled=${
-            !finals ||
-            this.busy ||
-            this.editing !== null ||
-            !can(this.user, "plan_competition")
-          }
-          @click=${this.startNew}
-        >
-          <span class="material-icon">add</span> Neues Finale
-        </button>
+        ${
+          // The jury lead only places the finals.
+          can(this.user, "plan_competition")
+            ? html`<button
+                class="btn primary small"
+                title=${this.editing ? "Erst speichern oder abbrechen" : nothing}
+                ?disabled=${!finals || this.busy || this.editing !== null}
+                @click=${this.startNew}
+              >
+                <span class="material-icon">add</span> Neues Finale
+              </button>`
+            : nothing
+        }
       </div>
       ${
         this.error
@@ -392,37 +392,39 @@ export default class CupAdminFinals extends LitElement {
           aria-label="Platzierung"
           aria-expanded=${this.placing?.name === final.name}
           data-name=${final.name}
-          ?disabled=${locked || !can(this.user, "manage_results")}
+          ?disabled=${locked}
           @click=${this.onTogglePlacement}
         >
           format_list_numbered
         </button>
-        <button
-          class="icon-btn primary"
-          title=${this.editing ? "Erst speichern oder abbrechen" : "Bearbeiten"}
-          aria-label="Bearbeiten"
-          data-name=${final.name}
-          ?disabled=${locked || !can(this.user, "plan_competition")}
-          @click=${this.onEdit}
-        >
-          edit
-        </button>
-        <button
-          class="icon-btn danger"
-          title=${
-            final.started
-              ? "Ein begonnenes Finale kann nicht gelöscht werden"
-              : "Löschen"
-          }
-          aria-label="Löschen"
-          data-name=${final.name}
-          ?disabled=${
-            locked || final.started || !can(this.user, "plan_competition")
-          }
-          @click=${this.onDelete}
-        >
-          delete
-        </button>
+        ${
+          can(this.user, "plan_competition")
+            ? html`<button
+                  class="icon-btn primary"
+                  title=${this.editing ? "Erst speichern oder abbrechen" : "Bearbeiten"}
+                  aria-label="Bearbeiten"
+                  data-name=${final.name}
+                  ?disabled=${locked}
+                  @click=${this.onEdit}
+                >
+                  edit
+                </button>
+                <button
+                  class="icon-btn danger"
+                  title=${
+                    final.started
+                      ? "Ein begonnenes Finale kann nicht gelöscht werden"
+                      : "Löschen"
+                  }
+                  aria-label="Löschen"
+                  data-name=${final.name}
+                  ?disabled=${locked || final.started}
+                  @click=${this.onDelete}
+                >
+                  delete
+                </button>`
+            : nothing
+        }
       </td>
     </tr>`;
   }

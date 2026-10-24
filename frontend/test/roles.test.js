@@ -81,9 +81,15 @@ describe("jury lead", () => {
     assert.equal(canOpen("/admin-timeplan", juryLead), false);
   });
 
-  test("follows the event on the moderation screen", () => {
-    const juryLead = ["manage_jury", "manage_results", "view_moderation"];
+  test("follows the event on the moderation screen and sees the medals", () => {
+    const juryLead = [
+      "manage_jury",
+      "manage_results",
+      "view_medals",
+      "view_moderation",
+    ];
     assert.equal(canOpen("/admin-moderation", juryLead), true);
+    assert.equal(canOpen("/admin-medals", juryLead), true);
   });
 });
 

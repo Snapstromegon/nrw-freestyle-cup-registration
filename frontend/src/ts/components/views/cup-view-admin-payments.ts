@@ -12,7 +12,7 @@ import {
 } from "../../contexts/systemStatus";
 import { adminStyles } from "../../styles/admin";
 import { iconStyles, resetStyles } from "../../styles/base";
-import { countStarts, formatDate, formatMoney } from "../../utils";
+import { countStarts, formatDate, formatMoney, startsByFee } from "../../utils";
 
 type ClubOverview = schemas.ClubOverview;
 type Starter = schemas.Starter;
@@ -35,6 +35,9 @@ interface PaymentRow {
   club: ClubOverview;
   starters: number;
   starts: number;
+  /** Starts that cost the start fee, and those free beyond the cap. */
+  paidStarts: number;
+  freeStarts: number;
   /** Starts per type, for the tooltip. */
   em: number;
   ew: number;
@@ -55,6 +58,8 @@ type SortKey =
   | "contact"
   | "starters"
   | "starts"
+  | "paidStarts"
+  | "freeStarts"
   | "due"
   | "paid"
   | "open";
@@ -306,6 +311,7 @@ export default class CupViewAdminPayments extends LitElement {
   }
 
   buildRows(clubs: ClubOverview[], starters: Starter[]): PaymentRow[] {
+    const competition = this.systemStatus?.competition;
     const rows = new Map<string, PaymentRow>(
       clubs.map((club) => [
         club.id,
@@ -313,6 +319,8 @@ export default class CupViewAdminPayments extends LitElement {
           club,
           starters: 0,
           starts: 0,
+          paidStarts: 0,
+          freeStarts: 0,
           em: 0,
           ew: 0,
           p: 0,
@@ -332,6 +340,9 @@ export default class CupViewAdminPayments extends LitElement {
       }
       row.starters += 1;
       row.starts += countStarts(starter);
+      const { paid, free } = startsByFee(starter, competition);
+      row.paidStarts += paid;
+      row.freeStarts += free;
       row.em += Number(starter.single_male);
       row.ew += Number(starter.single_female);
       row.p += Number(starter.pair);
@@ -511,6 +522,18 @@ export default class CupViewAdminPayments extends LitElement {
                     "Einzel, Paar und Gruppen (inkl. Ersatz)",
                   )}
                   ${this.renderSortHeader(
+                    "paidStarts",
+                    "bezahlt",
+                    "num",
+                    "Starts mit Startgeld",
+                  )}
+                  ${this.renderSortHeader(
+                    "freeStarts",
+                    "frei",
+                    "num",
+                    "Starts ohne Startgeld, weil die FahrerIn das Höchstgeld je FahrerIn schon erreicht hat",
+                  )}
+                  ${this.renderSortHeader(
                     "due",
                     "Soll",
                     "num",
@@ -535,7 +558,7 @@ export default class CupViewAdminPayments extends LitElement {
                   rows.length
                     ? nothing
                     : html`<tr>
-                        <td colspan="7" class="empty">
+                        <td colspan="9" class="empty">
                           ${
                             this.onlyOpen && !needle
                               ? "Keine offenen Beträge."
@@ -558,6 +581,8 @@ export default class CupViewAdminPayments extends LitElement {
                   <td class="num">
                     ${sum(rows, (r) => r.starts)}
                   </td>
+                  <td class="num">${sum(rows, (r) => r.paidStarts)}</td>
+                  <td class="num">${sum(rows, (r) => r.freeStarts)}</td>
                   <td class="num">${formatMoney(sum(rows, (r) => r.due))}</td>
                   <td class="num">${formatMoney(sum(rows, (r) => r.paid))}</td>
                   <td
@@ -593,6 +618,12 @@ export default class CupViewAdminPayments extends LitElement {
         title="EM ${row.em} · EW ${row.ew} · P ${row.p} · Gruppen ${row.groups}"
       >
         ${row.starts || html`<span class="zero">0</span>`}
+      </td>
+      <td class="num">
+        ${row.paidStarts || html`<span class="zero">0</span>`}
+      </td>
+      <td class="num">
+        ${row.freeStarts || html`<span class="zero">0</span>`}
       </td>
       <td
         class="num"

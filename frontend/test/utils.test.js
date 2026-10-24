@@ -39,6 +39,7 @@ import {
   lastTimeplanAct,
   countRiders,
   customOf,
+  startsByFee,
   isEmptyBlock,
   lastTimeplanEntry,
   MAX_SMALL_GROUP_SIZE,
@@ -171,6 +172,38 @@ describe("timeplan entries", () => {
     assert.equal(currentTimeplanEntry(undefined), undefined);
     assert.equal(nextTimeplanEntry(undefined), undefined);
     assert.equal(lastTimeplanEntry(undefined), undefined);
+  });
+});
+
+describe("startsByFee", () => {
+  const rider = (starts, waived_count = 0) => ({
+    single_male: false,
+    single_female: starts > 0,
+    pair: starts > 1,
+    group_count: Math.max(0, starts - 2),
+    waived_count,
+  });
+  const fees = { fee_per_start: 15, max_fee_per_starter: 45 };
+
+  test("starts up to the cap are paid, the rest is free", () => {
+    assert.deepEqual(startsByFee(rider(2), fees), { paid: 2, free: 0 });
+    assert.deepEqual(startsByFee(rider(3), fees), { paid: 3, free: 0 });
+    assert.deepEqual(startsByFee(rider(5), fees), { paid: 3, free: 2 });
+  });
+
+  test("a waived start is neither paid nor free because of the cap", () => {
+    assert.deepEqual(startsByFee(rider(4, 1), fees), { paid: 3, free: 0 });
+  });
+
+  test("a cap between two starts pays the start it cuts", () => {
+    const cap40 = { fee_per_start: 15, max_fee_per_starter: 40 };
+    assert.deepEqual(startsByFee(rider(4), cap40), { paid: 3, free: 1 });
+  });
+
+  test("without a cap or a competition every start is paid", () => {
+    const noCap = { fee_per_start: 15, max_fee_per_starter: null };
+    assert.deepEqual(startsByFee(rider(5), noCap), { paid: 5, free: 0 });
+    assert.deepEqual(startsByFee(rider(2), null), { paid: 0, free: 0 });
   });
 });
 

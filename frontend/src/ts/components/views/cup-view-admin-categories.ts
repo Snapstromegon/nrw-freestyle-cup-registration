@@ -292,19 +292,19 @@ export default class CupViewAdminCategories extends LitElement {
         <h1>Kategorien</h1>
         ${data && ranges ? this.renderKpis(data, ranges.problems) : nothing}
         <span class="spacer"></span>
-        <button
-          class="btn primary small"
-          title=${this.editing ? "Erst speichern oder abbrechen" : nothing}
-          ?disabled=${
-            !data ||
-            this.busy ||
-            this.editing !== null ||
-            !can(this.user, "plan_competition")
-          }
-          @click=${this.startNew}
-        >
-          <span class="material-icon">add</span> Neue Kategorie
-        </button>
+        ${
+          // The jury lead sees the categories, but only places the finals.
+          can(this.user, "plan_competition")
+            ? html`<button
+                class="btn primary small"
+                title=${this.editing ? "Erst speichern oder abbrechen" : nothing}
+                ?disabled=${!data || this.busy || this.editing !== null}
+                @click=${this.startNew}
+              >
+                <span class="material-icon">add</span> Neue Kategorie
+              </button>`
+            : nothing
+        }
       </div>
       ${
         this.error
@@ -531,9 +531,7 @@ export default class CupViewAdminCategories extends LitElement {
     rangeIssue: RangeIssue | undefined,
   ) {
     const single = category.act_type === "single";
-    // The jury lead sees the categories, but only plans the finals' placements.
-    const locked =
-      this.busy || this.editing !== null || !can(this.user, "plan_competition");
+    const locked = this.busy || this.editing !== null;
     const lockedTitle = (title: string) =>
       this.editing ? "Erst speichern oder abbrechen" : title;
     return html`<tr class=${classMap({ muted: acts === 0 })}>
@@ -559,7 +557,9 @@ export default class CupViewAdminCategories extends LitElement {
         ${formatDuration(blockSeconds(category, acts))}
       </td>
       <td class="actions">
-        <button
+        ${
+          can(this.user, "plan_competition")
+            ? html`<button
           class="icon-btn"
           title=${lockedTitle("Nach oben")}
           aria-label="Nach oben"
@@ -598,7 +598,9 @@ export default class CupViewAdminCategories extends LitElement {
           @click=${this.onDelete}
         >
           delete
-        </button>
+        </button>`
+            : nothing
+        }
       </td>
     </tr>`;
   }

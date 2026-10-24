@@ -334,6 +334,33 @@ export const getStarterPrice = (
   return max === null || max === undefined ? price : Math.min(price, max);
 };
 
+/**
+ * A starter's starts that cost a fee (`paid`) and those beyond
+ * `max_fee_per_starter` (`free`). Waived starts are neither. A cap between
+ * two starts pays the start it cuts into.
+ */
+export const startsByFee = (
+  starter: Starts,
+  competition:
+    | Pick<Competition, "fee_per_start" | "max_fee_per_starter">
+    | null
+    | undefined,
+) => {
+  if (!competition) {
+    return { paid: 0, free: 0 };
+  }
+  const billable = Math.max(
+    0,
+    countStarts(starter) - (starter.waived_count ?? 0),
+  );
+  const max = competition.max_fee_per_starter;
+  const paid =
+    max === null || max === undefined || competition.fee_per_start <= 0
+      ? billable
+      : Math.min(billable, Math.ceil(max / competition.fee_per_start));
+  return { paid, free: billable - paid };
+};
+
 /** The local calendar day of a date-time, e.g. "2027-02-12", for grouping. */
 export const dayKey = (value: string | Date) => {
   const date = new Date(value);
