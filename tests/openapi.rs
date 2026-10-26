@@ -47,6 +47,7 @@ const COMMANDS: &[&str] = &[
     "set_club_group_type",
     "set_club_responsible",
     "set_final_placement",
+    "set_fee_waived",
     "set_final_published",
     "set_photo_hidden",
     "set_song_checked",

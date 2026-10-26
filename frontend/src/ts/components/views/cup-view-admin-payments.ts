@@ -24,6 +24,8 @@ import { adminStyles } from "../../styles/admin";
 import { iconStyles, resetStyles } from "../../styles/base";
 import { roleNames } from "../../roles";
 import {
+  actParticipantsLabel,
+  actTypeLabels,
   countStarts,
   formatDate,
   formatDateTime,
@@ -35,6 +37,7 @@ type ClubOverview = schemas.ClubOverview;
 type Starter = schemas.Starter;
 type ListedBooking = schemas.ListedBooking;
 type BookingLogEntry = schemas.BookingLogEntry;
+type Act = schemas.Act;
 
 interface PaymentsData {
   clubs: ClubOverview[];
@@ -43,6 +46,8 @@ interface PaymentsData {
   bookings: ListedBooking[];
   /** The payment log, newest first. */
   log: BookingLogEntry[];
+  /** For the withdrawn acts whose fee can be waived. */
+  acts: Act[];
 }
 
 /** What the toolbar reports about the last save, with an undo. */
@@ -364,13 +369,14 @@ export default class CupViewAdminPayments extends LitElement {
 
   data = new Task(this, {
     task: async (): Promise<PaymentsData> => {
-      const [clubs, starters, bookings, log] = await Promise.all([
+      const [clubs, starters, bookings, log, acts] = await Promise.all([
         unwrap(client.listClubs()),
         unwrap(client.listStarters()),
         unwrap(client.listBookings()),
         unwrap(client.listBookingLog()),
+        unwrap(client.listActs()),
       ]);
-      return { clubs, starters, bookings, log };
+      return { clubs, starters, bookings, log, acts };
     },
     args: () => [],
     onComplete: (value) => {
@@ -869,10 +875,56 @@ export default class CupViewAdminPayments extends LitElement {
             ? this.renderBookingTable(bookings, data, false)
             : html`<p class="empty">Noch keine Zahlungen.</p>`
         }
+        ${this.renderWithdrawnActs(club, data)}
         <h3>Änderungen</h3>
         ${this.renderLog(log)}
       </td>
     </tr>`;
+  }
+
+  /**
+   * The club's withdrawn acts: their riders still pay for them unless the
+   * fee is waived, e.g. with a medical certificate.
+   */
+  renderWithdrawnActs(club: ClubOverview, data: PaymentsData) {
+    const acts = data.acts.filter(
+      (act) =>
+        act.withdrawn && act.participants.some((p) => p.club_id === club.id),
+    );
+    if (!acts.length) {
+      return nothing;
+    }
+    const rows = acts.map(
+      (act) => html`<tr>
+        <td>${actTypeLabels[act.act_type]}</td>
+        <td>${act.name ? `${act.name} – ` : ""}${actParticipantsLabel(act)}</td>
+        <td>
+          ${
+            act.fee_waived
+              ? html`<span class="chip ok">Startgebühr erlassen</span>`
+              : html`<span class="chip warn">Startgebühr wird berechnet</span>`
+          }
+        </td>
+        <td class="actions no-print">
+          <button
+            class="btn small"
+            data-id=${act.id}
+            data-club=${club.id}
+            data-waived=${act.fee_waived ? "false" : "true"}
+            ?disabled=${this.saving}
+            @click=${this.onWaiveClick}
+          >
+            ${act.fee_waived ? "Doch berechnen" : "Erlassen"}
+          </button>
+        </td>
+      </tr>`,
+    );
+    return html`<h3>Abgemeldete Küren</h3>
+      <table class="dense fit">
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>`;
   }
 
   /** The form to record a booking, e.g. a transfer from the bank statement. */
@@ -1678,6 +1730,38 @@ export default class CupViewAdminPayments extends LitElement {
     );
     if (done) {
       this.flash(null, [b.club_id]);
+    }
+  }
+
+  /** Waives the fee of a withdrawn act, or charges it again. */
+  async onWaiveClick(e: Event) {
+    const { id, club, waived } = (e.currentTarget as HTMLElement).dataset;
+    const act = (this.data.value ?? this.lastData)?.acts.find(
+      (a) => a.id === id,
+    );
+    if (!act || this.saving) {
+      return;
+    }
+    const feeWaived = waived === "true";
+    const label = actParticipantsLabel(act);
+    const done = await this.write(
+      () =>
+        unwrap(
+          client.setFeeWaived({
+            body: { act_id: act.id, fee_waived: feeWaived },
+          }),
+        ),
+      "Startgebühr nicht geändert",
+      {
+        text: feeWaived
+          ? `Startgebühr erlassen: ${label}`
+          : `Startgebühr wird wieder berechnet: ${label}`,
+        tone: "ok",
+      },
+    );
+    if (done) {
+      // Every club of the act's riders owes a different amount now.
+      this.flash(null, [club, ...act.participants.map((p) => p.club_id)]);
     }
   }
 

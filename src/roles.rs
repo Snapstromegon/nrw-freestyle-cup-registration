@@ -99,7 +99,8 @@ permissions! {
     ManageRegistrations,
     /// Riders' birthdates and ages, also of other clubs.
     ViewBirthdates,
-    /// Record bookings and payments, and read the payment log.
+    /// Record bookings and payments, read the payment log and waive the fee
+    /// of withdrawn acts.
     ManagePayments,
     /// The list of clubs.
     ViewClubs,

@@ -51,6 +51,7 @@ mod set_checked_in;
 mod set_club_group_members;
 mod set_club_group_type;
 mod set_club_responsible;
+mod set_fee_waived;
 mod set_final_placement;
 mod set_final_published;
 mod set_jury_category_order;
@@ -111,6 +112,7 @@ pub fn get_command_router() -> OpenApiRouter {
         .routes(routes!(set_song_checked::set_song_checked))
         .routes(routes!(set_user_roles::set_user_roles))
         .routes(routes!(set_act_withdrawn::set_act_withdrawn))
+        .routes(routes!(set_fee_waived::set_fee_waived))
         .routes(routes!(set_act_order::set_act_order))
         .routes(routes!(set_act_music_started::set_act_music_started))
         .routes(routes!(set_checked_in::set_checked_in))
