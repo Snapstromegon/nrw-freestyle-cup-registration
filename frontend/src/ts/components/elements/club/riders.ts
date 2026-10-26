@@ -46,6 +46,7 @@ export const ridersOf = (data: ClubData, admin: boolean): Rider[] => {
       partner_name: s.partner_name,
       group_count: s.group_count,
       waived_count: s.waived_count,
+      fee_waived: s.fee_waived,
     }))
     .sort(byFirstname);
   return [...own, ...others];

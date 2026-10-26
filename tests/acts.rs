@@ -637,12 +637,12 @@ async fn withdrawn_act_leaves_the_startlist_and_keeps_its_fee(db: SqlitePool) {
     let app = TestApp::new(db).await;
     let (owner, single, _) = club_with_acts(&app).await;
     let admin = app.create_admin().await;
-    let withdraw = |withdrawn: bool, fee_waived: bool| json!({ "act_id": single, "withdrawn": withdrawn, "fee_waived": fee_waived });
+    let withdraw = |withdrawn: bool| json!({ "act_id": single, "withdrawn": withdrawn });
 
     let forbidden = app
         .post(
             "/api/command/set_act_withdrawn",
-            withdraw(true, false),
+            withdraw(true),
             Some(&owner),
         )
         .await;
@@ -651,7 +651,7 @@ async fn withdrawn_act_leaves_the_startlist_and_keeps_its_fee(db: SqlitePool) {
     let response = app
         .post(
             "/api/command/set_act_withdrawn",
-            withdraw(true, false),
+            withdraw(true),
             Some(&admin),
         )
         .await;
@@ -662,102 +662,27 @@ async fn withdrawn_act_leaves_the_startlist_and_keeps_its_fee(db: SqlitePool) {
     assert_eq!(act["category"], Value::Null);
     let startlist = app.get("/api/query/startlist", None).await;
     assert!(!startlist.body.to_string().contains(&single.to_string()));
-    let starters = app.get("/api/query/list_starters", Some(&admin)).await.body;
-    let anna = starters
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|s| s["firstname"] == "Anna")
-        .unwrap();
-    assert_eq!(anna["waived_count"], 0);
+    let club = app.get("/api/query/get_club", Some(&owner)).await;
+    // Anna's single, still charged, and the pair of Berta and Carla.
+    assert_eq!(club.body["amount_due"]["start_fees"], 45.0);
 
-    app.post(
-        "/api/command/set_act_withdrawn",
-        withdraw(true, true),
-        Some(&admin),
-    )
-    .await;
-    let starters = app.get("/api/query/list_starters", Some(&admin)).await.body;
-    let anna = starters
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|s| s["firstname"] == "Anna")
-        .unwrap();
-    assert_eq!(anna["waived_count"], 1);
-
-    // Taking the withdrawal back also takes back the waiver.
-    app.post(
-        "/api/command/set_act_withdrawn",
-        withdraw(false, true),
-        Some(&admin),
-    )
-    .await;
+    let response = app
+        .post(
+            "/api/command/set_act_withdrawn",
+            withdraw(false),
+            Some(&admin),
+        )
+        .await;
+    assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
     let act = get_act(&app, single).await;
     assert_eq!(act["withdrawn"], false);
-    assert_eq!(act["fee_waived"], false);
     assert_eq!(act["category"], "EWU13");
 
     let unknown = app
         .post(
             "/api/command/set_act_withdrawn",
-            json!({ "act_id": Uuid::now_v7(), "withdrawn": true, "fee_waived": false }),
+            json!({ "act_id": Uuid::now_v7(), "withdrawn": true }),
             Some(&admin),
-        )
-        .await;
-    assert_eq!(unknown.status, StatusCode::NOT_FOUND);
-}
-
-#[sqlx::test]
-async fn the_treasurer_waives_the_fee_of_a_withdrawn_act(db: SqlitePool) {
-    let app = TestApp::new(db).await;
-    let (owner, single, _) = club_with_acts(&app).await;
-    let admin = app.create_admin().await;
-    let kasse = app.cookie_for(app.create_user_with_roles("Kim", &["treasurer"]).await);
-    let desk = app.cookie_for(app.create_user_with_roles("Desk", &["check_in"]).await);
-    let waive = |fee_waived: bool| json!({ "act_id": single, "fee_waived": fee_waived });
-
-    // Only withdrawn acts have a fee to waive.
-    let response = app
-        .post("/api/command/set_fee_waived", waive(true), Some(&kasse))
-        .await;
-    assert_ne!(response.status, StatusCode::OK);
-    assert_eq!(get_act(&app, single).await["fee_waived"], false);
-
-    let response = app
-        .post(
-            "/api/command/set_act_withdrawn",
-            json!({ "act_id": single, "withdrawn": true, "fee_waived": false }),
-            Some(&admin),
-        )
-        .await;
-    assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
-    for cookie in [&owner, &desk] {
-        let forbidden = app
-            .post("/api/command/set_fee_waived", waive(true), Some(cookie))
-            .await;
-        assert_eq!(forbidden.status, StatusCode::FORBIDDEN);
-    }
-
-    let response = app
-        .post("/api/command/set_fee_waived", waive(true), Some(&kasse))
-        .await;
-    assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
-    let act = get_act(&app, single).await;
-    assert_eq!(act["withdrawn"], true);
-    assert_eq!(act["fee_waived"], true);
-
-    let response = app
-        .post("/api/command/set_fee_waived", waive(false), Some(&kasse))
-        .await;
-    assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
-    assert_eq!(get_act(&app, single).await["fee_waived"], false);
-
-    let unknown = app
-        .post(
-            "/api/command/set_fee_waived",
-            json!({ "act_id": Uuid::now_v7(), "fee_waived": true }),
-            Some(&kasse),
         )
         .await;
     assert_eq!(unknown.status, StatusCode::NOT_FOUND);

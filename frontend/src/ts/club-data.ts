@@ -113,7 +113,8 @@ export const riderCounts = (participants: { is_replacement: boolean }[]) => {
 
 /**
  * What the club owes (start fees, jury fee and their sum, as calculated by
- * the server), paid and the open amount (negative when overpaid), in euros.
+ * the server), paid and the open amount (negative when overpaid, 0 for a
+ * waived club), in euros.
  */
 export const paymentState = (data: Pick<ClubData, "club">) => {
   const due = data.club.amount_due;
@@ -121,7 +122,10 @@ export const paymentState = (data: Pick<ClubData, "club">) => {
   const juryFee = due?.jury_fee ?? 0;
   const amount = due?.total ?? 0;
   const paid = data.club.paid ?? 0;
-  const open = Math.round((amount - paid) * 100) / 100;
+  // A waived club owes nothing; a refund settles what it already paid.
+  const open = data.club.fee_waived
+    ? 0
+    : Math.round((amount - paid) * 100) / 100;
   return { startFees, juryFee, amount, paid, open };
 };
 
@@ -313,15 +317,17 @@ export const stepSummaries = (
         summary: parts.join(" · ") || "keine JurorInnen",
       };
     })(),
-    startgeld: {
-      state: amount === 0 ? "todo" : open >= 0.01 ? "open" : "done",
-      summary:
-        amount === 0
-          ? "nichts zu zahlen"
-          : open >= 0.01
-            ? `${formatEuro(open)} offen`
-            : "bezahlt",
-    },
+    startgeld: data.club.fee_waived
+      ? { state: "done", summary: "erlassen" }
+      : {
+          state: amount === 0 ? "todo" : open >= 0.01 ? "open" : "done",
+          summary:
+            amount === 0
+              ? "nichts zu zahlen"
+              : open >= 0.01
+                ? `${formatEuro(open)} offen`
+                : "bezahlt",
+        },
   };
 };
 

@@ -38,6 +38,7 @@ pub async fn get_act(
     Extension(db): Extension<ReloadableSqlite>,
     Query(query): Query<GetActQuery>,
     birthdates: Option<Granted<permit::ViewBirthdates>>,
+    payments: Option<Granted<permit::ManagePayments>>,
 ) -> Result<Json<Act>, HttpError> {
     let db = db.get().await.clone();
     let act = sqlx::query_as!(
@@ -71,7 +72,7 @@ pub async fn get_act(
             ) as "type_conflict!: bool",
             view_act.song_checked,
             view_act.withdrawn_at IS NOT NULL as "withdrawn!: bool",
-            view_act.fee_waived as "fee_waived!: bool"
+            view_act.fee_waiver
         FROM view_act LEFT JOIN categories ON view_act.category = categories.name
         WHERE view_act.id = ?
         "#,
@@ -79,5 +80,7 @@ pub async fn get_act(
     )
     .fetch_one(&db)
     .await?;
-    Ok(Json(Act::from(act).for_viewer(birthdates.is_some())))
+    Ok(Json(
+        Act::from(act).for_viewer(birthdates.is_some(), payments.is_some()),
+    ))
 }

@@ -17,15 +17,14 @@ pub struct SetActWithdrawnResponse {}
 pub struct SetActWithdrawnBody {
     act_id: Uuid,
     withdrawn: bool,
-    /// Only for withdrawn acts: the riders don't pay for this start.
-    fee_waived: bool,
 }
 
 /// Withdraws an act after the registration deadline, or takes it back.
 ///
 /// A withdrawn act doesn't start: it gets no category, so it leaves the
-/// startlist and the timeplan. Its riders still pay for it, unless an admin
-/// waives the fee (the announcement refunds only with a medical certificate).
+/// startlist and the timeplan. Its riders still pay for it unless the fee
+/// is waived (`set_fee_waived`; the announcement refunds only with a medical
+/// certificate); withdrawing doesn't change a waiver.
 /// Before the deadline, clubs simply delete their starters instead.
 #[utoipa::path(
     post,
@@ -48,21 +47,14 @@ pub async fn set_act_withdrawn(
 ) -> Result<Json<SetActWithdrawnResponse>, HttpError> {
     let db = db.get().await.clone();
 
-    info!(
-        "Setting act {} withdrawn = {}, fee waived = {}",
-        body.act_id, body.withdrawn, body.fee_waived
-    );
-    let fee_waived = body.withdrawn && body.fee_waived;
+    info!("Setting act {} withdrawn = {}", body.act_id, body.withdrawn);
     let updated = sqlx::query!(
         r#"
         UPDATE acts
-        SET
-            withdrawn_at = CASE WHEN $1 THEN COALESCE(withdrawn_at, datetime('now')) END,
-            fee_waived = $2
-        WHERE id = $3
+        SET withdrawn_at = CASE WHEN $1 THEN COALESCE(withdrawn_at, datetime('now')) END
+        WHERE id = $2
         "#,
         body.withdrawn,
-        fee_waived,
         body.act_id,
     )
     .execute(&db)

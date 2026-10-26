@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, test } from "vite-plus/test";
 import {
+  actionLabels,
   bookingChanges,
+  describeWaiver,
   bookingStateLabel,
   parseAmount,
   parseBookingAmount,
@@ -64,5 +66,26 @@ describe("bookings", () => {
       (c) => c.field,
     );
     assert.deepEqual(fields, ["Betrag", "Datum", "Verein"]);
+  });
+
+  test("a waiver in the log names its level, target and reason", () => {
+    const waiver = (level, name) => ({
+      level,
+      target_id: "t",
+      name,
+      clubs: [],
+      reason: "Attest",
+    });
+    assert.equal(describeWaiver(waiver("club", "RSV")), "Verein RSV · Attest");
+    assert.equal(
+      describeWaiver(waiver("rider", "Anna Muster")),
+      "FahrerIn Anna Muster · Attest",
+    );
+    assert.equal(
+      describeWaiver(waiver("act", "Wirbelwind")),
+      "Kür Wirbelwind · Attest",
+    );
+    assert.equal(actionLabels.waived, "Gebühr erlassen");
+    assert.equal(actionLabels.waiver_revoked, "Erlass aufgehoben");
   });
 });

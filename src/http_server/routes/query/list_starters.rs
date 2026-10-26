@@ -34,9 +34,13 @@ pub struct Starter {
     checked_in_at: Option<time::OffsetDateTime>,
     /// Number of groups the starter is in, as a regular or replacement rider.
     group_count: i64,
-    /// Starts whose fee an admin waived after a withdrawal. They count in
-    /// the flags and `group_count` above, but cost nothing.
+    /// Starts in acts whose fee is waived. They count in the flags and
+    /// `group_count` above, but cost nothing.
     waived_count: i64,
+    /// The rider's own starts are all free (a rider's fee waiver).
+    fee_waived: bool,
+    /// Why the rider's fees are waived.
+    fee_waiver: Option<String>,
 }
 
 /// Every rider with their club and starts; birthdates and ages only for
@@ -95,9 +99,10 @@ pub async fn list_starters(
               SELECT COUNT(*) FROM act_participants
               JOIN acts ON acts.id = act_participants.act_id
               WHERE act_participants.starter_id = starter.id
-                AND acts.withdrawn_at IS NOT NULL
-                AND acts.fee_waived
-            ) as "waived_count!: i64"
+                AND acts.fee_waiver IS NOT NULL
+            ) as "waived_count!: i64",
+            starter.fee_waiver IS NOT NULL as "fee_waived!: bool",
+            starter.fee_waiver
         FROM starter
           LEFT JOIN clubs as club ON club.id = starter.club_id
           LEFT JOIN starter as partner ON partner.id = starter.partner_id

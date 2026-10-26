@@ -71,17 +71,23 @@ pub struct Act {
     /// Withdrawn after the registration deadline: the act doesn't start and
     /// has no category, but its riders still pay for it unless `fee_waived`.
     pub withdrawn: bool,
-    /// An admin waived the fee of a withdrawn act (e.g. medical certificate).
+    /// The act's fee is waived: its start is free for every rider.
     pub fee_waived: bool,
+    /// Why the fee is waived; only for who manages payments.
+    pub fee_waiver: Option<String>,
     pub act_order: Option<i64>,
     pub category_order: Option<i64>,
 }
 
 impl Act {
-    /// Hides data only who may see birthdates may see, see [`Act::max_age`].
-    pub fn for_viewer(mut self, sees_birthdates: bool) -> Self {
+    /// Hides data only who may see birthdates may see, see [`Act::max_age`],
+    /// and the waiver reason from who doesn't manage payments.
+    pub fn for_viewer(mut self, sees_birthdates: bool, manages_payments: bool) -> Self {
         if !sees_birthdates {
             self.max_age = None;
+        }
+        if !manages_payments {
+            self.fee_waiver = None;
         }
         self
     }
@@ -106,7 +112,7 @@ pub struct DBAct {
     pub type_conflict: bool,
     pub song_checked: bool,
     pub withdrawn: bool,
-    pub fee_waived: bool,
+    pub fee_waiver: Option<String>,
     pub act_order: Option<i64>,
     pub category_order: Option<i64>,
 }
@@ -133,7 +139,8 @@ impl From<DBAct> for Act {
             type_conflict: db_act.type_conflict,
             song_checked: db_act.song_checked,
             withdrawn: db_act.withdrawn,
-            fee_waived: db_act.fee_waived,
+            fee_waived: db_act.fee_waiver.is_some(),
+            fee_waiver: db_act.fee_waiver,
             act_order: db_act.act_order,
             category_order: db_act.category_order,
         }

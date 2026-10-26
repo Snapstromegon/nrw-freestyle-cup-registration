@@ -195,6 +195,12 @@ describe("startsByFee", () => {
     assert.deepEqual(startsByFee(rider(4, 1), fees), { paid: 3, free: 0 });
   });
 
+  test("a waived rider's starts are neither paid nor free", () => {
+    const waived = { ...rider(4), fee_waived: true };
+    assert.deepEqual(startsByFee(waived, fees), { paid: 0, free: 0 });
+    assert.equal(getStarterPrice(waived, fees), 0);
+  });
+
   test("a cap between two starts pays the start it cuts", () => {
     const cap40 = { fee_per_start: 15, max_fee_per_starter: 40 };
     assert.deepEqual(startsByFee(rider(4), cap40), { paid: 3, free: 1 });

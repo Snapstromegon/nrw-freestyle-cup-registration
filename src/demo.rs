@@ -97,6 +97,8 @@ pub struct DemoClub {
     pub owner: String,
     /// Amount in € the club has paid, as one payment.
     pub payment: Option<f64>,
+    /// Waiver reason: all the club's fees are waived.
+    pub fee_waiver: Option<String>,
     #[serde(default)]
     pub starters: Vec<DemoStarter>,
     #[serde(default)]
@@ -154,6 +156,8 @@ pub struct DemoStarter {
     /// When the starter checked in on competition day.
     #[serde(default, deserialize_with = "toml_datetime_option")]
     pub checked_in_at: Option<OffsetDateTime>,
+    /// Waiver reason: all the rider's starts are free.
+    pub fee_waiver: Option<String>,
 }
 
 impl DemoStarter {
@@ -207,6 +211,8 @@ pub struct DemoAct {
     #[serde(default)]
     pub song_checked: bool,
     pub order: Option<i64>,
+    /// Waiver reason: the act's start is free for every rider.
+    pub fee_waiver: Option<String>,
     #[serde(default, deserialize_with = "toml_datetime_option")]
     pub started_at: Option<OffsetDateTime>,
     #[serde(default, deserialize_with = "toml_datetime_option")]
@@ -409,10 +415,11 @@ impl DemoData {
             })?;
             let club_id = Uuid::now_v7();
             sqlx::query!(
-                "INSERT INTO clubs (id, name, owner_id) VALUES (?, ?, ?)",
+                "INSERT INTO clubs (id, name, owner_id, fee_waiver) VALUES (?, ?, ?, ?)",
                 club_id,
                 club.name,
                 owner_id,
+                club.fee_waiver,
             )
             .execute(db)
             .await
@@ -468,8 +475,9 @@ impl DemoData {
                     r#"
                     INSERT INTO starter (
                         id, club_id, firstname, lastname, birthdate, gender,
-                        single_male, single_female, pair, partner_name, checked_in_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        single_male, single_female, pair, partner_name, checked_in_at,
+                        fee_waiver
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     "#,
                     id,
                     club_id,
@@ -482,6 +490,7 @@ impl DemoData {
                     starter.pair,
                     starter.partner_name,
                     checked_in_at,
+                    starter.fee_waiver,
                 )
                 .execute(db)
                 .await
@@ -767,7 +776,8 @@ impl DemoData {
                 r#"
                 UPDATE acts SET
                     name = ?, description = ?, song_file = ?, song_file_name = ?,
-                    song_checked = ?, "order" = ?, started_at = ?, ended_at = ?
+                    song_checked = ?, "order" = ?, started_at = ?, ended_at = ?,
+                    fee_waiver = ?
                 WHERE id = ?
                 "#,
                 name,
@@ -778,6 +788,7 @@ impl DemoData {
                 act.order,
                 started_at,
                 ended_at,
+                act.fee_waiver,
                 act_id,
             )
             .execute(db)

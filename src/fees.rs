@@ -20,6 +20,9 @@ pub struct AmountDue {
     /// For missing jury deployments; 0 without the jury registration.
     pub jury_fee: f64,
     pub total: f64,
+    /// What fee waivers drop: the start fees of waived clubs, riders and
+    /// acts, and the jury fee of a waived club.
+    pub waived: f64,
 }
 
 /// What a club owes and, with the jury registration, its jury obligation.
@@ -61,7 +64,19 @@ async fn fees(
     jury_registration: bool,
     club_id: Option<Uuid>,
 ) -> sqlx::Result<HashMap<Uuid, ClubFees>> {
-    let start_fees = start_fees_by_club(db, competition, club_id).await?;
+    let start_fees = start_fees_by_club(db, competition, club_id, true).await?;
+    let unwaived_start_fees = start_fees_by_club(db, competition, club_id, false).await?;
+    let waived_clubs: std::collections::HashSet<Uuid> = sqlx::query_scalar!(
+        r#"
+        SELECT id as "id!: Uuid" FROM clubs
+        WHERE fee_waiver IS NOT NULL AND (?1 IS NULL OR id = ?1)
+        "#,
+        club_id
+    )
+    .fetch_all(db)
+    .await?
+    .into_iter()
+    .collect();
     let obligations = match competition.and_then(|c| c.jury.as_ref()) {
         Some(rules) if jury_registration => {
             let mut conn = db.acquire().await?;
@@ -69,7 +84,7 @@ async fn fees(
         }
         _ => HashMap::new(),
     };
-    let clubs: std::collections::HashSet<Uuid> = start_fees
+    let clubs: std::collections::HashSet<Uuid> = unwaived_start_fees
         .keys()
         .chain(obligations.keys())
         .copied()
@@ -78,13 +93,21 @@ async fn fees(
         .into_iter()
         .map(|id| {
             let start_fees = start_fees.get(&id).copied().unwrap_or(0.0);
+            let unwaived = unwaived_start_fees.get(&id).copied().unwrap_or(0.0);
             let jury = obligations.get(&id).copied();
-            let jury_fee = jury.map_or(0.0, |jury| jury.fee);
+            // A waived club keeps its obligation, only the fee is gone.
+            let obligation_fee = jury.map_or(0.0, |jury| jury.fee);
+            let jury_fee = if waived_clubs.contains(&id) {
+                0.0
+            } else {
+                obligation_fee
+            };
             let fees = ClubFees {
                 amount_due: AmountDue {
                     start_fees,
                     jury_fee,
                     total: start_fees + jury_fee,
+                    waived: unwaived - start_fees + obligation_fee - jury_fee,
                 },
                 jury,
             };
@@ -93,14 +116,16 @@ async fn fees(
         .collect())
 }
 
-/// Start fees per club. Each single, pair and group start counts, except
-/// withdrawn acts whose fee an admin waived; the starter's club pays. The
+/// Start fees per club. Each single, pair and group start counts; the
+/// starter's club pays, at most the cap per rider. With `waivers`, a waived
+/// club or rider pays nothing and a waived act's start doesn't count. The
 /// same rule as `getStarterPrice` in the frontend, which still prices single
 /// starters in the forms.
 async fn start_fees_by_club(
     db: &sqlx::SqlitePool,
     competition: Option<&Competition>,
     club_id: Option<Uuid>,
+    waivers: bool,
 ) -> sqlx::Result<HashMap<Uuid, f64>> {
     let Some(competition) = competition else {
         return Ok(HashMap::new());
@@ -109,7 +134,10 @@ async fn start_fees_by_club(
         r#"
         SELECT
             starter.club_id as "club_id!: Uuid",
-            MAX(
+            CASE WHEN ?2 AND (
+                starter.fee_waiver IS NOT NULL
+                OR (SELECT fee_waiver FROM clubs WHERE clubs.id = starter.club_id) IS NOT NULL
+            ) THEN 0 ELSE MAX(
                 0,
                 starter.single_male + starter.single_female + starter.pair
                 + (
@@ -122,13 +150,14 @@ async fn start_fees_by_club(
                     SELECT COUNT(*) FROM act_participants
                     JOIN acts ON acts.id = act_participants.act_id
                     WHERE act_participants.starter_id = starter.id
-                        AND acts.withdrawn_at IS NOT NULL AND acts.fee_waived
+                        AND ?2 AND acts.fee_waiver IS NOT NULL
                 )
-            ) as "starts!: i64"
+            ) END as "starts!: i64"
         FROM starter
         WHERE ?1 IS NULL OR starter.club_id = ?1
         "#,
-        club_id
+        club_id,
+        waivers
     )
     .fetch_all(db)
     .await?;

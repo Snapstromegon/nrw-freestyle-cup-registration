@@ -996,7 +996,7 @@ async fn amount_due_lists_start_fees_jury_fee_and_total(db: SqlitePool) {
     let club = app.get("/api/query/get_club", Some(&cookie)).await;
     assert_eq!(
         club.body["amount_due"],
-        json!({ "start_fees": 0.0, "jury_fee": 0.0, "total": 0.0 })
+        json!({ "start_fees": 0.0, "jury_fee": 0.0, "total": 0.0, "waived": 0.0 })
     );
 
     app.add_starter(&cookie, starter_body(club_id, "Anna", true, false))
@@ -1020,7 +1020,7 @@ async fn amount_due_lists_start_fees_jury_fee_and_total(db: SqlitePool) {
         .await;
 
     // Anna 15, Carla 30, Dora 4 starts capped at 45, both riders 2 × 15.
-    let expected = json!({ "start_fees": 150.0, "jury_fee": 0.0, "total": 150.0 });
+    let expected = json!({ "start_fees": 150.0, "jury_fee": 0.0, "total": 150.0, "waived": 0.0 });
     let club = app.get("/api/query/get_club", Some(&cookie)).await;
     assert_eq!(club.body["amount_due"], expected);
 
@@ -1043,7 +1043,7 @@ async fn amount_due_lists_start_fees_jury_fee_and_total(db: SqlitePool) {
         vec![
             (
                 "RSV Andere".to_string(),
-                json!({ "start_fees": 15.0, "jury_fee": 0.0, "total": 15.0 })
+                json!({ "start_fees": 15.0, "jury_fee": 0.0, "total": 15.0, "waived": 0.0 })
             ),
             ("RSV Test".to_string(), expected),
         ]
@@ -1074,17 +1074,25 @@ async fn amount_due_keeps_withdrawn_starts_unless_the_fee_is_waived(db: SqlitePo
     };
     assert_eq!(start_fees().await, 30.0);
 
-    for (fee_waived, expected) in [(false, 30.0), (true, 15.0)] {
-        let response = app
-            .post(
-                "/api/command/set_act_withdrawn",
-                json!({ "act_id": single, "withdrawn": true, "fee_waived": fee_waived }),
-                Some(&admin),
-            )
-            .await;
-        assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
-        assert_eq!(start_fees().await, expected, "fee_waived: {fee_waived}");
-    }
+    let response = app
+        .post(
+            "/api/command/set_act_withdrawn",
+            json!({ "act_id": single, "withdrawn": true }),
+            Some(&admin),
+        )
+        .await;
+    assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+    assert_eq!(start_fees().await, 30.0);
+
+    let response = app
+        .post(
+            "/api/command/set_fee_waived",
+            json!({ "act_id": single, "reason": "Attest" }),
+            Some(&admin),
+        )
+        .await;
+    assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+    assert_eq!(start_fees().await, 15.0);
 }
 
 #[sqlx::test]

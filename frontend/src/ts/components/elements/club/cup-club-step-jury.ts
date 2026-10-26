@@ -850,6 +850,8 @@ export default class CupClubStepJury extends LitElement {
     if (!jury || !rules) {
       return nothing;
     }
+    // A waived club still sees its expected Einsätze, without any fee.
+    const waived = !!this.data.club.fee_waived;
     return html`<div class="tiles">
         <div class="tile">
           <span>Küren</span><strong>${jury.acts}</strong>
@@ -872,21 +874,27 @@ export default class CupClubStepJury extends LitElement {
           <span
             >${
               jury.missing
-                ? `${jury.missing} fehlen · Jurygebühr`
+                ? waived
+                  ? `${jury.missing} fehlen`
+                  : `${jury.missing} fehlen · Jurygebühr`
                 : "Pflicht erfüllt"
             }</span
           >
           <strong
-            >${jury.missing ? formatMoney(jury.fee) : "✓"}</strong
+            >${jury.missing ? (waived ? jury.missing : formatMoney(jury.fee)) : "✓"}</strong
           >
         </div>
       </div>
       ${this.renderProgress(jury.credited, jury.required)}
       <p class="muted small">
         Pro angefangene 2 Küren sind ${rules.deployments_per_two_acts}
-        Juryeinsätze zu melden; jeder fehlende kostet
-        ${formatMoney(rules.missing_deployment_fee)} und wird mit dem Startgeld
-        bezahlt. Gezählt werden die Einsätze der Jury-Kategorien, für die eure
+        Juryeinsätze zu melden${
+          waived
+            ? ""
+            : html`; jeder fehlende kostet
+                ${formatMoney(rules.missing_deployment_fee)} und wird mit dem
+                Startgeld bezahlt`
+        }. Gezählt werden die Einsätze der Jury-Kategorien, für die eure
         geschulten JurorInnen gemeldet sind, höchstens ihre max. Einsätze.
       </p>`;
   }

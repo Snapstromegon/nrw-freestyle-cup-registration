@@ -11,6 +11,8 @@ import {
   bookingChanges,
   bookingStateLabel,
   describeBooking,
+  describeWaiver,
+  type WaiverLevel,
   parseAmount,
   parseBookingAmount,
   todayIso,
@@ -93,6 +95,8 @@ interface PaymentRow {
   juryFee: number;
   /** What the club owes: start fees plus jury fee. */
   due: number;
+  /** What fee waivers drop from `due`. */
+  waived: number;
   paid: number;
   open: number;
 }
@@ -440,6 +444,7 @@ export default class CupViewAdminPayments extends LitElement {
           startFees: club.amount_due?.start_fees ?? 0,
           juryFee: club.amount_due?.jury_fee ?? 0,
           due: club.amount_due?.total ?? 0,
+          waived: club.amount_due?.waived ?? 0,
           paid: club.paid ?? 0,
           open: 0,
         },
@@ -452,9 +457,12 @@ export default class CupViewAdminPayments extends LitElement {
       }
       row.starters += 1;
       row.starts += countStarts(starter);
-      const { paid, free } = startsByFee(starter, competition);
-      row.paidStarts += paid;
-      row.freeStarts += free;
+      // A waived club's starts cost nothing.
+      if (!row.club.fee_waiver) {
+        const { paid, free } = startsByFee(starter, competition);
+        row.paidStarts += paid;
+        row.freeStarts += free;
+      }
       row.em += Number(starter.single_male);
       row.ew += Number(starter.single_female);
       row.p += Number(starter.pair);
@@ -526,6 +534,14 @@ export default class CupViewAdminPayments extends LitElement {
                     >${formatMoney(-sum(overpaidRows, (r) => r.open))}</b
                   >
                   (${clubCount(overpaidRows.length)})</span
+                >`
+              : nothing
+          }
+          ${
+            sum(allRows, (r) => r.waived) > CENT
+              ? html`<span class="kpi"
+                  >Erlassen
+                  <b>${formatMoney(sum(allRows, (r) => r.waived))}</b></span
                 >`
               : nothing
           }
@@ -792,6 +808,16 @@ export default class CupViewAdminPayments extends LitElement {
                   ${formatMoney(row.juryFee)}</small
                 >`
             : nothing
+        }${
+          row.waived > CENT
+            ? html`<br /><small
+                  class="muted"
+                  title=${club.fee_waiver ? `Verein befreit: ${club.fee_waiver}` : "Erlassene Gebühren von FahrerInnen und Küren"}
+                  >${formatMoney(row.waived)} erlassen</small
+                >`
+            : club.fee_waiver
+              ? html`<br /><small class="muted">Verein befreit</small>`
+              : nothing
         }
       </td>
       <td class="num paid">
@@ -865,7 +891,10 @@ export default class CupViewAdminPayments extends LitElement {
   renderClubDetails(club: ClubOverview, data: PaymentsData) {
     const bookings = data.bookings.filter((b) => b.club_id === club.id);
     const log = data.log.filter(
-      (e) => e.before?.club_id === club.id || e.after?.club_id === club.id,
+      (e) =>
+        e.before?.club_id === club.id ||
+        e.after?.club_id === club.id ||
+        e.waiver?.clubs.some((c) => c.id === club.id),
     );
     return html`<tr class="club-details">
       <td colspan="9">
@@ -875,7 +904,7 @@ export default class CupViewAdminPayments extends LitElement {
             ? this.renderBookingTable(bookings, data, false)
             : html`<p class="empty">Noch keine Zahlungen.</p>`
         }
-        ${this.renderWithdrawnActs(club, data)}
+        ${this.renderWaivers(club, data)}
         <h3>Änderungen</h3>
         ${this.renderLog(log)}
       </td>
@@ -883,48 +912,111 @@ export default class CupViewAdminPayments extends LitElement {
   }
 
   /**
-   * The club's withdrawn acts: their riders still pay for them unless the
-   * fee is waived, e.g. with a medical certificate.
+   * The club's fee waivers: the whole club, its riders and the acts its
+   * riders start in, each with a button to waive or charge again.
    */
-  renderWithdrawnActs(club: ClubOverview, data: PaymentsData) {
-    const acts = data.acts.filter(
-      (act) =>
-        act.withdrawn && act.participants.some((p) => p.club_id === club.id),
+  renderWaivers(club: ClubOverview, data: PaymentsData) {
+    const riders = data.starters
+      .filter((s) => s.club_id === club.id)
+      .sort((a, b) =>
+        `${a.firstname} ${a.lastname}`.localeCompare(
+          `${b.firstname} ${b.lastname}`,
+          "de",
+        ),
+      );
+    const acts = data.acts.filter((act) =>
+      act.participants.some((p) => p.club_id === club.id),
     );
-    if (!acts.length) {
-      return nothing;
-    }
-    const rows = acts.map(
-      (act) => html`<tr>
-        <td>${actTypeLabels[act.act_type]}</td>
-        <td>${act.name ? `${act.name} – ` : ""}${actParticipantsLabel(act)}</td>
-        <td>
-          ${
-            act.fee_waived
-              ? html`<span class="chip ok">Startgebühr erlassen</span>`
-              : html`<span class="chip warn">Startgebühr wird berechnet</span>`
-          }
-        </td>
+    const riderRows = riders.map(
+      (s) => html`<tr>
+        <td>${s.firstname} ${s.lastname}</td>
+        <td>${this.renderWaiverState(s.fee_waiver)}</td>
         <td class="actions no-print">
-          <button
-            class="btn small"
-            data-id=${act.id}
-            data-club=${club.id}
-            data-waived=${act.fee_waived ? "false" : "true"}
-            ?disabled=${this.saving}
-            @click=${this.onWaiveClick}
-          >
-            ${act.fee_waived ? "Doch berechnen" : "Erlassen"}
-          </button>
+          ${this.renderWaiverButton("rider", s.id, `${s.firstname} ${s.lastname}`, s.fee_waiver)}
         </td>
       </tr>`,
     );
-    return html`<h3>Abgemeldete Küren</h3>
-      <table class="dense fit">
-        <tbody>
-          ${rows}
-        </tbody>
-      </table>`;
+    const actRows = acts.map(
+      (act) => html`<tr>
+        <td>${actTypeLabels[act.act_type]}</td>
+        <td>
+          ${act.name ? `${act.name} – ` : ""}${actParticipantsLabel(act)}
+          ${act.withdrawn ? html`<span class="chip muted">abgemeldet</span>` : nothing}
+        </td>
+        <td>${this.renderWaiverState(act.fee_waiver)}</td>
+        <td class="actions no-print">
+          ${this.renderWaiverButton("act", act.id, actParticipantsLabel(act), act.fee_waiver)}
+        </td>
+      </tr>`,
+    );
+    const waivedRiders = riders.filter((s) => s.fee_waiver).length;
+    const waivedActs = acts.filter((a) => a.fee_waiver).length;
+    return html`<h3>Gebühren erlassen</h3>
+      <p class="row">
+        Ganzer Verein (Startgeld und Jurygebühr):
+        ${this.renderWaiverState(club.fee_waiver)}
+        ${this.renderWaiverButton("club", club.id, club.name, club.fee_waiver)}
+      </p>
+      <details class="block" ?open=${waivedRiders > 0}>
+        <summary>
+          FahrerInnen
+          <span class="muted"
+            >${riders.length}${waivedRiders ? ` · ${waivedRiders} erlassen` : ""}</span
+          >
+        </summary>
+        ${
+          riders.length
+            ? html`<table class="dense fit">
+                <tbody>
+                  ${riderRows}
+                </tbody>
+              </table>`
+            : html`<p class="empty">Keine FahrerInnen.</p>`
+        }
+      </details>
+      <details class="block" ?open=${waivedActs > 0}>
+        <summary>
+          Küren
+          <span class="muted"
+            >${acts.length}${waivedActs ? ` · ${waivedActs} erlassen` : ""}</span
+          >
+        </summary>
+        ${
+          acts.length
+            ? html`<table class="dense fit">
+                <tbody>
+                  ${actRows}
+                </tbody>
+              </table>`
+            : html`<p class="empty">Keine Küren.</p>`
+        }
+      </details>`;
+  }
+
+  /** Whether fees are waived, with the reason. */
+  renderWaiverState(reason: string | null | undefined) {
+    return reason
+      ? html`<span class="chip ok" title="Grund: ${reason}">erlassen: ${reason}</span>`
+      : html`<span class="muted small">wird berechnet</span>`;
+  }
+
+  renderWaiverButton(
+    level: WaiverLevel,
+    id: string,
+    name: string,
+    reason: string | null | undefined,
+  ) {
+    return html`<button
+      class="btn small"
+      data-level=${level}
+      data-id=${id}
+      data-name=${name}
+      data-grant=${reason ? "false" : "true"}
+      ?disabled=${this.saving}
+      @click=${this.onWaiveClick}
+    >
+      ${reason ? "Doch berechnen" : "Erlassen"}
+    </button>`;
   }
 
   /** The form to record a booking, e.g. a transfer from the bank statement. */
@@ -1224,6 +1316,11 @@ export default class CupViewAdminPayments extends LitElement {
   }
 
   renderLogChange(entry: BookingLogEntry) {
+    if (entry.waiver) {
+      return entry.action === "waiver_revoked"
+        ? html`<s>${describeWaiver(entry.waiver)}</s>`
+        : describeWaiver(entry.waiver);
+    }
     if (!entry.before && entry.after) {
       return describeBooking(entry.after);
     }
@@ -1733,35 +1830,67 @@ export default class CupViewAdminPayments extends LitElement {
     }
   }
 
-  /** Waives the fee of a withdrawn act, or charges it again. */
+  /**
+   * Waives the fees of a club, rider or act, asking for the reason, or
+   * charges them again.
+   */
   async onWaiveClick(e: Event) {
-    const { id, club, waived } = (e.currentTarget as HTMLElement).dataset;
-    const act = (this.data.value ?? this.lastData)?.acts.find(
-      (a) => a.id === id,
-    );
-    if (!act || this.saving) {
+    const { level, id, name, grant } = (e.currentTarget as HTMLElement)
+      .dataset as {
+      level: WaiverLevel;
+      id: string;
+      name: string;
+      grant: string;
+    };
+    const data = this.data.value ?? this.lastData;
+    if (!data || this.saving) {
       return;
     }
-    const feeWaived = waived === "true";
-    const label = actParticipantsLabel(act);
+    let reason: string | null = null;
+    if (grant === "true") {
+      reason = prompt(
+        `Warum werden die Gebühren erlassen?\n\n${name}\n\nz. B. Veranstalter, befreundeter Verein, Attest`,
+      );
+      if (reason === null) {
+        return;
+      }
+      if (!reason.trim()) {
+        this.error = "Nicht erlassen: Bitte einen Grund angeben.";
+        return;
+      }
+    }
+    const target =
+      level === "club"
+        ? { club_id: id }
+        : level === "rider"
+          ? { starter_id: id }
+          : { act_id: id };
+    // The clubs whose amount due changes.
+    const clubIds =
+      level === "club"
+        ? [id]
+        : level === "rider"
+          ? [data.starters.find((s) => s.id === id)?.club_id]
+          : (data.acts
+              .find((a) => a.id === id)
+              ?.participants.map((p) => p.club_id) ?? []);
     const done = await this.write(
       () =>
         unwrap(
           client.setFeeWaived({
-            body: { act_id: act.id, fee_waived: feeWaived },
+            body: { ...target, reason: reason?.trim() ?? null },
           }),
         ),
-      "Startgebühr nicht geändert",
+      "Erlass nicht gespeichert",
       {
-        text: feeWaived
-          ? `Startgebühr erlassen: ${label}`
-          : `Startgebühr wird wieder berechnet: ${label}`,
+        text: reason
+          ? `Erlassen: ${name} (${reason.trim()})`
+          : `Wird wieder berechnet: ${name}`,
         tone: "ok",
       },
     );
     if (done) {
-      // Every club of the act's riders owes a different amount now.
-      this.flash(null, [club, ...act.participants.map((p) => p.club_id)]);
+      this.flash(null, clubIds);
     }
   }
 

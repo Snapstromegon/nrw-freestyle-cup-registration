@@ -29,6 +29,9 @@ pub struct ClubOverview {
     code: String,
     /// What the club owes; only with club balances.
     amount_due: Option<AmountDue>,
+    /// Why all the club's fees are waived; `null` if they aren't or without
+    /// club balances.
+    fee_waiver: Option<String>,
     /// The club's jury obligation, while the jury registration is on; only
     /// with club balances or for the jury lead.
     jury: Option<JuryObligation>,
@@ -79,6 +82,7 @@ pub async fn list_clubs(
             clubs.id as "id!: Uuid",
             clubs.name,
             clubs.owner_id as "owner_id!: Uuid",
+            clubs.fee_waiver,
             users.name as owner_name,
             users.email as owner_email,
             users.email_verified as owner_email_verified,
@@ -101,6 +105,7 @@ pub async fn list_clubs(
             ClubOverview {
                 code: club_code(&row.id),
                 amount_due: Some(club_fees.amount_due).filter(|_| balances),
+                fee_waiver: row.fee_waiver.filter(|_| balances),
                 jury: club_fees.jury.filter(|_| jury),
                 id: row.id,
                 name: row.name,

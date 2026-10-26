@@ -1232,15 +1232,13 @@ export default class CupViewAdminActsOverview extends LitElement {
         class="icon-btn ${act.fee_waived ? "active" : ""}"
         title=${
           act.fee_waived
-            ? "Startgebühr doch berechnen"
+            ? `Startgebühr doch berechnen${act.fee_waiver ? ` (erlassen: ${act.fee_waiver})` : ""}`
             : "Startgebühr erlassen (z. B. mit Attest)"
         }
         aria-label="Startgebühr erlassen"
         aria-pressed=${act.fee_waived ? "true" : "false"}
         data-id=${act.id}
-        data-withdrawn="true"
-        data-waived=${act.fee_waived ? "false" : "true"}
-        @click=${this.onWithdrawClick}
+        @click=${this.onWaiveClick}
       >
         money_off
       </button> `;
@@ -1320,8 +1318,41 @@ export default class CupViewAdminActsOverview extends LitElement {
     }
   }
 
+  /** Waives the act's fee, asking for the reason, or charges it again. */
+  private async onWaiveClick(e: Event) {
+    const act = this.acts.find(
+      (a) => a.id === (e.currentTarget as HTMLElement).dataset.id,
+    );
+    if (!act) {
+      return;
+    }
+    let reason: string | null = null;
+    if (!act.fee_waived) {
+      reason = prompt(
+        `Warum wird die Startgebühr erlassen?\n\n${this.actLabel(act)}\n\nz. B. Attest`,
+      );
+      if (reason === null) {
+        return;
+      }
+      if (!reason.trim()) {
+        this.error = "Nicht erlassen: Bitte einen Grund angeben.";
+        return;
+      }
+    }
+    try {
+      await unwrap(
+        client.setFeeWaived({
+          body: { act_id: act.id, reason: reason?.trim() ?? null },
+        }),
+      );
+      await this.load();
+    } catch (error) {
+      this.error = `Der Erlass konnte nicht gespeichert werden: ${errorMessage(error)}`;
+    }
+  }
+
   private async onWithdrawClick(e: Event) {
-    const { id, withdrawn, waived } = (e.currentTarget as HTMLElement).dataset;
+    const { id, withdrawn } = (e.currentTarget as HTMLElement).dataset;
     const act = this.acts.find((a) => a.id === id);
     if (!act) {
       return;
@@ -1329,7 +1360,6 @@ export default class CupViewAdminActsOverview extends LitElement {
     const body = {
       act_id: act.id,
       withdrawn: withdrawn === "true",
-      fee_waived: waived === "true",
     };
     if (
       body.withdrawn &&

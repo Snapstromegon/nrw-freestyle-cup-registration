@@ -6,6 +6,8 @@ import { formatDate, formatMoney } from "./utils";
 
 export type Booking = schemas.Booking;
 export type BookingAction = schemas.BookingAction;
+export type FeeWaiver = schemas.FeeWaiver;
+export type WaiverLevel = schemas.WaiverLevel;
 
 /**
  * Parses a typed amount: a non-negative amount with at most two decimals and
@@ -75,7 +77,20 @@ export const actionLabels: Record<BookingAction, string> = {
   ignored: "Buchung ignoriert",
   deleted: "Buchung gelöscht",
   taken_over: "übernommen",
+  waived: "Gebühr erlassen",
+  waiver_revoked: "Erlass aufgehoben",
 };
+
+/** What a waiver applies to, before its name. */
+export const waiverLevelLabels: Record<WaiverLevel, string> = {
+  club: "Verein",
+  rider: "FahrerIn",
+  act: "Kür",
+};
+
+/** A waiver in one line, e.g. "Kür Wirbelwind · Attest". */
+export const describeWaiver = (waiver: FeeWaiver) =>
+  `${waiverLevelLabels[waiver.level]} ${waiver.name} · ${waiver.reason}`;
 
 /** A booking in one line, e.g. "45,00 € · 01.03.2027 · RSV · Überweisung". */
 export const describeBooking = (booking: Booking) =>

@@ -32,6 +32,7 @@ use crate::{
 pub async fn list_acts(
     Extension(db): Extension<ReloadableSqlite>,
     birthdates: Option<Granted<permit::ViewBirthdates>>,
+    payments: Option<Granted<permit::ManagePayments>>,
 ) -> Result<Json<Vec<Act>>, HttpError> {
     let db = db.get().await.clone();
     let acts = sqlx::query_as!(
@@ -65,7 +66,7 @@ pub async fn list_acts(
             ) as "type_conflict!: bool",
             view_act.song_checked,
             view_act.withdrawn_at IS NOT NULL as "withdrawn!: bool",
-            view_act.fee_waived as "fee_waived!: bool"
+            view_act.fee_waiver
         FROM view_act LEFT JOIN categories ON view_act.category = categories.name
         ORDER BY categories."order" IS NULL, categories."order", view_act."order" ASC
         "#
@@ -74,7 +75,7 @@ pub async fn list_acts(
     .await?;
     Ok(Json(
         acts.into_iter()
-            .map(|act| Act::from(act).for_viewer(birthdates.is_some()))
+            .map(|act| Act::from(act).for_viewer(birthdates.is_some(), payments.is_some()))
             .collect(),
     ))
 }

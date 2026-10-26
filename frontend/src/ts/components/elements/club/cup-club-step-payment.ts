@@ -10,6 +10,7 @@ import { buildEpcPayload, paymentReference } from "../../../epc";
 import { iconStyles, resetStyles } from "../../../styles/base";
 import { clubPortalStyles } from "../../../styles/club-portal";
 import {
+  actTypeLabels,
   type Competition,
   countStarts,
   formatDate,
@@ -27,6 +28,11 @@ export default class CupClubStepPayment extends LitElement {
     iconStyles,
     clubPortalStyles,
     css`
+      ul.waived {
+        margin: 0.25rem 0 0.75rem;
+        padding-left: 1.25rem;
+      }
+
       .transfer {
         display: flex;
         flex-wrap: wrap;
@@ -128,6 +134,9 @@ export default class CupClubStepPayment extends LitElement {
   @state() detailsOpen = loadPref("payment.detailsOpen", false);
 
   override render() {
+    if (this.data.club.fee_waived) {
+      return this.renderWaivedClub();
+    }
     const competition = this.competition;
     const { startFees, juryFee, amount, paid, open } = paymentState(this.data);
     const contact = competition?.contact_email;
@@ -187,6 +196,7 @@ export default class CupClubStepPayment extends LitElement {
             </p>`
           : nothing
       }
+      ${this.renderWaived()}
       ${open >= 0.01 ? this.renderTransfer(open) : nothing}
       ${this.renderPayments()}
 
@@ -200,6 +210,62 @@ export default class CupClubStepPayment extends LitElement {
       </p>
 
       ${this.renderBreakdown(startFees)}`;
+  }
+
+  /** The whole club pays nothing: a banner instead of fees and transfer. */
+  renderWaivedClub() {
+    return html`<div class="step-intro">
+        <h2>${this.number}. Startgeld</h2>
+      </div>
+      <p class="banner ok">
+        <i class="material-icon">volunteer_activism</i>
+        <span class="grow"
+          >Für euren Verein wurden alle Gebühren erlassen – Startgeld und
+          Jurygebühr.</span
+        >
+      </p>
+      ${this.renderPayments()}`;
+  }
+
+  /** The riders and acts whose fees are waived, without amounts. */
+  renderWaived() {
+    const riders = this.data.starters.filter((s) => s.fee_waived);
+    const acts = this.data.acts.filter((a) => a.fee_waived);
+    if (!riders.length && !acts.length) {
+      return nothing;
+    }
+    const riderItems = riders.map((s) => html`<li>${starterName(s)}</li>`);
+    const actItems = acts.map(
+      (a) =>
+        html`<li>
+          ${a.name ? `${a.name} – ` : ""}${
+            a.group_name ??
+            a.participants
+              .map((p) => `${p.starter_firstname} ${p.starter_lastname}`)
+              .join(" & ")
+          }
+          <span class="muted">(${actTypeLabels[a.act_type]})</span>
+        </li>`,
+    );
+    return html`<section class="card">
+      <header><h3>Erlassene Gebühren</h3></header>
+      ${
+        riders.length
+          ? html`<p>Diese FahrerInnen zahlen kein Startgeld:</p>
+              <ul class="waived">
+                ${riderItems}
+              </ul>`
+          : nothing
+      }
+      ${
+        acts.length
+          ? html`<p>Für diese Küren fällt kein Startgeld an:</p>
+              <ul class="waived">
+                ${actItems}
+              </ul>`
+          : nothing
+      }
+    </section>`;
   }
 
   /** The payments we recorded for the club; refunds are negative. */

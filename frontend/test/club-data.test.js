@@ -183,6 +183,24 @@ describe("club data", () => {
     });
   });
 
+  test("a waived club's Startgeld step is done and owes nothing", () => {
+    const d = data({
+      club: {
+        ...club(30),
+        fee_waived: true,
+        amount_due: { start_fees: 0, jury_fee: 0, total: 0, waived: 45 },
+      },
+      starters: [starter("b", { single_male: true })],
+    });
+    assert.equal(paymentState(d).open, 0);
+    const issues = clubIssues(d);
+    assert.ok(!issues.some((issue) => issue.step === "startgeld"));
+    assert.deepEqual(stepSummaries(d, issues).startgeld, {
+      state: "done",
+      summary: "erlassen",
+    });
+  });
+
   test("responsibleIsContact compares name and email with the owner", () => {
     const contact = {
       owner_name: "Anna",

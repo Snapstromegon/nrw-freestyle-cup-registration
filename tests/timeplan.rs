@@ -1492,7 +1492,7 @@ async fn withdrawn_acts_keep_their_place_in_a_replanned_block(db: SqlitePool) {
         let response = app
             .post(
                 "/api/command/set_act_withdrawn",
-                json!({ "act_id": c1, "withdrawn": withdrawn, "fee_waived": false }),
+                json!({ "act_id": c1, "withdrawn": withdrawn }),
                 Some(&admin),
             )
             .await;

@@ -603,7 +603,7 @@ async fn clubs_owe_a_fee_for_missing_einsaetze(db: SqlitePool) {
     );
     assert_eq!(
         body["amount_due"],
-        json!({ "start_fees": 45.0, "jury_fee": 56.0, "total": 101.0 })
+        json!({ "start_fees": 45.0, "jury_fee": 56.0, "total": 101.0, "waived": 0.0 })
     );
 
     // A heat (2) and a final (1); several tasks in one category count once.
@@ -721,17 +721,24 @@ async fn kueren_count_like_the_start_fee(db: SqlitePool) {
     .unwrap()
     .to_string()
     .into();
-    for (fee_waived, acts) in [(false, 3), (true, 2)] {
-        let response = app
-            .post(
-                "/api/command/set_act_withdrawn",
-                json!({ "act_id": single, "withdrawn": true, "fee_waived": fee_waived }),
-                Some(&admin),
-            )
-            .await;
-        assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
-        assert_eq!(club(&app, &owner).await["jury"]["acts"], acts);
-    }
+    let response = app
+        .post(
+            "/api/command/set_act_withdrawn",
+            json!({ "act_id": single, "withdrawn": true }),
+            Some(&admin),
+        )
+        .await;
+    assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+    assert_eq!(club(&app, &owner).await["jury"]["acts"], 3);
+    let response = app
+        .post(
+            "/api/command/set_fee_waived",
+            json!({ "act_id": single, "reason": "Attest" }),
+            Some(&admin),
+        )
+        .await;
+    assert_eq!(response.status, StatusCode::OK, "{:?}", response.body);
+    assert_eq!(club(&app, &owner).await["jury"]["acts"], 2);
 }
 
 #[sqlx::test]

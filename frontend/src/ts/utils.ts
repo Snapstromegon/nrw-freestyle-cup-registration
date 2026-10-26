@@ -299,9 +299,17 @@ interface Starts {
   pair: boolean;
   /** Group memberships, replacement riders included. Missing counts as 0. */
   group_count?: number | null;
-  /** Withdrawn starts whose fee an admin waived. Missing counts as 0. */
+  /** Starts in acts whose fee is waived. Missing counts as 0. */
   waived_count?: number | null;
+  /** All the rider's starts are free (a rider's fee waiver). */
+  fee_waived?: boolean | null;
 }
+
+/** The starts that cost a fee, before the cap. */
+const billableStarts = (starter: Starts) =>
+  starter.fee_waived
+    ? 0
+    : Math.max(0, countStarts(starter) - (starter.waived_count ?? 0));
 
 /** Number of starts a starter is registered for, groups included. */
 export const countStarts = (starter: Starts) =>
@@ -312,8 +320,8 @@ export const countStarts = (starter: Starts) =>
 
 /**
  * Registration fee of one starter: `fee_per_start` per start, capped at
- * `max_fee_per_starter`. Withdrawn starts still cost, unless their fee was
- * waived. Without a competition there is nothing to pay.
+ * `max_fee_per_starter`. Withdrawn starts still cost; waived acts and a
+ * waived rider cost nothing. Without a competition there is nothing to pay.
  */
 export const getStarterPrice = (
   starter: Starts,
@@ -325,10 +333,7 @@ export const getStarterPrice = (
   if (!competition) {
     return 0;
   }
-  const billable = Math.max(
-    0,
-    countStarts(starter) - (starter.waived_count ?? 0),
-  );
+  const billable = billableStarts(starter);
   const price = billable * competition.fee_per_start;
   const max = competition.max_fee_per_starter;
   return max === null || max === undefined ? price : Math.min(price, max);
@@ -349,10 +354,7 @@ export const startsByFee = (
   if (!competition) {
     return { paid: 0, free: 0 };
   }
-  const billable = Math.max(
-    0,
-    countStarts(starter) - (starter.waived_count ?? 0),
-  );
+  const billable = billableStarts(starter);
   const max = competition.max_fee_per_starter;
   const paid =
     max === null || max === undefined || competition.fee_per_start <= 0

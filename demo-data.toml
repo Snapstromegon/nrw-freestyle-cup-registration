@@ -13,7 +13,8 @@
 #                                 partly checked in
 # - lena.schmitz@example.org      RV Bonn, not paid, owns an incomplete group,
 #                                 nobody checked in
-# - sabine.koch@example.org       club without starters, overpaid, password reset pending
+# - sabine.koch@example.org       club without starters, fees waived and so overpaid,
+#                                 password reset pending
 # - tim.neumann@example.org       verified, no club yet
 # - paul.hoffmann@example.org     email not verified
 #
@@ -290,6 +291,7 @@ firstname = "Lea"
 lastname = "Hoffmann"
 birthdate = 2012-10-03
 pair = true
+fee_waiver = "Gastfahrerin"
 
 [[clubs.starters]]
 firstname = "Julia"
@@ -446,6 +448,9 @@ birthdate = 2016-07-01
 name = "Einrad-Freunde Aachen"
 owner = "Sabine Koch"
 payment = 30
+# Fee waivers (reason) exist for clubs, riders and acts; this one makes the
+# club's earlier payment an overpayment.
+fee_waiver = "Veranstalter"
 
 # Groups: name (unique), owner (the club that created it and manages its name),
 # act_type ("group_small" for a Kleingruppe, "group_large" for a Großgruppe, as
@@ -509,6 +514,11 @@ members = ["Felix Braun", "Leon Lehmann"]
 #
 # EMU11 is finished and EMU13 is running (see the timeplan below), so the info
 # board and the live startlist have something to show.
+
+[[acts]]
+starter = "Felix Braun"
+act_type = "single"
+fee_waiver = "Attest"
 
 [[acts]]
 starter = "Ben Fischer"

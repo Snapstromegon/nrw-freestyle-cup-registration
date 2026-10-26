@@ -39,6 +39,9 @@ pub struct Club {
     responsible_email: Option<String>,
     /// What the club owes. Only for the club itself and the organizer.
     amount_due: Option<AmountDue>,
+    /// All the club's fees are waived. Only for the club itself and the
+    /// organizer; the reason isn't shown here.
+    fee_waived: Option<bool>,
     /// The club's jury obligation, while the jury registration is on. Only
     /// for the club itself and the organizer.
     jury: Option<JuryObligation>,
@@ -83,6 +86,7 @@ pub async fn get_club(
             clubs.id as "id!: Uuid",
             clubs.name,
             clubs.owner_id as "owner_id: Uuid",
+            clubs.fee_waiver IS NOT NULL as "fee_waived!: bool",
             users.name as "owner_name?: String",
             users.email as "owner_email?: String",
             COALESCE(clubs.responsible_name, users.name) as "responsible_name?: String",
@@ -109,6 +113,7 @@ pub async fn get_club(
             responsible_name: row.responsible_name,
             responsible_email: row.responsible_email,
             amount_due: None,
+            fee_waived: None,
             jury: None,
         };
         if may_see_owner {
@@ -124,6 +129,7 @@ pub async fn get_club(
             club.paid = Some(round_cents(payments.iter().map(|p| p.amount).sum()));
             club.payments = Some(payments);
             club.amount_due = Some(fees.amount_due);
+            club.fee_waived = Some(row.fee_waived);
             club.jury = fees.jury;
         } else {
             club.owner_name = None;

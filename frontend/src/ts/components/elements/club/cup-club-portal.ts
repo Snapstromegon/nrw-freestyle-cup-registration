@@ -778,6 +778,15 @@ export default class CupClubPortal extends LitElement {
   }
 
   renderAmount(data: ClubData) {
+    if (data.club.fee_waived) {
+      return html`<a
+        href="#startgeld"
+        class=${classMap({ amount: true, paid: true })}
+        @click=${this.onAmountClick}
+      >
+        <span>Gebühren erlassen</span>
+      </a>`;
+    }
     const { amount, open, juryFee } = paymentState(data);
     const paid = amount > 0 && open < 0.01;
     const what = juryFee > 0 ? "Startgeld + Jury" : "Startgeld";

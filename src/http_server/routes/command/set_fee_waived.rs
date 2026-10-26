@@ -5,6 +5,8 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
+    bookings::Actor,
+    fee_waivers::{self, Target},
     http_server::{ClientError, HttpError, extractor::auth::Granted},
     reloadable_sqlite::{ReloadableSqlite, begin_write},
     roles::permit,
@@ -13,15 +15,22 @@ use crate::{
 #[derive(Debug, Serialize, ToSchema)]
 pub struct SetFeeWaivedResponse {}
 
+/// Exactly one of `club_id`, `starter_id` and `act_id`.
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SetFeeWaivedBody {
-    act_id: Uuid,
-    /// The riders don't pay for this start.
-    fee_waived: bool,
+    /// All the club's fees: start fees and jury fee.
+    club_id: Option<Uuid>,
+    /// All the rider's starts.
+    starter_id: Option<Uuid>,
+    /// The act's start, for every rider.
+    act_id: Option<Uuid>,
+    /// Why the fees are waived, e.g. "Veranstalter"; `null` charges them
+    /// again.
+    reason: Option<String>,
 }
 
-/// Waive the fee of a withdrawn act, e.g. with a medical certificate, or
-/// charge it again. Treasurer; withdrawing stays with the admin.
+/// Waive the fees of a club, a rider or an act in full, or charge them
+/// again. Treasurer.
 #[utoipa::path(
     post,
     tags=["command", "payment"],
@@ -29,6 +38,7 @@ pub struct SetFeeWaivedBody {
     request_body=SetFeeWaivedBody,
     responses(
         (status=200, content_type="application/json", body=SetFeeWaivedResponse),
+        (status=400, content_type="application/json", body=ClientError),
         (status=403, content_type="application/json", body=ClientError),
         (status=404, content_type="application/json", body=ClientError),
         (status=500, content_type="application/json", body=ClientError),
@@ -38,34 +48,34 @@ pub struct SetFeeWaivedBody {
 #[axum::debug_handler]
 pub async fn set_fee_waived(
     Extension(db): Extension<ReloadableSqlite>,
-    _: Granted<permit::ManagePayments>,
+    granted: Granted<permit::ManagePayments>,
     Json(body): Json<SetFeeWaivedBody>,
 ) -> Result<Json<SetFeeWaivedResponse>, HttpError> {
+    let target = match (body.club_id, body.starter_id, body.act_id) {
+        (Some(id), None, None) => Target::Club(id),
+        (None, Some(id), None) => Target::Rider(id),
+        (None, None, Some(id)) => Target::Act(id),
+        _ => {
+            return Err(HttpError::ErrorMessages(
+                "Bitte genau einen Verein, eine FahrerIn oder eine Kür angeben.".to_string(),
+            ));
+        }
+    };
+    info!("Setting the fee waiver of {target:?} to {:?}", body.reason);
     let db = db.get().await.clone();
     let mut tx = begin_write(&db).await?;
-    let withdrawn = sqlx::query_scalar!(
-        r#"SELECT withdrawn_at IS NOT NULL as "withdrawn!: bool" FROM acts WHERE id = ?"#,
-        body.act_id
+    fee_waivers::set_waiver(
+        &mut tx,
+        target,
+        body.reason.as_deref(),
+        &Actor::of(&granted),
     )
-    .fetch_optional(&mut *tx)
-    .await?
-    .ok_or(HttpError::NotFound)?;
-    if !withdrawn {
-        return Err(HttpError::ErrorMessages(
-            "Die Startgebühr lässt sich nur für abgemeldete Küren erlassen.".to_string(),
-        ));
-    }
-    info!(
-        "Setting the fee of act {} waived = {}",
-        body.act_id, body.fee_waived
-    );
-    sqlx::query!(
-        "UPDATE acts SET fee_waived = ? WHERE id = ?",
-        body.fee_waived,
-        body.act_id
-    )
-    .execute(&mut *tx)
-    .await?;
+    .await
+    .map_err(|e| match e {
+        fee_waivers::Error::NotFound => HttpError::NotFound,
+        fee_waivers::Error::ReasonMissing => HttpError::ErrorMessages(e.to_string()),
+        fee_waivers::Error::Database(e) => HttpError::DBError(e),
+    })?;
     tx.commit().await?;
     Ok(Json(SetFeeWaivedResponse {}))
 }

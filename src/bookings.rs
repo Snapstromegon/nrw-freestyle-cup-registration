@@ -12,7 +12,7 @@ use sqlx::{Sqlite, SqliteConnection};
 use time::{Date, OffsetDateTime};
 use uuid::Uuid;
 
-use crate::{http_server::extractor::auth::Auth, roles::Role};
+use crate::{fee_waivers::FeeWaiver, http_server::extractor::auth::Auth, roles::Role};
 
 time::serde::format_description!(iso_date, Date, "[year]-[month]-[day]");
 
@@ -127,8 +127,13 @@ pub enum BookingAction {
     Unassigned,
     Ignored,
     Deleted,
-    /// Created by the migration from the paid total the club had before.
+    /// Created by the migration from the paid total the club had before, or
+    /// a waiver taken over from before waivers had a reason.
     TakenOver,
+    /// A fee waiver granted (see [`crate::fee_waivers`]).
+    Waived,
+    /// A fee waiver revoked: the fees are charged again.
+    WaiverRevoked,
 }
 
 impl BookingAction {
@@ -208,10 +213,38 @@ pub async fn log_change(
     Ok(())
 }
 
-/// One entry of the payment log.
+/// Writes the log entry for granting or revoking `waiver`.
+pub async fn log_waiver(
+    tx: &mut SqliteConnection,
+    actor: &Actor<'_>,
+    action: BookingAction,
+    waiver: &FeeWaiver,
+) -> Result<(), sqlx::Error> {
+    let waiver = serde_json::to_string(waiver).map_err(|e| sqlx::Error::Encode(e.into()))?;
+    let roles = serde_json::to_string(actor.roles).map_err(|e| sqlx::Error::Encode(e.into()))?;
+    let at = OffsetDateTime::now_utc();
+    sqlx::query!(
+        r#"
+        INSERT INTO booking_log (at, user_id, user_name, roles, action, waiver)
+        VALUES (?, ?, ?, ?, ?, ?)
+        "#,
+        at,
+        actor.user_id,
+        actor.name,
+        roles,
+        action,
+        waiver,
+    )
+    .execute(tx)
+    .await?;
+    Ok(())
+}
+
+/// One entry of the payment log: a change to a booking or to a fee waiver.
 #[derive(Debug, Clone, serde::Serialize, utoipa::ToSchema)]
 pub struct BookingLogEntry {
-    pub booking_id: Uuid,
+    /// `null` for a waiver.
+    pub booking_id: Option<Uuid>,
     #[serde(with = "time::serde::rfc3339")]
     pub at: OffsetDateTime,
     /// `null` for changes without a user, like the migration's.
@@ -224,16 +257,23 @@ pub struct BookingLogEntry {
     pub before: Option<Booking>,
     /// `null` for a deleted booking.
     pub after: Option<Booking>,
+    /// The waiver granted or revoked; `null` for a booking.
+    pub waiver: Option<FeeWaiver>,
 }
 
 impl BookingLogEntry {
-    /// Whether the booking was a payment of `club_id` before or after.
+    /// Whether the booking was a payment of `club_id` before or after, or
+    /// the waiver changes the club's fees.
     #[must_use]
     pub fn concerns_club(&self, club_id: Uuid) -> bool {
         [&self.before, &self.after]
             .into_iter()
             .flatten()
             .any(|b| b.club_id == Some(club_id))
+            || self
+                .waiver
+                .as_ref()
+                .is_some_and(|w| w.clubs.iter().any(|c| c.id == club_id))
     }
 }
 
@@ -252,7 +292,8 @@ where
             roles,
             action as "action: BookingAction",
             before,
-            after
+            after,
+            waiver
         FROM booking_log
         ORDER BY id DESC
         "#
@@ -276,6 +317,11 @@ where
                 action: row.action,
                 before: booking(row.before)?,
                 after: booking(row.after)?,
+                waiver: row
+                    .waiver
+                    .map(|json| serde_json::from_str::<FeeWaiver>(&json))
+                    .transpose()
+                    .map_err(decode)?,
             })
         })
         .collect()

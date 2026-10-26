@@ -502,7 +502,12 @@ export default class CupClubStepRiders extends LitElement {
       </td>
       <td class="acts-col">${this.renderActs(starter)}</td>
       <td class="num">
-        ${formatEuro(getStarterPrice(starter, this.competition))}
+        ${
+          // A waived club's riders pay nothing.
+          this.data.club.fee_waived
+            ? html`<span class="muted">erlassen</span>`
+            : formatEuro(getStarterPrice(starter, this.competition))
+        }
       </td>
       <td class="actions-col">
         ${

@@ -33,7 +33,7 @@ pub struct ClubAct {
     /// Withdrawn after the registration deadline: the act doesn't start and
     /// has no category, but its riders still pay for it unless `fee_waived`.
     withdrawn: bool,
-    /// An admin waived the fee of a withdrawn act (e.g. medical certificate).
+    /// The act's fee is waived: its start is free for every rider.
     fee_waived: bool,
 }
 
@@ -99,7 +99,7 @@ pub async fn list_club_acts(
             acts.act_type as "act_type: ActType",
             acts.created_at as "created_at!: time::OffsetDateTime",
             acts.withdrawn_at IS NOT NULL as "withdrawn!: bool",
-            acts.fee_waived
+            acts.fee_waiver IS NOT NULL as "fee_waived!: bool"
         FROM acts
         WHERE acts.owner_club_id = ?1
             OR EXISTS (
