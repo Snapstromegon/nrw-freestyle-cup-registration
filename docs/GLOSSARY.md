@@ -186,7 +186,7 @@ The fee per missing jury deployment, paid with the start fees.
 _Avoid_: Strafgebühr, penalty
 
 **Amount due** (Betrag, Soll):
-What a club owes: its start fees plus its jury fee.
+What a club owes: its start fees plus its jury fee, less its fee waivers.
 _Avoid_: Invoice, Rechnung
 
 **Booking** (Buchung):
@@ -211,7 +211,11 @@ A booking that has nothing to do with the event, e.g. account fees; it counts fo
 The sum of a club's payments.
 
 **Fee waiver** (Gebühr erlassen):
-The organizer dropping a withdrawn act's start fee.
+The organizer dropping fees, always in full and with a waiver reason: for a club all its fees (start fees and jury fee), for a rider all their start fees, for an act its start for every rider. It lowers the amount due; it is never a booking.
+_Avoid_: Rabatt, discount, Gutschrift (for a waiver)
+
+**Waiver reason** (Grund):
+Why a fee was waived, e.g. "Veranstalter", "befreundeter Verein", "Attest"; only the organizer team sees it.
 
 ### Jury
 
@@ -276,6 +280,7 @@ An award for each rider of the first three places of a final, and for each group
 - A **Judge** registers for **Jury categories** for **Tasks**; the **Jury plan** assigns each judge at most one task per jury category.
 - A **Booking** is a **Payment** of one **Club**, an **Unassigned booking** or an **Ignored booking**; a club's **Paid** amount is the sum of its payments, set against its **Amount due**.
 - A club's **Credited deployments** below its **Jury obligation** cost a **Jury fee** per missing **Jury deployment**.
+- A **Fee waiver** applies to a **Club**, a **Rider** or an **Act**; it lowers the **Amount due** but never the **Jury obligation**, except for a withdrawn act.
 
 ## Example dialogue
 
